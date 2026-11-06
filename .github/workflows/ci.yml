@@ -1,0 +1,46 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions are pinned to exact commits (plugin store rule).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -m pip install pytest
+      - run: python -m pytest
+
+  privacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # The word list is a repository secret, never a file in the repo.
+      - name: No private details anywhere in the history
+        env:
+          PATTERNS: ${{ secrets.PRIVATE_PATTERNS }}
+          ALLOW: ${{ secrets.PRIVATE_ALLOW }}
+        run: |
+          if [ -z "$PATTERNS" ]; then
+            echo "::warning::PRIVATE_PATTERNS secret not set: privacy check skipped"
+            exit 0
+          fi
+          printf '%s\n' "$PATTERNS" | grep -v -E '^\s*(#|$)' > /tmp/p
+          printf '%s\n' "$ALLOW" | grep -v -E '^\s*(#|$)' > /tmp/a || true
+          { git log --all --format='%h message: %B'; git log --all -p --format='commit %h' | grep -E '^(commit |\+)'; } \
+            | grep -E -f /tmp/p | { if [ -s /tmp/a ]; then grep -v -E -f /tmp/a; else cat; fi; } > /tmp/hits || true
+          if [ -s /tmp/hits ]; then
+            echo "Private details found (count: $(wc -l < /tmp/hits)). Run the local check to see them."
+            exit 1
+          fi
+          echo "No private details found."

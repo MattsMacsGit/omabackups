@@ -1,0 +1,5 @@
+# Only used by the tests (the package itself is installed by packaging/PKGBUILD).
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+addopts = "-q"

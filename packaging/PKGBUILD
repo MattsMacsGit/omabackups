@@ -1,0 +1,35 @@
+# The omabackups package (D20).
+# This build reads the files from the repo it sits in (for testing):
+#   cd packaging && makepkg -si
+# The AUR version (at release) downloads a tagged, checked release instead.
+
+pkgname=omabackups
+pkgver=2.0.0.dev1
+pkgrel=1
+pkgdesc="Backups, rescue and migration for Omarchy"
+arch=(any)
+url="https://github.com/MattsMacsGit/omabackups"
+license=(MIT)
+depends=(python rsync openssh cryptsetup btrfs-progs)
+optdepends=('tailscale: back up when away from home')
+
+package() {
+  local repo="$startdir/.."
+  local site
+  site="$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+
+  # The omabackups command's code, compiled ahead so it starts fast.
+  cd "$repo/src"
+  find omabackups -name '*.py' -exec install -Dm644 {} "$pkgdir$site/{}" \;
+  python -m compileall -q -s "$pkgdir" -p / "$pkgdir$site/omabackups"
+
+  # The command itself.
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/omabackups" <<'EOF'
+#!/usr/bin/python3
+import sys
+from omabackups.cli import main
+sys.exit(main())
+EOF
+
+  install -Dm644 "$repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
