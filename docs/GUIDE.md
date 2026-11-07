@@ -194,8 +194,12 @@ It starts with your home folders, biggest first, with **System** beside them:
 - The line under the list explains the highlighted row in plain words.
 
 Keys: **↑↓** move, **Enter** open a folder, **⌫** back, **Space** tick or
-skip, **s** save and quit, **q** quit (it asks first if you changed
-something). The mouse works too.
+skip, **H** show hidden files too, **s** save and quit, **q** quit (it asks
+first if you changed something). The mouse works too.
+
+Hidden files and folders (the ones starting with a dot, mostly settings)
+aren't shown unless you press H. They're still backed up; Migrate is what
+brings settings over to a new computer.
 
 Caches and the trash are skipped everywhere; Space on one of them backs that
 one up anyway. Something inside a skipped folder can't be ticked on its own:

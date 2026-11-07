@@ -7,9 +7,11 @@ everyday(): the improved mix: replay renames/deletes, send changed ranges of
 """
 
 import json
+import re
 import struct
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from omabackups.backup.changes import Plan
@@ -22,19 +24,34 @@ BASE = ["-aHAX", "--numeric-ids", "--partial-dir=.rsync-partial"]
 _RANGE = struct.Struct(">QQ")
 
 
+STATS = {"files_checked": "Number of files", "files_sent": "Number of regular files transferred",
+         "file_bytes": "Total transferred file size", "wire_bytes": "Total bytes sent"}
+
+
 class Sender:
     def __init__(self, gate: Gate, backup: str, line: str, compress: bool = False):
         self.gate, self.backup, self.line = gate, backup, line
+        self.stats = {}     # per part: what rsync really sent
         self.compress = compress   # D25: zstd only when away
 
     def _rsync(self, part: str, source: str, extra: list[str]) -> None:
-        command = ["rsync", *BASE, *(["-z", "--zc=zstd"] if self.compress else []), *extra,
+        command = ["rsync", *BASE, "--stats", *(["-z", "--zc=zstd"] if self.compress else []), *extra,
                    "-e", self.gate.rsh(),
                    f"--rsync-path=send {self.backup} {self.line} {part}",
                    f"{source.rstrip('/')}/", f"{self.gate.rsync_target()}:{part}/"]
         log.get("send").debug("rsync %s %s", part, " ".join(extra))
-        done = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+        started = time.monotonic()
+        done = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                               env=self.gate.rsync_env())
+        # What rsync really did, so a slow backup explains itself.
+        found = {key: int(m.group(1).replace(",", "")) for key, label in STATS.items()
+                 if (m := re.search(rf"^{label}: ([\d,]+)", done.stdout, re.M))}
+        found["seconds"] = round(time.monotonic() - started, 1)
+        self.stats[part] = {k: self.stats.get(part, {}).get(k, 0) + v for k, v in found.items()}
+        log.get("send").info("%s: %s files sent (%s bytes of file data, %s bytes on the wire) "
+                             "out of %s checked, in %s s", part, found.get("files_sent", "?"),
+                             found.get("file_bytes", "?"), found.get("wire_bytes", "?"),
+                             found.get("files_checked", "?"), found["seconds"])
         # 24: some files vanished while being sent (normal for a live /boot).
         if done.returncode not in (0, 24):
             raise OmaError(f"Sending the {part} part of your backup stopped.",

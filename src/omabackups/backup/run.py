@@ -176,6 +176,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                      "skip_patterns": {p: skips.for_part(p).patterns for p in fingerprints},
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
                      "away": away, "not_included": left_out, "manifests": manifests,
+                     "sent": sender.stats,
                      "space": {k: space.get(k) for k in ("box", "used", "free")},
                      "resent_for_pass": verdict.get("pass_started") if resend
                      else record.get("resent_for_pass")})

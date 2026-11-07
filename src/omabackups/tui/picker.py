@@ -16,7 +16,7 @@ from omabackups.core.errors import OmaError
 from omabackups.tui import kit
 from omabackups.tui.pick_model import Model
 
-KEYS = "↑↓ move  Enter open  ⌫ back  Space tick  s save & quit  q quit"
+KEYS = "↑↓ move  Enter open  ⌫ back  Space tick  H hidden  s save & quit  q quit"
 TITLE = "Choose what gets backed up"
 
 
@@ -47,7 +47,7 @@ class Picker:
         ui.scr.erase()
         h, w = ui.size()
         node = self.stack[-1]
-        self.rows = m.children(node)
+        self.rows = m.listing(node)
         ui.header(TITLE, self.where())
         height = max(1, h - 7)
         pos = min(self.cursor.get(node, 0), max(0, len(self.rows) - 1))
@@ -130,6 +130,10 @@ class Picker:
                 child = self.current()
                 problem = self.model.toggle(child) if child else None
                 self.ui.say(problem or "")
+            elif key == ord("H"):
+                self.model.show_hidden = not self.model.show_hidden
+                self.ui.say("Showing hidden files too." if self.model.show_hidden
+                            else "Hidden files aren't shown (they're still backed up).")
             elif key == ord("s"):
                 if self.save():
                     break

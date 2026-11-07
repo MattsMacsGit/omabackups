@@ -230,7 +230,7 @@ def test_reuse_clones_only_what_is_unchanged(box, tmp_path):
              "files": [["restored.iso", iso.st_size, iso.st_mtime_ns],
                        ["edited.txt", edited.st_size, edited.st_mtime_ns + 1]]}   # a different date
     done = srv.ok(kid, f"reuse {bid} 001 home", json.dumps(asked).encode())
-    assert done == {"dirs": 1, "files": 1, "bytes": 500}
+    assert done == {"dirs": 1, "files": 1, "bytes": 1500}       # the folder (1000) + the file (500)
     assert (home / "Videos" / "big.mkv").read_bytes() == b"V" * 1000
     assert (home / "restored.iso").exists() and not (home / "edited.txt").exists()
 

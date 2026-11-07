@@ -28,6 +28,11 @@ def names(model, node):
 
 def test_first_page(world):
     world.measure(world.home())
+    shown = [n.name for n in world.listing(world.home())]
+    assert shown == ["Videos", "Projects", "Downloads", "System"]          # hidden ones aren't shown...
+    world.show_hidden = True                                               # ...until H
+    assert [n.name for n in world.listing(world.home())] == ["Videos", "Projects", "Downloads",
+                                                             ".config", ".cache", "System"]
     assert names(world, world.home()) == ["Videos", "Projects", "Downloads", ".config", ".cache", "System"]
     assert "home" not in names(world, world.system())          # mount points aren't offered
 

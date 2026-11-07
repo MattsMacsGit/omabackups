@@ -207,6 +207,8 @@ def v_reuse(call):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 host().clone(src, target)
                 done["dirs"] += 1
+                done["bytes"] += sum(f.stat().st_size for f in target.rglob("*")
+                                     if f.is_file() and not f.is_symlink())
                 break
     for entry in files:
         rel, size, mtime = str(entry[0]), int(entry[1]), int(entry[2])

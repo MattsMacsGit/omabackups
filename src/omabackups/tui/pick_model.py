@@ -44,6 +44,7 @@ class Model:
                        for p in ("home", "system")}
         self.backed_up_once = bool(record.get("last_finished"))
         self.dirty = False
+        self.show_hidden = False    # hidden files: Migrate's business; H shows them
         self._sizes, self._inside, self._lock = {}, {}, threading.Lock()
         self._refresh()
 
@@ -57,6 +58,14 @@ class Model:
 
     def system(self) -> Node:
         return Node("system", "", "System", True)
+
+    def listing(self, node: Node) -> list[Node]:
+        """What the screen shows: hidden (dot) files only when asked (H).
+        Sizes still count them: they're backed up like anything else."""
+        rows = self.children(node)
+        if self.show_hidden:
+            return rows
+        return [n for n in rows if not n.name.startswith(".") or n == self.system()]
 
     def children(self, node: Node) -> list[Node]:
         out = []
