@@ -70,9 +70,22 @@ def main() -> int:
                         sys.stderr.write(f"         {done.stderr.strip()[-500:]}\n")
                 else:
                     sys.stderr.write(f"  OK   {part.name}: identical, byte for byte\n")
+        # Stage 4: the restore point carries Your changes to Omarchy, the same as here.
+        info = gate.call("info", bid, point) if gate.call("version").get("gate", 0) >= 9 else {}
+        try:
+            here = json.loads((paths.system_state_dir() / "changes.json").read_text())
+        except (OSError, ValueError):
+            here = {}
+        theirs = info.get("changes") or {}
+        if theirs and theirs.get("made") == here.get("made"):
+            sys.stderr.write(f"  OK   Your changes to Omarchy: in the restore point "
+                             f"({len(theirs['items'])} items), same as this computer's list\n")
+        else:
+            failures += 1
+            sys.stderr.write("  FAIL Your changes to Omarchy: missing from the restore point, or different\n")
     finally:
         gate.call("lock", bid, hold)
-    sys.stderr.write("\nAll good.\n" if not failures else f"\n{failures} part(s) differ.\n")
+    sys.stderr.write("\nAll good.\n" if not failures else f"\n{failures} check(s) failed.\n")
     return 1 if failures else 0
 
 
