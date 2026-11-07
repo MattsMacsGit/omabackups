@@ -18,6 +18,7 @@ CursorSurface {
   implicitHeight: column.implicitHeight + Style.space(14)
 
   function activate() { toggled() }
+  function openOptions() { if (hasGear) gearOpen = !gearOpen }
 
   Column {
     id: column
@@ -28,15 +29,24 @@ CursorSurface {
     spacing: Style.space(4)
     Item {
       width: parent.width
-      implicitHeight: Math.max(titleText.implicitHeight, toggle.implicitHeight)
-      Prose { id: titleText; anchors.left: parent.left; anchors.right: gear.left; text: row.title }
+      implicitHeight: Math.max(words.implicitHeight, toggle.implicitHeight)
+      Column {
+        id: words
+        anchors.left: parent.left
+        anchors.right: gear.visible ? gear.left : toggle.left
+        anchors.rightMargin: Style.space(8)
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(2)
+        Prose { width: parent.width; text: row.title }
+        Prose { width: parent.width; visible: text !== ""; text: row.explainer; dim: true }
+      }
       PanelActionButton {
         id: gear
         visible: row.hasGear
         anchors.right: toggle.left
         anchors.rightMargin: Style.space(6)
         anchors.verticalCenter: parent.verticalCenter
-        iconText: ""
+        iconText: "\uf013"
         tooltipText: "Options"
         onClicked: row.gearOpen = !row.gearOpen
       }
@@ -48,7 +58,6 @@ CursorSurface {
         onToggled: row.toggled()
       }
     }
-    Prose { width: parent.width; visible: text !== ""; text: row.explainer; dim: true }
     Column { id: optionsColumn; visible: row.gearOpen; width: parent.width; spacing: Style.space(6) }
   }
 }

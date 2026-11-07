@@ -38,9 +38,13 @@ function human(bytes) {
 
 function where(header) {
   if (!header) return ""
-  var text = header.kind === "disk" ? "To your backup disk" : "To your backup server"
-  var free = header.space && header.space.free
-  return free ? text + " · " + human(free) + " free" : text
+  if (header.kind === "disk") return "To your backup disk" + (header.model ? ", " + header.model : "")
+  return "To your backup server" + (header.address ? " at " + header.address : "")
+}
+
+function free(header) {
+  var n = header && header.space && header.space.free
+  return n ? human(n) + " free" : ""
 }
 
 // What a running backup is doing, in words.

@@ -13,7 +13,16 @@ Column {
   spacing: Style.space(8)
 
   readonly property var s: service ? service.settings : ({})
-  readonly property var targets: [pick, automatic, away, health, kept, changes, yourBackup]
+  // The cursor's path, top to bottom; an open gear's options come right after its switch.
+  readonly property var targets: [pick, automatic].concat(items(automatic.gearOpen ? everyRepeater : null),
+                                   [awayMinus, awayPlus, health],
+                                   health.gearOpen ? [atMinus, atPlus].concat(items(minutesRepeater)) : [],
+                                   [kept, changes, yourBackup])
+  function items(repeater) {
+    var out = []
+    for (var i = 0; repeater && i < repeater.count; i++) out.push(repeater.itemAt(i))
+    return out
+  }
   function cursorOn(item) { return panel && panel.cursorTarget === item }
   function set(name, value) { service.setSetting(name, value) }
 
@@ -37,24 +46,23 @@ Column {
     options: Row {
       spacing: Style.space(6)
       Repeater {
+        id: everyRepeater
         model: [["hourly", "Every hour"], ["daily", "Every day"], ["weekly", "Every week"]]
-        Button {
+        OptionButton {
           required property var modelData
+          owner: page
           text: modelData[1]
           selected: page.s["automatic.every"] === modelData[0]
-          bordered: true
           onClicked: page.set("automatic.every", modelData[0])
         }
       }
     }
   }
 
-  CursorSurface {
+  Item {
     id: away
     width: parent.width
     implicitHeight: awayColumn.implicitHeight + Style.space(14)
-    hasCursor: page.cursorOn(this)
-    function activate() {}
     Column {
       id: awayColumn
       anchors.left: parent.left
@@ -66,9 +74,9 @@ Column {
       Row {
         spacing: Style.space(8)
         Prose { anchors.verticalCenter: parent.verticalCenter; dim: true; wrapMode: Text.NoWrap; text: "Ask first above" }
-        Button { text: "−"; bordered: true; onClicked: page.set("away.limit_mb", Math.max(50, (page.s["away.limit_mb"] || 500) - 100)) }
+        OptionButton { id: awayMinus; owner: page; text: "−"; onClicked: page.set("away.limit_mb", Math.max(50, (page.s["away.limit_mb"] || 500) - 100)) }
         Prose { anchors.verticalCenter: parent.verticalCenter; wrapMode: Text.NoWrap; text: (page.s["away.limit_mb"] || 500) + " MB" }
-        Button { text: "+"; bordered: true; onClicked: page.set("away.limit_mb", (page.s["away.limit_mb"] || 500) + 100) }
+        OptionButton { id: awayPlus; owner: page; text: "+"; onClicked: page.set("away.limit_mb", (page.s["away.limit_mb"] || 500) + 100) }
       }
       Prose { width: parent.width; dim: true; text: "Away from home, a backup bigger than this asks first: it counts against your data." }
     }
@@ -90,19 +98,20 @@ Column {
       Row {
         spacing: Style.space(8)
         Prose { anchors.verticalCenter: parent.verticalCenter; dim: true; wrapMode: Text.NoWrap; text: "Starts at" }
-        Button { text: "−"; bordered: true; onClicked: page.set("health.at", ((page.s["health.at"] || 0) + 23) % 24) }
+        OptionButton { id: atMinus; owner: page; text: "−"; onClicked: page.set("health.at", ((page.s["health.at"] || 0) + 23) % 24) }
         Prose { anchors.verticalCenter: parent.verticalCenter; wrapMode: Text.NoWrap; text: Model.clock(new Date(2000, 0, 1, page.s["health.at"] || 0)) }
-        Button { text: "+"; bordered: true; onClicked: page.set("health.at", ((page.s["health.at"] || 0) + 1) % 24) }
+        OptionButton { id: atPlus; owner: page; text: "+"; onClicked: page.set("health.at", ((page.s["health.at"] || 0) + 1) % 24) }
       }
       Row {
         spacing: Style.space(6)
         Repeater {
+          id: minutesRepeater
           model: [30, 60, 120, 240, 480]
-          Button {
+          OptionButton {
             required property var modelData
+            owner: page
             text: modelData < 60 ? modelData + " min" : (modelData / 60) + " h"
             selected: page.s["health.minutes"] === modelData
-            bordered: true
             onClicked: page.set("health.minutes", modelData)
           }
         }

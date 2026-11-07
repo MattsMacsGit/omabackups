@@ -36,10 +36,22 @@ Panel {
                                    ? pages.start || null : shown === "settings" ? pages.settings || null
                                    : ["kept", "changes", "yourBackup"].indexOf(shown) >= 0 ? pages.details || null
                                    : shown === "everyday" ? pages.everyday || null : null
-  readonly property var targets: pageItem && pageItem.targets ? pageItem.targets.filter(function(t) { return t && t.visible }) : []
-  readonly property Item cursorTarget: cursorActive && targets.length ? targets[Math.min(cursorIndex, targets.length - 1)] : null
+  // The header's own button (gear or back) comes first, where it sits on screen.
+  readonly property bool heroButtonShown: shown === "everyday" || page !== ""
+  readonly property var targets: (heroButtonShown ? [heroTarget] : []).concat(
+      pageItem && pageItem.targets ? pageItem.targets.filter(function(t) { return t && t.visible }) : [])
+  // The cursor starts on the page's first item, not on the header's button.
+  readonly property int firstIndex: heroButtonShown && targets.length > 1 ? 1 : 0
+  readonly property var cursorTarget: cursorActive && targets.length ? targets[Math.min(cursorIndex, targets.length - 1)] : null
 
-  function go(name) { page = name; cursorIndex = 0 }
+  function go(name) { page = name; cursorIndex = firstIndex }
+  function heroPressed() { shown === "everyday" ? go("settings") : back() }
+
+  QtObject {
+    id: heroTarget
+    readonly property bool visible: true
+    function activate() { root.heroPressed() }
+  }
   function back() {
     if (["kept", "changes", "yourBackup"].indexOf(shown) >= 0) go("settings")
     else if (shown === "settings") go("")
@@ -56,6 +68,17 @@ Panel {
   Connections {
     target: svc
     function onFlowChanged() { if (["where", "server", "disk"].indexOf(root.page) >= 0) root.go("") }
+  }
+  // Keep the keyboard cursor in view on a page taller than the panel.
+  onCursorTargetChanged: {
+    var f = panel.loadedContent ? panel.loadedContent.flick : null
+    var t = cursorTarget && cursorTarget.mapToItem ? cursorTarget : (cursorTarget === heroTarget ? null : undefined)
+    if (!f || t === undefined) return
+    if (t === null) { f.contentY = 0; return }
+    var y = t.mapToItem(f.contentItem, 0, 0).y
+    if (y < f.contentY) f.contentY = Math.max(0, y - Style.space(8))
+    else if (y + t.height > f.contentY + f.height)
+      f.contentY = Math.min(f.contentHeight - f.height, y + t.height - f.height + Style.space(8))
   }
   onOpenedChanged: { svc.panelOpen = opened; if (opened) svc.refresh() }
 
@@ -83,13 +106,15 @@ Panel {
 
     content: PanelKeyCatcher {
       id: keys
+      readonly property Item flick: flick
       readonly property var pages: ({ start: startPage, everyday: everydayPage,
                                       settings: settingsPage, details: detailsPage })
       anchors.fill: parent
       implicitHeight: column.implicitHeight
       onMoveRequested: function(dx, dy) {
         if (dx < 0) { root.back(); return }
-        if (!root.cursorActive) { root.cursorActive = true; return }
+        if (dx > 0) { if (root.cursorTarget && root.cursorTarget.openOptions) root.cursorTarget.openOptions(); return }
+        if (!root.cursorActive) { root.cursorActive = true; root.cursorIndex = root.firstIndex; return }
         root.cursorIndex = Math.max(0, Math.min(root.targets.length - 1, root.cursorIndex + dy))
       }
       onActivateRequested: if (root.cursorTarget && root.cursorTarget.activate) root.cursorTarget.activate()
@@ -98,6 +123,7 @@ Panel {
       onTextKey: function(t) { if (t === "\b") root.back() }
 
       Flickable {
+        id: flick
         anchors.fill: parent
         contentWidth: width
         contentHeight: column.implicitHeight
@@ -116,7 +142,7 @@ Panel {
             title: root.titleFor(root.shown)
             meta: root.shown === "everyday" && svc.header && svc.header.last_finished
                   ? "Latest backup was " + Model.when(svc.header.last_finished) : ""
-            detail: root.shown === "everyday" ? Model.where(svc.header) : ""
+            detail: root.shown === "everyday" ? Model.free(svc.header) : ""
             iconComponent: Component {
               Text {
                 textFormat: Text.PlainText
@@ -128,12 +154,20 @@ Panel {
             }
             trailingControl: Component {
               PanelActionButton {
-                visible: root.shown === "everyday" || root.page !== ""
+                visible: root.heroButtonShown
+                hasCursor: root.cursorTarget === heroTarget
                 iconText: root.shown === "everyday" ? "" : ""
                 tooltipText: root.shown === "everyday" ? "Settings" : "Back"
-                onClicked: root.shown === "everyday" ? root.go("settings") : root.back()
+                onClicked: root.heroPressed()
               }
             }
+          }
+
+          Prose {
+            visible: root.shown === "everyday" && text !== ""
+            width: parent.width
+            dim: true
+            text: Model.where(svc.header)
           }
 
           Prose {
