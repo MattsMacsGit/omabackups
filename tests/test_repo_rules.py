@@ -42,10 +42,14 @@ def test_only_events_print_to_stdout():
 
 def test_standard_library_only():
     allowed_third_party = set()  # D19: add here only with a decision in BUILD §4
+    import ast
     imports = set()
     for path in SRC.rglob("*.py"):
-        for match in re.finditer(r"^\s*(?:from|import)\s+([a-zA-Z_]\w*)", path.read_text(), re.M):
-            imports.add(match.group(1))
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Import):
+                imports |= {a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                imports.add(node.module.split(".")[0])
     import sys
     outside = {m for m in imports
                if m != "omabackups" and m not in sys.stdlib_module_names} - allowed_third_party
