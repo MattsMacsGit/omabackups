@@ -57,3 +57,11 @@ def test_each_line_is_thinned_on_its_own():
 
 def test_odd_names_are_left_alone():
     assert to_delete(["junk", "001-2020-01-01-0000", "001-2020-01-01-0001x"], NOW) == []
+
+
+def test_space_order_is_oldest_first_and_never_newest_or_kept():
+    from omabackups.backup.thinning import space_order
+    names = ["001-2026-01-01-0000", "001-2026-02-01-0000", "001-2026-03-01-0000",
+             "002-2025-01-01-0000"]
+    assert space_order(names) == ["001-2026-01-01-0000", "001-2026-02-01-0000"]
+    assert space_order(names, kept={"001-2026-01-01-0000"}) == ["001-2026-02-01-0000"]

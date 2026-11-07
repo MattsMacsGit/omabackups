@@ -72,7 +72,7 @@ class FakeHost:
 
     def used_inside(self, bid: str) -> tuple[int, int]:
         used = sum(f.stat().st_size for f in mountpoint(bid).resolve().rglob("*") if f.is_file())
-        return used, 50 << 30
+        return used, int(os.environ.get("OMABACKUPS_GATE_FAKE_INSIDE_FREE", str(50 << 30)))
 
     def store_free(self, store: Path) -> int:
         return int(os.environ.get("OMABACKUPS_GATE_FAKE_FREE", str(100 << 30)))

@@ -27,7 +27,7 @@ def owned(server):
 def test_version(server):
     server.init()
     kid = server.add_computer(1)
-    assert server.ok(kid, "version") == {"gate": 2, "contract": 1}
+    assert server.ok(kid, "version") == {"gate": 3, "contract": 1}
 
 
 def test_unknown_keys_and_verbs_are_refused(server):
@@ -189,3 +189,10 @@ def test_no_store_yet_is_explained(server):
     code, _, error = server.call(kid, f"create {2 << 30}",
                                  json.dumps({"password": "p", "key": "S0VZ"}).encode())
     assert code == 1 and "no backup store" in error
+
+
+def test_addresses(owned):
+    server, kid, bid = owned
+    answer = server.ok(kid, "addresses")
+    assert "127.0.0.1" not in answer["addresses"] and isinstance(answer["tailscale"], dict)
+    assert server.call("0" * 16, "addresses")[0] == 1      # unknown keys get nothing

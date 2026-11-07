@@ -85,6 +85,35 @@ def v_status(call: Call) -> dict:
     return {"key": {"id": call.kid, "kind": key["kind"], "label": key["label"]}, "backups": out}
 
 
+def v_addresses(call: Call) -> dict:
+    """This server's addresses, so a computer can still reach it away from home
+    (its Tailscale address and name, if it has one: D17)."""
+    _argc(call, 0)
+    registry.the_key(registry.load(), call.kid)
+    import ipaddress
+    import shutil
+    import subprocess
+    found, tailscale = [], {}
+    done = subprocess.run(["ip", "-j", "addr"], capture_output=True, text=True)
+    try:
+        for link in json.loads(done.stdout or "[]"):
+            for a in link.get("addr_info", []):
+                ip = ipaddress.ip_address(a["local"])
+                if not (ip.is_loopback or ip.is_link_local):
+                    found.append(str(ip))
+    except (ValueError, KeyError, TypeError):
+        pass
+    if shutil.which("tailscale"):
+        done = subprocess.run(["tailscale", "status", "--json", "--self=true", "--peers=false"],
+                              capture_output=True, text=True, timeout=10)
+        try:
+            me = json.loads(done.stdout)["Self"]
+            tailscale = {"ips": me.get("TailscaleIPs", []), "name": me.get("DNSName", "").rstrip(".")}
+        except (ValueError, KeyError, TypeError):
+            pass
+    return {"addresses": found, "tailscale": tailscale}
+
+
 # --- making a backup ---------------------------------------------------------
 
 def v_create(call: Call) -> dict:
@@ -267,7 +296,7 @@ def v_remove_key(call: Call) -> dict:
 
 
 VERBS = {
-    "version": v_version, "status": v_status, "create": v_create,
+    "version": v_version, "status": v_status, "addresses": v_addresses, "create": v_create,
     "unlock": v_unlock, "hold": v_hold, "lock": v_lock,
     "points": v_points, "space": v_space, "delete": v_delete,
     "add-key": v_add_key, "remove-key": v_remove_key,

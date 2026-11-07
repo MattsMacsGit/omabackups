@@ -3,3 +3,4 @@ d /run/omabackups/results 0755 root root -
 d /var/lib/omabackups 0755 root root -
 d /var/lib/omabackups/keys 0700 root root -
 d /etc/omabackups 0755 root root -
+d /var/log/omabackups 0755 root root -

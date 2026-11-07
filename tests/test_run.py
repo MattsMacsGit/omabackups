@@ -132,3 +132,75 @@ def test_thinning_runs_after_a_backup(world, monkeypatch):
     assert "001-2020-01-01-1000" not in names       # same week as 01-01-1100 and 01-02-1000
     assert result["point"] in names
     assert run.load_record()["thinned"]
+
+
+def away_setup(monkeypatch, limit_mb=500):
+    server = json.loads(paths.server_file().read_text())
+    server["away"] = ["backup-server.away.test"]
+    paths.server_file().write_text(json.dumps(server))
+    monkeypatch.setenv("OMABACKUPS_TEST_REACHABLE", "backup-server.away.test")   # home address doesn't answer
+    from omabackups.core import config
+    values = config.load()
+    values["away.limit_mb"] = limit_mb
+    config.save(values)
+
+
+def test_away_a_full_check_waits_for_an_answer(world, monkeypatch):
+    srv, kid, bid, src, box = world
+    away_setup(monkeypatch)
+    from omabackups.backup.check import AwayWait
+    with pytest.raises(AwayWait) as caught:
+        run.backup(source=src)
+    assert caught.value.size is None and "isn't known" in caught.value.what
+    assert not (box / "points").exists() or not list((box / "points").iterdir())
+    assert run.load_record().get("finished") is not False      # nothing half done
+    done = run.backup(source=src, anyway=True)                 # "Back up now"
+    assert done["away"] is True
+    same(latest(box), src)
+
+
+def test_away_small_changes_go_compressed_big_ones_wait(world, monkeypatch):
+    srv, kid, bid, src, box = world
+    run.backup(source=src)                                      # at home
+    away_setup(monkeypatch, limit_mb=1)
+    (src.root / "home/u/small.txt").write_text("small")
+    monkeypatch.setattr(run, "point_name", lambda line, latest: f"{line}-2099-01-01-0000")
+    sent = []
+    real = run.Sender.__init__
+
+    def spy(self, *a, **k):
+        sent.append(k.get("compress"))
+        real(self, *a, **k)
+    monkeypatch.setattr(run.Sender, "__init__", spy)
+    assert run.backup(source=src)["away"] is True and sent[-1] is True
+    same(latest(box), src)
+
+    (src.root / "home/u/big.bin").write_bytes(b"x" * 2_000_000)
+    from omabackups.backup.check import AwayWait
+    with pytest.raises(AwayWait) as caught:
+        run.backup(source=src)
+    assert caught.value.size >= 2_000_000
+
+
+def test_unreachable_says_so(world, monkeypatch):
+    monkeypatch.setenv("OMABACKUPS_TEST_REACHABLE", "nothing")
+    with pytest.raises(OmaError) as caught:
+        run.backup(source=world[3])
+    assert caught.value.code == "unreachable"
+
+
+def test_a_backup_that_doesnt_fit_thins_then_says_full(world, monkeypatch):
+    srv, kid, bid, src, box = world
+    run.backup(source=src)
+    points = box / "points"
+    for name in ("001-2020-01-01-1000", "001-2020-02-01-1000"):
+        (points / name).mkdir()
+    (src.root / "home/u/big.bin").write_bytes(b"x" * 100_000)
+    srv.env["OMABACKUPS_GATE_FAKE_INSIDE_FREE"] = "1000"
+    monkeypatch.setattr(run.check.time, "sleep", lambda s: None)
+    with pytest.raises(OmaError) as caught:
+        run.backup(source=src)
+    assert caught.value.code == "backup-full"
+    left = sorted(p.name for p in points.iterdir())
+    assert "001-2020-01-01-1000" not in left and "001-2020-02-01-1000" not in left
+    assert len(left) == 1          # the newest stays, always

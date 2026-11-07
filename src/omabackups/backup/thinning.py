@@ -36,3 +36,14 @@ def to_delete(names: list[str], now: datetime, kept: set[str] = frozenset()) -> 
             else:
                 seen.add(bucket)
     return sorted(out)
+
+
+def space_order(names: list[str], kept: set[str] = frozenset()) -> list[str]:
+    """What may go when the backup is full, oldest first: never a line's newest,
+    never a kept one (1.x: one at a time, checking real free space after each)."""
+    newest = {}
+    for name in names:
+        if NAME.match(name) and name > newest.get(name[:3], ""):
+            newest[name[:3]] = name
+    return sorted(n for n in names
+                  if NAME.match(n) and n not in kept and n not in newest.values())

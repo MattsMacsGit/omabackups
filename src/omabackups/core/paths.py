@@ -40,6 +40,10 @@ def state_file(name: str) -> Path:
 
 
 def log_dir() -> Path:
+    # Root (the backup service, root jobs) logs where people can find it,
+    # not in root's home folder (1.x lesson: root-only logs hide failures).
+    if os.geteuid() == 0:
+        return _sys("/var/log/omabackups")
     return state_dir() / "logs"
 
 

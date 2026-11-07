@@ -15,7 +15,8 @@ from contextlib import contextmanager
 from omabackups.core import paths
 from omabackups.core.state import write_atomic
 
-STEPS = {"unlock": "Opening your backup", "send": "Backing up", "point": "Making the restore point"}
+STEPS = {"unlock": "Opening your backup", "check": "Checking what changed",
+         "send": "Backing up", "point": "Making the restore point"}
 
 
 def file():

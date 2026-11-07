@@ -46,6 +46,12 @@ def run(args, events: Events) -> int:
     progress_now = progress.read()
     if progress_now.get("running"):
         text += f"\nRunning now: {progress.text(progress_now)}"
+    elif progress_now.get("waiting") == "away":
+        # A line that appears only when true (BUILD 6.1 D, D17).
+        data["lines"].append({"kind": "waiting-network", "size": progress_now.get("size"),
+                              "limit_mb": progress_now.get("limit_mb")})
+        text += ("\nWaiting for a known network: " + progress_now["error"]["what"]
+                 + "\n" + progress_now["error"]["todo"])
     events.result({**data, "running": progress_now if progress_now.get("running") else None}, text)
     return 0
 

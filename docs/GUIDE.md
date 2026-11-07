@@ -104,6 +104,31 @@ Once set up, OmaBackups backs up on its own every hour (or every day or week:
 see Settings below). If the computer was off or asleep when one was due, it
 runs soon after it wakes up.
 
+### Away from home
+
+Backups run wherever you are. OmaBackups finds out by itself whether you're
+home: if your backup server answers at its home address, you are. If not, it
+reaches the server through [Tailscale](https://tailscale.com) instead, if
+both have it (OmaBackups learns the server's Tailscale address while you're
+home; there's nothing to set up).
+
+Away from home, backups are compressed, and anything bigger than your limit
+(500 MB to start with, see `away.limit_mb` in Settings) asks first, because
+it counts against your data on both ends:
+
+- **Back up now**: `omabackups away answer now`
+- **Wait until I'm on a known network**: `omabackups away answer wait`
+
+An automatic backup over the limit simply waits: `omabackups status` shows
+"Waiting for a known network", and it runs by itself once you're home.
+
+### When your backup is full
+
+Before sending anything, OmaBackups checks the backup has room. If it
+doesn't, the oldest restore points go first (never kept ones, never the
+newest). If it still won't fit, it stops before sending anything and says
+so: make your backup bigger, or skip big folders you don't need.
+
 ### What gets backed up
 
 - **System**: everything on your system disk, except temporary files, the
