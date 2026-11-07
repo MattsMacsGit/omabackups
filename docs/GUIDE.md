@@ -187,11 +187,16 @@ opens the picker in the terminal (the panel opens it for you from Settings).
 It starts with your home folders (folders first, then files, each biggest
 first), and **☰ Quick skips** at the bottom:
 
-- **✓** everything in it is backed up; **•** only part of it (open it to see
-  what's skipped); no mark: skipped.
-- **Green**: in your backup already. **Blue**: ticked, goes at the next
-  backup. **Grey**: skipped. The line at the bottom turns **red** if it all
-  won't fit.
+- The **tick** says what's backed up from the next backup on: **✓** all of
+  it, **•** part of it (open it to see what's skipped), no mark: skipped.
+- The **colour** says what your backup holds:
+  - **green ✓**: in your latest restore point, and stays backed up;
+  - **blue ✓**: not in your backup yet: it goes in at the next backup;
+  - **yellow** (no tick): not backed up any more, but still in older restore
+    points, until thinning removes them (a kept restore point holds on to
+    it);
+  - **grey** (no tick): in none of your restore points.
+- The line at the bottom turns **red** if it all won't fit.
 - The line under the list explains the highlighted row in plain words.
 
 Keys: **↑↓** move, **Enter** open a folder, **⌫** back, **Space** tick or

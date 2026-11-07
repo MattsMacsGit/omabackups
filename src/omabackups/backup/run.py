@@ -163,7 +163,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         if changes_now is not None:
             write_atomic(paths.system_state_dir() / "changes.json",
                          (json.dumps({**changes_now, "point": name}) + "\n").encode(), 0o644)
-        thinned = thin(gate, bid, logger)
+        thinned, left = thin(gate, bid, logger)
         try:
             space = gate.call("space", bid)      # for the picker's bottom line
         except OmaError:
@@ -174,6 +174,8 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         since.update(made)
         save_record({"finished": True, "since": since, "skips": fingerprints, "last_point": name,
                      "skip_patterns": {p: skips.for_part(p).patterns for p in fingerprints},
+                     "point_skips": point_skips(record, name,
+                                                {p: skips.for_part(p).patterns for p in fingerprints}, left),
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
                      "away": away, "not_included": left_out, "manifests": manifests,
                      "sent": sender.stats,
@@ -225,18 +227,30 @@ class HoldKeeper:
         self.thread.join(timeout=5)
 
 
-def thin(gate: Gate, bid: str, logger) -> list[str]:
-    """Smart thinning after each backup (D18). A problem here never fails the backup."""
-    gone = []
+def thin(gate: Gate, bid: str, logger) -> tuple[list[str], list[str] | None]:
+    """Smart thinning after each backup (D18). A problem here never fails the backup.
+    Returns (the restore points removed, the ones left; None if unknown)."""
+    gone, left = [], None
     try:
         info = gate.call("points", bid)
         kept = set(info["kept"].get("kept", [])) | {info["kept"].get("return_point")}
         for old in thinning.to_delete(info["points"], datetime.now(), kept):
             gate.call("delete", bid, old)
             gone.append(old)
+        left = [n for n in info["points"] if n not in gone]
     except OmaError as exc:
         logger.warning("thinning: %s | %s", exc.what, exc.details)
-    return gone
+    return gone, left
+
+
+def point_skips(record: dict, name: str, made: dict, left: list[str] | None) -> dict:
+    """Each restore point with the skip list it was made with, for the picker's
+    colours (what the backup holds); points thinning removed drop out."""
+    out = dict(record.get("point_skips") or {})
+    out[name] = {"time": int(time.time()), "skips": made}
+    if left is not None:
+        out = {n: v for n, v in out.items() if n in set(left) | {name}}
+    return out
 
 
 def changes_latest(gate: Gate, bid: str, line: str) -> str | None:

@@ -16,7 +16,13 @@ def world(tmp_path):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_bytes(b"x" * size)
     (system / "home").mkdir()
-    record = {"last_finished": 1, "skip_patterns": {"home": ["/u/Downloads", ".cache"], "system": []},
+    import time
+    later = int(time.time()) + 1000          # the restore point was made after these files
+    record = {"last_finished": later, "last_point": "001-2026-11-07-1200",
+              "point_skips": {
+                  "001-2026-11-01-1200": {"time": later, "skips": {"home": [".cache"], "system": []}},
+                  "001-2026-11-07-1200": {"time": later, "skips": {"home": ["/u/Downloads", ".cache"],
+                                                                   "system": []}}},
               "space": {"used": 9000, "free": 1000}}
     rules = {"home": ["/u/Downloads", ".cache", "/u/Videos/render.mp4"], "system": []}
     return Model("u", record, roots={"home": home, "system": system}, rules=rules)
@@ -42,10 +48,12 @@ def test_marks_colours_and_lines(world):
     cache, render = Node("home", "u/.cache", ".cache", True), Node("home", "u/Videos/render.mp4", "render.mp4", False)
     assert (m.mark(videos), m.colour(videos)) == ("•", "green")
     assert m.explain(videos) == "Videos: 1 thing inside is skipped. Open it to see."
-    assert (m.mark(downloads), m.colour(downloads)) == (" ", "grey")
-    assert m.explain(downloads) == "Downloads: skipped. Space backs it up again."
+    # Downloads: skipped now, but an older restore point (11-01) has it: yellow.
+    assert (m.mark(downloads), m.colour(downloads)) == (" ", "yellow")
+    assert m.explain(downloads).startswith("Downloads: Not backed up any more, but in your older "
+                                           "restore points until thinning removes them")
     assert "like every .cache" in m.explain(cache)
-    assert m.explain(render) == "render.mp4: skipped. Space backs it up again."
+    assert m.colour(render) == "yellow"          # skipped since the latest; older points have it
     assert m.size(videos) == 5000                                  # only what's backed up
 
 
@@ -53,7 +61,8 @@ def test_space_ticks_and_skips(world):
     m = world
     downloads = Node("home", "u/Downloads", "Downloads", True)
     assert m.toggle(downloads) is None and not m.skipped(downloads)
-    assert m.colour(downloads) == "blue"                           # goes at the next backup
+    assert m.colour(downloads) == "blue"                           # ticked: goes at the next backup
+    assert m.explain(downloads) == "Downloads: goes in at the next backup."
     assert "/u/Downloads" not in m.rules["home"] and m.dirty
     projects = Node("home", "u/Projects", "Projects", True)
     m.toggle(projects)
@@ -108,7 +117,8 @@ def test_quick_skips(world):
     m.rules["home"] += [".thumbnails", ".var/app/*/cache"]      # the full default set
     m._refresh()
     assert (m.mark(caches), m.colour(caches)) == (" ", "grey")
-    assert m.explain(caches) == "Caches: Made again whenever they're needed. Skipped: Space backs them up."
+    assert m.explain(caches) == ("Caches: Made again whenever they're needed. Skipped: not in your "
+                                 "backup. Space backs them up.")
     m.toggle(caches)
     assert ".cache" not in m.rules["home"] and ".thumbnails" not in m.rules["home"]
     assert m.mark(caches) == "✓" and m.colour(caches) == "blue"    # was skipped at the last backup
@@ -145,3 +155,21 @@ def test_folders_come_before_files(world, tmp_path):
     world.measure(world.home())
     shown = [n.name for n in world.listing(world.home())]
     assert shown == ["Videos", "Projects", "Downloads", "huge-file.bin", "Quick skips"]
+
+
+def test_the_four_looks(world, tmp_path):
+    m = world
+    projects = Node("home", "u/Projects", "Projects", True)
+    assert (m.mark(projects), m.colour(projects)) == ("✓", "green")     # in, staying
+    m.toggle(projects)
+    assert (m.mark(projects), m.colour(projects)) == (" ", "yellow")    # in older points, not any more
+    import os
+    import time
+    (tmp_path / "home/u/New").mkdir()
+    after = time.time() + 5000                 # made after the restore points
+    os.utime(tmp_path / "home/u/New", (after, after))
+    new = Node("home", "u/New", "New", True)
+    m.toggle(new)
+    assert m.colour(new) == "grey"                                     # never in any restore point
+    m.toggle(new)
+    assert (m.mark(new), m.colour(new)) == ("✓", "blue")               # ticked: goes next time

@@ -42,12 +42,21 @@ class Model:
         self.user, self.record = user, record
         self.roots = roots or PART_ROOT
         self.rules = {p: list(rules[p] if rules else skips.patterns_for(p)) for p in ("home", "system")}
-        self.before = {p: skips.Skips((record.get("skip_patterns") or {}).get(p, self.rules[p]))
-                       for p in ("home", "system")}
+        # Each restore point with the skip list it was made with (kept by the backup):
+        # the colours say what your backup holds (§7.2).
+        made = record.get("point_skips") or {}
+        if not made and record.get("last_point"):
+            made = {record["last_point"]: {"time": record.get("last_finished", 0),
+                                           "skips": record.get("skip_patterns") or {}}}
+        self.points = [(n, v.get("time", 0), {p: skips.Skips((v.get("skips") or {}).get(p, []))
+                                              for p in ("home", "system")}) for n, v in made.items()]
+        self.latest = record.get("last_point")
+        latest = next((r for n, _, r in self.points if n == self.latest), None)
+        self.before = latest or {p: skips.Skips(self.rules[p]) for p in ("home", "system")}
         self.backed_up_once = bool(record.get("last_finished"))
         self.dirty = False
         self.show_hidden = False    # hidden files: Migrate's business; H shows them
-        self._sizes, self._inside, self._lock = {}, {}, threading.Lock()
+        self._sizes, self._inside, self._lock, self._held = {}, {}, threading.Lock(), {}
         self._refresh()
 
     def _refresh(self) -> None:
@@ -122,6 +131,45 @@ class Model:
         with self._lock:
             return self._inside.get(node, 0)
 
+    def held(self, node: Node, latest_only: bool) -> bool:
+        """Is it in your latest restore point (or in any)? Not skipped by that
+        point's list, and there already when it was made."""
+        key = (node, latest_only)
+        if key not in self._held:
+            self._held[key] = any(self._held_by(node, when, rules)
+                                  for name, when, rules in self.points
+                                  if not latest_only or name == self.latest)
+        return self._held[key]
+
+    def _held_by(self, node: Node, when: float, rules: dict) -> bool:
+        if node.part == "quick":      # one of its real folders wasn't skipped by that point
+            for place in quick.places(self._quick(node), self.user, self.roots):
+                for part, root in self.roots.items():
+                    rel = os.path.relpath(place, root)
+                    if not rel.startswith("..") and part in rules and not rules[part].skipped(rel) \
+                            and self._older(Path(place), when):
+                        return True
+            return False
+        if node.rel and rules[node.part].skipped(node.rel):
+            return False
+        return self._older(node.path(self.roots), when)
+
+    @staticmethod
+    def _older(path: Path, when: float) -> bool:
+        """There before `when`: itself, or (a folder) something in it."""
+        try:
+            if os.lstat(path).st_mtime <= when:
+                return True
+            if path.is_dir() and not path.is_symlink():
+                for n, entry in enumerate(os.scandir(path)):
+                    if n > 200:
+                        break
+                    if entry.stat(follow_symlinks=False).st_mtime <= when:
+                        return True
+        except OSError:
+            pass
+        return False
+
     def mark(self, node: Node) -> str:
         if node.part == "quick":
             if not node.rel:
@@ -133,14 +181,14 @@ class Model:
         return "•" if node.is_dir and self.inside_skipped(node) else "✓"
 
     def colour(self, node: Node) -> str:
+        """Tick = backed up from now on; colour = what your backup holds (§7.2):
+        green ticked and in the latest point; blue ticked, not in yet; yellow not
+        ticked but in older restore points; grey in none."""
+        if node in (self.home(), self.quick()):
+            return "green" if self.backed_up_once else "blue"
         if self.skipped(node):
-            return "grey"
-        if node.part == "quick":
-            back_on = node.rel and self._present(node)[2] and not self._present(node)[0]
-            return "blue" if not self.backed_up_once or back_on else "green"
-        if not self.backed_up_once or (node.rel and self.before[node.part].skipped(node.rel)):
-            return "blue"
-        return "green"
+            return "yellow" if self.held(node, latest_only=False) else "grey"
+        return "green" if self.held(node, latest_only=True) else "blue"
 
     def explain(self, node: Node) -> str:
         if node == self.quick():
@@ -148,9 +196,8 @@ class Model:
                     "is always backed up (the Rescue USB needs it).")
         if node.part == "quick":
             have, total, _ = self._present(node)
-            state = ("Skipped: Space backs them up." if have == total else
-                     "Part of it is skipped: Space skips all of it." if have else
-                     "Backed up: Space skips them.")
+            state = ("Part of it is skipped: Space skips all of it." if 0 < have < total
+                     else self._state_line(node, "them"))
             return f"{node.name}: {self._quick(node).note} {state}"
         why = node.rel and self.skips[node.part].why(node.rel)
         if why:
@@ -161,13 +208,24 @@ class Model:
             if not rule.startswith("/"):
                 return (f"{node.name}: skipped, like every {rule.split('/')[-1]} (caches and the trash "
                         "aren't backed up). Space backs this one up anyway.")
-            return f"{node.name}: skipped. Space backs it up again."
+            return f"{node.name}: {self._state_line(node, 'it')}"
         n = self.inside_skipped(node)
         if n:
             return f"{node.name}: {n} thing{'s' if n > 1 else ''} inside {'are' if n > 1 else 'is'} skipped. Open it to see."
         if self.colour(node) == "blue":
-            return f"{node.name}: backed up from the next backup on."
+            return f"{node.name}: goes in at the next backup."
         return f"{node.name}: everything in it is backed up." if node.is_dir else f"{node.name}: backed up."
+
+    def _state_line(self, node: Node, it: str) -> str:
+        colour = self.colour(node)
+        if colour == "yellow":
+            return (f"Not backed up any more, but in your older restore points until thinning "
+                    f"removes them (a kept restore point holds on to {it}). Space backs {it} up again.")
+        if colour == "grey":
+            return f"Skipped: not in your backup. Space backs {it} up."
+        if colour == "blue":
+            return f"Goes in at the next backup. Space skips {it}."
+        return f"Backed up. Space skips {it}."
 
     # --- Space ---------------------------------------------------------------
 

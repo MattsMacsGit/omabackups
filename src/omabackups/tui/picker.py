@@ -59,7 +59,8 @@ class Picker:
         for i, child in enumerate(self.rows[self.top:self.top + height]):
             size = m.size(child)
             skipped = m.skipped(child)
-            note = "skipped" if skipped and child.rel else ""
+            note = ("in older restore points" if m.colour(child) == "yellow" else "skipped") \
+                if skipped and child.rel else ""
             inside = m.inside_skipped(child)
             if not skipped and inside:
                 note = f"{inside} thing{'s' if inside > 1 else ''} skipped"
