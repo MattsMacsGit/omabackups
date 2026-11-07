@@ -86,3 +86,9 @@ class FakeServer:
                size: int = 2 << 30) -> str:
         secrets = json.dumps({"password": password, "key": base64.b64encode(key).decode()})
         return self.ok(kid, f"create {size}", secrets.encode())["id"]
+
+
+def gate_version() -> int:
+    """The gatekeeper's version, as its own conf.py says (no copies to keep in step)."""
+    import re
+    return int(re.search(r"^VERSION = (\d+)", (GATE / "conf.py").read_text(), re.M).group(1))

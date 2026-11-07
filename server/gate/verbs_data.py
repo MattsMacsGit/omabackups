@@ -5,7 +5,8 @@
   apply BACKUP LINE PART                       replay renames/deletes (JSON input)
   ranges BACKUP LINE PART                      write changed ranges into one file
   reuse BACKUP LINE PART                       clone what's unchanged in a restore point
-  snapshot BACKUP LINE NAME                    a restore point (point.json input)
+  snapshot BACKUP LINE NAME                    a restore point (point.json, changes.json input)
+  info BACKUP POINT                            a restore point's point.json and changes.json
   keep / release BACKUP POINT                  kept restore points
 
 PART is system, home or boot. Only the line's owner may write to it (D22a),
@@ -238,14 +239,42 @@ def v_snapshot(call):
     latest = layout.newest_in_line(layout.points(inside), line)
     if latest and name <= latest:
         raise Refused("a restore point must be newer than the last one")
-    info = call.read_input(64 * 1024)
+    raw = call.read_input(8 << 20)
     try:
-        json.loads(info)
+        given = json.loads(raw)
     except ValueError:
         raise Refused("point.json is damaged") from None
-    (current / "point.json").write_bytes(info)
+    # New style: {"point.json": {...}, "changes.json": {...}}; old style: point.json itself.
+    files = given if isinstance(given, dict) and "point.json" in given else {"point.json": given}
+    for fname in ("point.json", "changes.json"):
+        if fname in files:
+            (current / fname).write_text(json.dumps(files[fname], indent=1) + "\n")
+        elif fname == "changes.json":
+            (current / fname).unlink(missing_ok=True)   # never an older day's list in a new point
     host().snapshot(current, inside / "points" / name)
     return {"point": name}
+
+
+def v_info(call):
+    """info BACKUP POINT -- a restore point's point.json and changes.json (read only)."""
+    if len(call.args) != 2:
+        raise Refused("wrong number of arguments")
+    bid, name = call.args
+    registry.the_backup(registry.load(), bid, call.kid, ("owner", "rescue"))
+    if not conf.POINT.match(name):
+        raise Refused("that is not a restore point name")
+    if not host().is_mounted(bid):
+        raise Refused("this backup is locked (unlock it first)")
+    folder = mountpoint(bid) / "points" / name
+    if not folder.is_dir():
+        raise Refused("no such restore point")
+    out = {}
+    for fname in ("point.json", "changes.json"):
+        try:
+            out[fname.removesuffix(".json")] = json.loads((folder / fname).read_text())
+        except (OSError, ValueError):
+            out[fname.removesuffix(".json")] = None
+    return out
 
 
 def _kept(call, keep: bool):
@@ -266,5 +295,5 @@ def _kept(call, keep: bool):
     return {"kept": sorted(names)}
 
 
-VERBS = {"send": v_send, "fetch": v_fetch, "apply": v_apply, "reuse": v_reuse, "ranges": v_ranges, "snapshot": v_snapshot,
+VERBS = {"send": v_send, "fetch": v_fetch, "apply": v_apply, "reuse": v_reuse, "info": v_info, "ranges": v_ranges, "snapshot": v_snapshot,
          "keep": lambda call: _kept(call, True), "release": lambda call: _kept(call, False)}

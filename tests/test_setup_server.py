@@ -108,7 +108,8 @@ def test_the_gatekeeper_bundle_runs(sandbox, tmp_path):
     import sys
     gate = bundle.gate_file()
     done = subprocess.run([sys.executable, str(gate), "version"], capture_output=True, text=True)
-    assert json.loads(done.stdout) == {"gate": 8, "contract": 1}
+    from gate_harness import gate_version
+    assert json.loads(done.stdout) == {"gate": gate_version(), "contract": 1}
     assert len(bundle.sha256(gate)) == 64
 
 

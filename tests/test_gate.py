@@ -4,7 +4,7 @@ import json
 import os
 
 import pytest
-from gate_harness import FakeServer, make_pubkey
+from gate_harness import FakeServer, gate_version, make_pubkey
 
 KEY = b"K" * 64
 
@@ -27,7 +27,7 @@ def owned(server):
 def test_version(server):
     server.init()
     kid = server.add_computer(1)
-    assert server.ok(kid, "version") == {"gate": 8, "contract": 1}
+    assert server.ok(kid, "version") == {"gate": gate_version(), "contract": 1}
 
 
 def test_unknown_keys_and_verbs_are_refused(server):

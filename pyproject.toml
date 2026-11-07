@@ -3,3 +3,4 @@
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["real_audit: run the real audit (reads this system; slower)"]

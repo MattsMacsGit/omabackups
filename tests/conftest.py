@@ -49,3 +49,18 @@ class Sandbox:
             [sys.executable, "-m", "omabackups", *args],
             env=env, capture_output=True, text=True, timeout=60,
         )
+
+
+@pytest.fixture(autouse=True)
+def quick_audit(request, monkeypatch):
+    """Backups run the audit (Your changes to Omarchy). The real one reads the
+    whole system (pacman, sizes): too slow to run in every backup test. Tests
+    that check the audit itself ask for it with @pytest.mark.real_audit."""
+    if request.node.get_closest_marker("real_audit"):
+        return
+    from omabackups.audit import model, scan
+
+    def quick(user=None):
+        return model.audit({"system": "omarchy", "version": "test"}, user or "test",
+                           [model.item("app:test", "apps", "Test app", "package", ["test"])], {})
+    monkeypatch.setattr(scan, "safely", quick)

@@ -323,3 +323,21 @@ def test_the_hold_is_kept_alive_during_a_long_part(world, monkeypatch):
     monkeypatch.setattr(run.Sender, "full", slow)
     run.backup(source=src)
     assert seen == [True]
+
+
+@pytest.mark.real_audit
+def test_every_restore_point_carries_its_changes(world, sandbox):
+    srv, kid, bid, src, box = world
+    result = run.backup(source=src)
+    changes = json.loads((latest(box) / "changes.json").read_text())
+    assert changes["format"] == 1 and changes["source"]["system"] == "omarchy"
+    info = srv.ok(kid, f"info {bid} {result['point']}")
+    assert info["changes"]["made"] == changes["made"] and info["point"]["owner"]
+    shown = sandbox.run("changes")
+    assert shown.returncode == 0, shown.stderr
+    assert shown.stdout.startswith("Your changes to Omarchy\nLatest backup was ")
+
+
+def test_no_changes_list_yet_is_explained(sandbox):
+    done = sandbox.run("changes")
+    assert done.returncode == 1 and "back up once" in done.stderr

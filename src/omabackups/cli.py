@@ -10,12 +10,12 @@ import argparse
 import sys
 
 from omabackups import __version__
-from omabackups.commands import backup, plumbing, settings, setup, status
+from omabackups.commands import backup, changes, plumbing, settings, setup, status
 from omabackups.core import log
 from omabackups.core.errors import OmaError, unexpected
 from omabackups.core.events import Events
 
-COMMANDS = (status, backup, setup, settings, plumbing)
+COMMANDS = (status, backup, changes, setup, settings, plumbing)
 
 
 def parser() -> argparse.ArgumentParser:

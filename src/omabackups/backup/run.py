@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from omabackups import __version__
+from omabackups.audit import scan as audit_scan
 from omabackups.backup import changes, check, health, reuse, schedule, skips, thinning
 from omabackups.backup.send import Sender
 from omabackups.backup.source import Snapshots, parts
@@ -145,14 +146,23 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                 how[part.name] = "full check, every file's contents" if resend else "full check"
 
         # 3. The restore point, then thinning.
-        progress("point")
         latest = changes_latest(gate, bid, line)
         name = point_name(line, latest)
         point = {"owner": ids.system_id(), "user": linked_user(), "omarchy": omarchy_version(),
                  "omabackups": __version__, "follows": latest, "how": how, "away": away,
                  "not_included": left_out,
                  "skips": {p: skips.for_part(p).patterns for p in how}, "created": int(time.time())}
-        gate.call("snapshot", bid, line, name, data=json.dumps(point).encode())
+        progress("audit")
+        changes_now = audit_scan.safely(linked_user() or None)     # Your changes to Omarchy (D9)
+        progress("point")
+        files = {"point.json": point}
+        if changes_now is not None and gate_version >= 9:
+            files["changes.json"] = changes_now
+        gate.call("snapshot", bid, line, name,
+                  data=json.dumps(files if gate_version >= 9 else point).encode())
+        if changes_now is not None:
+            write_atomic(paths.system_state_dir() / "changes.json",
+                         (json.dumps({**changes_now, "point": name}) + "\n").encode(), 0o644)
         thinned = thin(gate, bid, logger)
 
         # 4. Done: the new snapshots are the next "since" point; the old ones go.

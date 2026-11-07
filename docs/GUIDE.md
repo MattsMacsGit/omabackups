@@ -12,8 +12,9 @@ the whole system, and move your setup onto a fresh install.
 2. [Set up backups to a backup server](#set-up-backups-to-a-backup-server)
 3. [Set up backups to a backup disk](#set-up-backups-to-a-backup-disk)
 4. [Backing up](#backing-up)
-5. [Start over](#start-over)
-6. [The omabackups command](#the-omabackups-command)
+5. [Your changes to Omarchy](#your-changes-to-omarchy)
+6. [Start over](#start-over)
+7. [The omabackups command](#the-omabackups-command)
 
 ## Install and remove
 
@@ -211,6 +212,34 @@ still missing.
 
 One snapshot stays on your computer between backups. It's what the next
 backup compares against, and it's replaced each time.
+
+## Your changes to Omarchy
+
+Every backup also notes how this computer differs from a fresh Omarchy, and
+keeps that list inside the restore point. There's nothing to do: it takes
+about a second, and it's what Migrate uses on a new computer to offer you
+everything you had.
+
+```
+omabackups changes
+```
+
+shows the list as of your latest backup:
+
+- **Apps** you installed (from Arch, the AUR, Flatpak, or tools like mise),
+  and web apps you added to the menu. Each one says where its settings are.
+- **Settings**: your SSH keys, saved passwords, browser profiles, Wi-Fi and
+  Bluetooth, and apps whose settings changed since Omarchy set them up.
+- **System tweaks**: files you set up yourself in the system's own places
+  (services, commands, driver and kernel settings). Only ones no package
+  owns and Omarchy didn't make.
+- **Keybindings, bar & theme**: each piece of the desktop that differs from
+  a fresh Omarchy: keybindings, screens, the bar, your themes and the one in
+  use, menus, automation hooks, bar plugins.
+- **Backgrounds** you added, and **Your files**: the folders in your home.
+
+Each item says what it is, why you might want it (or not), and how easy it
+would be to get back without it.
 
 ## Start over
 
