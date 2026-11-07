@@ -1,6 +1,6 @@
 # The omabackups package (D20).
 # This build reads the files from the repo it sits in (for testing):
-#   cd packaging && makepkg -si
+#   cd packaging && makepkg -sif   (-f: always build fresh; the version only changes at release)
 # The AUR version (at release) downloads a tagged, checked release instead.
 
 pkgname=omabackups

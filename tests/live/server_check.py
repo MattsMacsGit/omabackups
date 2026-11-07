@@ -35,7 +35,12 @@ def main() -> int:
     if os.geteuid() != 0:
         sys.stderr.write("Run it with sudo (it uses this computer's root-only keys).\n")
         return 1
-    server = json.loads(paths.server_file().read_text())
+    try:
+        server = json.loads(paths.server_file().read_text())
+    except FileNotFoundError:
+        sys.stderr.write("No backup server is set up on this computer yet.\n"
+                         "Run 'omabackups setup server' first, then this check.\n")
+        return 1
     gate, bid = Gate(server["address"]), server["backup"]
     failures = 0
 
