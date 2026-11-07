@@ -1,0 +1,12 @@
+[Unit]
+Description=OmaBackups: back up (%i)
+Documentation=https://github.com/MattsMacsGit/omabackups
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/omabackups backup-run %i
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

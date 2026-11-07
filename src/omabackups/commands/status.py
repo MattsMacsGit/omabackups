@@ -1,7 +1,11 @@
 """`omabackups status`: everything the panel shows, in one answer."""
 
+import json
+from datetime import datetime
+
 from omabackups import __version__
-from omabackups.core import flow, ids
+from omabackups.backup import progress
+from omabackups.core import flow, ids, paths
 from omabackups.core.events import Events
 
 _TEXT = {
@@ -13,7 +17,7 @@ _TEXT = {
     flow.Step.SETTING_UP: "OmaBackups is being set up: the first backup hasn't run yet.",
     flow.Step.MIGRATING: "Migrate from another system has started and isn't finished yet.",
     flow.Step.RESTORE_FILES: "Restore my files to finish. Automatic backups wait until then.",
-    flow.Step.EVERYDAY: "OmaBackups is set up.",
+    flow.Step.EVERYDAY: "OmaBackups is set up and backing up.",
 }
 
 
@@ -31,8 +35,31 @@ def run(args, events: Events) -> int:
         "version": __version__,
         # Filled in by later stages: the panel header and the lines that
         # appear only when true (BUILD 6.1 D).
-        "header": None,
+        "header": _header(),
         "lines": [],
     }
-    events.result(data, _TEXT[step])
+    text = _TEXT[step]
+    if data["header"] and data["header"].get("last_point"):
+        h = data["header"]
+        when = datetime.fromtimestamp(h["last_finished"]).strftime("%A %-I:%M %p").replace(" 0", " ")
+        text += f"\nLast backup: {when} (restore point {h['last_point']}), to {h['where']}."
+    progress_now = progress.read()
+    if progress_now.get("running"):
+        text += f"\nRunning now: {progress.text(progress_now)}"
+    events.result({**data, "running": progress_now if progress_now.get("running") else None}, text)
     return 0
+
+
+def _header() -> dict | None:
+    """Last backup and where it went (BUILD 6.1 D). Both files are readable by everyone."""
+    try:
+        server = json.loads(paths.server_file().read_text())
+    except (OSError, ValueError):
+        return None
+    try:
+        record = json.loads((paths.system_state_dir() / "backup.json").read_text())
+    except (OSError, ValueError):
+        record = {}
+    return {"where": "your backup server", "address": server.get("address"),
+            "last_point": record.get("last_point"), "last_finished": record.get("last_finished"),
+            "size": server.get("size")}

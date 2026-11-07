@@ -123,8 +123,15 @@ def test_link_writes_a_polkit_rule_for_this_user_only(world):
     import pwd
     rule = paths.polkit_rule_file().read_text()
     me = pwd.getpwuid(os.getuid()).pw_name
-    assert f'subject.user !== "{me}"' in rule
-    assert "omabackups-root@" in rule and "isInGroup" not in rule
+    assert f'subject.user !== "{me}"' in rule and "isInGroup" not in rule
+    import re
+    pattern = re.search(r"if \(/(.+)/\.test\(unit\)\)", rule).group(1)
+    for unit in ("omabackups-backup@now.service", "omabackups-backup@scheduled.service",
+                 "omabackups-root@create-backup.service", "omabackups-health.service"):
+        assert re.match(pattern, unit), unit
+    for unit in ("sshd.service", "oma-backups-backup.service", "omabackups-backup@now.timer",
+                 "omabackups-x@a/../b.service", "xomabackups-backup.service", "omabackups-.service"):
+        assert not re.match(pattern, unit), unit
 
 
 def test_a_request_reached_through_a_link_is_refused(world, tmp_path):

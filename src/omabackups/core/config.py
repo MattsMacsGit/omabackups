@@ -61,9 +61,9 @@ def defaults() -> dict:
     return {name: s.default for name, s in _BY_NAME.items()}
 
 
-def load() -> dict:
+def load(path=None) -> dict:
     """All settings as {"section.key": value}, defaults filled in."""
-    path = paths.settings_file()
+    path = path or paths.settings_file()
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:

@@ -12,6 +12,7 @@ import json
 import os
 import pwd
 import re
+import subprocess
 
 from omabackups.core import paths
 from omabackups.core.errors import OmaError
@@ -31,14 +32,14 @@ def caller() -> pwd.struct_passwd:
 
 RULE = """// OmaBackups (BUILD 5.2, D27): written by `omabackups link`.
 // Only USER, in an active local session, may start and stop OmaBackups' own
-// root jobs without a password. Nothing else.
+// services (the package's omabackups-* units) without a password. Nothing else.
 polkit.addRule(function (action, subject) {
   if (action.id !== "org.freedesktop.systemd1.manage-units") return;
   if (subject.user !== "USER" || !subject.local || !subject.active) return;
   var verb = action.lookup("verb");
   if (verb !== "start" && verb !== "stop") return;
   var unit = action.lookup("unit");
-  if (/^omabackups-root@[a-z][a-z-]{0,40}\\.service$/.test(unit)) return polkit.Result.YES;
+  if (/^omabackups-[a-z]+(@[a-z][a-z-]{0,40})?\\.service$/.test(unit)) return polkit.Result.YES;
 });
 """
 USER_NAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -53,6 +54,8 @@ def link(user: pwd.struct_passwd) -> dict:
     rule = paths.polkit_rule_file()
     rule.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(rule, RULE.replace("USER", user.pw_name).encode(), 0o644)
+    if not os.environ.get("OMABACKUPS_SYSROOT"):   # tests have no systemd
+        subprocess.run(["systemctl", "enable", "--now", "omabackups-backup.timer"], capture_output=True)
     paths.system_config_dir().mkdir(parents=True, exist_ok=True)
     write_atomic(paths.linked_user_file(),
                  (json.dumps({"user": user.pw_name, "uid": user.pw_uid}) + "\n").encode(), 0o644)

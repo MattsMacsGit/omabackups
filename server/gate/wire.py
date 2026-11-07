@@ -69,6 +69,13 @@ def relay(sock: socket.socket, key_id: str, command: str, stdin=None, stdout=Non
     stdout = stdout if stdout is not None else sys.stdout.buffer
     stderr = stderr if stderr is not None else sys.stderr.buffer
     sock.sendall(json.dumps({"key": key_id, "cmd": command}).encode() + b"\n")
+    # Whoever started us may have left our input/output non-blocking (rsync does):
+    # then a big write fails instead of waiting. Make them wait.
+    for f in (stdin, stdout, stderr):
+        try:
+            os.set_blocking(f.fileno(), True)
+        except (OSError, ValueError, AttributeError):
+            pass
 
     def pump_in():
         try:

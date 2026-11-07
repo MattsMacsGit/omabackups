@@ -1,6 +1,7 @@
 """The data verbs (stage 3): only into this computer's own backup line.
 
   send BACKUP LINE PART <rsync server args>    rsync into current/LINE/PART
+  fetch BACKUP POINT PART <rsync server args>  rsync out of a restore point (read only)
   apply BACKUP LINE PART                       replay renames/deletes (JSON input)
   ranges BACKUP LINE PART                      write changed ranges into one file
   snapshot BACKUP LINE NAME                    a restore point (point.json input)
@@ -74,6 +75,24 @@ def v_send(call):
     bid, line, part = call.args[:3]
     root = _part(call, bid, line, part)
     options = rsync_args.check(call.args[3:], sender=False)
+    return Stream(["rsync", *options, ".", str(root) + "/"], cwd=str(root))
+
+
+def v_fetch(call):
+    """fetch BACKUP POINT PART <rsync server args>: read one part of a restore
+    point (Browse, Restore my files, rescues, checks). Owner and rescue keys."""
+    if len(call.args) < 8:
+        raise Refused("wrong number of arguments")
+    bid, point, part = call.args[:3]
+    registry.the_backup(registry.load(), bid, call.kid, ("owner", "rescue"))
+    if part not in PARTS or not conf.POINT.match(point):
+        raise Refused("that is not a restore point and part")
+    if not host().is_mounted(bid):
+        raise Refused("this backup is locked (unlock it first)")
+    root = mountpoint(bid) / "points" / point / part
+    if not root.is_dir():
+        raise Refused("no such restore point")
+    options = rsync_args.check(call.args[3:], sender=True)
     return Stream(["rsync", *options, ".", str(root) + "/"], cwd=str(root))
 
 
@@ -190,5 +209,5 @@ def _kept(call, keep: bool):
     return {"kept": sorted(names)}
 
 
-VERBS = {"send": v_send, "apply": v_apply, "ranges": v_ranges, "snapshot": v_snapshot,
+VERBS = {"send": v_send, "fetch": v_fetch, "apply": v_apply, "ranges": v_ranges, "snapshot": v_snapshot,
          "keep": lambda call: _kept(call, True), "release": lambda call: _kept(call, False)}

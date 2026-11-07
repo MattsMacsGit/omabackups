@@ -1,0 +1,11 @@
+[Unit]
+Description=OmaBackups: automatic backups (the backup itself checks your settings)
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+Unit=omabackups-backup@scheduled.service
+
+[Install]
+WantedBy=timers.target

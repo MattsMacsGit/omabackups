@@ -10,7 +10,8 @@ the whole system, and move your setup onto a fresh install.
 
 1. [Install and remove](#install-and-remove)
 2. [Set up backups to a backup server](#set-up-backups-to-a-backup-server)
-3. [The omabackups command](#the-omabackups-command)
+3. [Backing up](#backing-up)
+4. [The omabackups command](#the-omabackups-command)
 
 ## Install and remove
 
@@ -83,6 +84,56 @@ you.
 
 Several computers can back up to the same server. Each gets its own box and
 its own password, and none of them can see the others.
+
+## Backing up
+
+### Back up now
+
+```
+omabackups backup
+```
+
+It shows what it's doing, then the name of the new **restore point**, for
+example `001-2026-11-07-1400` (backup line 001, 7 November 2026, 2:00 pm).
+`omabackups stop` stops a backup that's running. Nothing is lost: the next
+backup picks up where it stopped.
+
+### Automatic backups
+
+Once set up, OmaBackups backs up on its own every hour (or every day or week:
+see Settings below). If the computer was off or asleep when one was due, it
+runs soon after it wakes up.
+
+### What gets backed up
+
+- **System**: everything on your system disk, except temporary files, the
+  package cache, crash dumps and other things that are no use after a
+  restore.
+- **Home**: every user's home folder, except caches, thumbnails and the
+  trash.
+- **Boot**: the boot partition.
+
+OmaBackups reads your files from a snapshot taken at the start of each
+backup, so everything in one restore point is from the same moment, even
+while you keep working.
+
+### Why most backups take seconds
+
+The first backup copies everything, so it takes a while. After that, your
+disk already knows what changed since the last backup, so OmaBackups sends
+only that:
+
+- a renamed or moved folder is moved on the server too, and nothing is sent;
+- a big file that changed a little (a virtual machine's disk, say) only
+  sends the parts that changed;
+- everything else that changed is sent as it is.
+
+If a backup is cut off (the network drops, the computer turns off), the next
+one checks every file instead and finishes the job: it only sends what's
+still missing.
+
+One snapshot stays on your computer between backups. It's what the next
+backup compares against, and it's replaced each time.
 
 ## The omabackups command
 

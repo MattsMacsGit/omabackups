@@ -183,3 +183,30 @@ def test_restore_points_and_kept_ones(box, tmp_path):
     srv.ok(kid, f"release {bid} 001-2026-11-07-1000")
     srv.ok(kid, f"delete {bid} 001-2026-11-07-1000")
     assert srv.ok(kid, f"points {bid}")["points"] == ["001-2026-11-07-1100", "001-2026-11-07-1200"]
+
+
+def test_fetch_reads_a_restore_point_back(box, tmp_path):
+    srv, kid, bid, line = box
+    src = tmp_path / "src"
+    make_source(src)
+    assert rsync(srv, kid, bid, "home", src).returncode == 0
+    srv.ok(kid, f"snapshot {bid} 001 001-2026-11-07-1000", b"{}")
+    rescue = srv.ok(kid, f"add-key {bid} stick", make_pubkey(9).encode())["key"]
+    back = tmp_path / "back"
+    env = {**srv.env, "OMABACKUPS_TEST_KEY": rescue}
+    done = subprocess.run(["rsync", *BASE, "-e", f"{sys.executable} {FAKE_SSH}",
+                           f"--rsync-path=fetch {bid} 001-2026-11-07-1000 home",
+                           "omabackups-server:x/", f"{back}/"],
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert tree(back) == tree(src)
+
+
+def test_fetch_never_writes_and_stays_in_points(box):
+    srv, kid, bid, line = box
+    srv.ok(kid, f"snapshot {bid} 001 001-2026-11-07-1000", b"{}")
+    for command in (f"fetch {bid} 001-2026-11-07-1000 home --server -le.x . x",       # not a sender
+                    f"fetch {bid} ../current home --server --sender -le.x . x",
+                    f"fetch {bid} 001-2026-11-07-1000 etc --server --sender -le.x . x"):
+        code, _, error = srv.call(kid, command)
+        assert code == 1, (command, error)

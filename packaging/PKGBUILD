@@ -37,6 +37,8 @@ EOF
   # The root helper (5.2, D27): its unit, the link pop-up and its folders.
   local files="$repo/packaging/files"
   install -Dm644 "$files/omabackups-root@.service" "$pkgdir/usr/lib/systemd/system/omabackups-root@.service"
+  install -Dm644 "$files/omabackups-backup@.service" "$pkgdir/usr/lib/systemd/system/omabackups-backup@.service"
+  install -Dm644 "$files/omabackups-backup.timer" "$pkgdir/usr/lib/systemd/system/omabackups-backup.timer"
   install -Dm644 "$files/org.omabackups.link.policy" "$pkgdir/usr/share/polkit-1/actions/org.omabackups.link.policy"
   install -Dm644 "$files/omabackups.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/omabackups.conf"
 

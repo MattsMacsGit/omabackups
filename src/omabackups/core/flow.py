@@ -36,6 +36,16 @@ def where() -> Step:
     if setup is None:
         # After a finished Migrate, the first backup (and handover) is next.
         return Step.SETTING_UP if migrate is not None else Step.NOT_SET_UP
-    if not setup.get("first_backup"):
+    if not setup.get("first_backup") and not _a_backup_finished():
         return Step.SETTING_UP
     return Step.EVERYDAY
+
+
+def _a_backup_finished() -> bool:
+    """The root side's record (readable by everyone) says a backup finished."""
+    import json
+    from omabackups.core import paths
+    try:
+        return bool(json.loads((paths.system_state_dir() / "backup.json").read_text()).get("last_point"))
+    except (OSError, ValueError):
+        return False
