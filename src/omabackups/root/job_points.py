@@ -1,6 +1,6 @@
 """Root jobs on the backup itself (as root, through the gatekeeper):
 keep / release a restore point (kept ones are never thinned or deleted),
-and change your backup's password."""
+delete one (to make room, D35), and change your backup's password."""
 
 import json
 
@@ -33,6 +33,25 @@ def keep(request: dict) -> dict:
     record = run.load_record()          # written after the server said yes
     run.save_record({**record, "kept": kept.get("kept", []), "return_point": kept.get("return_point")})
     return {"kept": kept.get("kept", [])}
+
+
+def delete(request: dict) -> dict:
+    """Delete one restore point: never the newest, never a kept one (the
+    gatekeeper refuses those too)."""
+    point = str(request.get("point", ""))
+    if not POINT.match(point):
+        raise OmaError("That isn't a restore point.", code="bad-request")
+    gate, bid = _open()
+    hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
+    try:
+        gate.call("delete", bid, point)
+        space = gate.call("space", bid)
+    finally:
+        gate.call("lock", bid, hold)
+    record = run.load_record()          # written after the server said yes
+    points = {n: v for n, v in (record.get("point_skips") or {}).items() if n != point}
+    run.save_record({**record, "point_skips": points, "space": space})
+    return {"deleted": point, "space": space}
 
 
 def change_password(request: dict) -> dict:

@@ -138,7 +138,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         if settings["away.on"]:
             check.away_limit(away, anyway, needed if known else None, settings["away.limit_mb"])
         if known:
-            check.make_room(gate, bid, needed, logger)
+            check.make_room(gate, bid, needed, logger, may_delete=settings["thinning.on"])
 
         # 2. Send. From here until the end, the record says "not finished".
         save_record({**record, "finished": False, "started": int(time.time())})

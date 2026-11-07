@@ -1,5 +1,5 @@
 """`omabackups points` (the restore points), `keep <point>`, `release <point>`,
-and `password change` (your backup's password)."""
+`delete <point>` (to make room), and `password change` (your backup's password)."""
 
 import getpass
 from datetime import datetime
@@ -17,6 +17,9 @@ def add(sub) -> None:
         p = sub.add_parser(verb, help=about)
         p.add_argument("point")
         p.set_defaults(run=run_keep, keep=verb == "keep")
+    d = sub.add_parser("delete", help="delete a restore point (to make room)")
+    d.add_argument("point")
+    d.set_defaults(run=run_delete)
     pw = sub.add_parser("password", help="your backup's password")
     pw.add_subparsers(dest="verb", metavar="change", required=True).add_parser(
         "change", help="change your backup's password").set_defaults(run=run_password)
@@ -33,6 +36,14 @@ def run_points(args, events: Events) -> int:
 def run_keep(args, events: Events) -> int:
     answer = rootjob.run("keep", {"point": args.point, "keep": args.keep})
     events.result(answer, f"{args.point} is {'kept' if args.keep else 'no longer kept'}.")
+    return 0
+
+
+def run_delete(args, events: Events) -> int:
+    answer = rootjob.run("delete-point", {"point": args.point})
+    from omabackups.backup.check import human
+    free = answer.get("space", {}).get("free")
+    events.result(answer, f"{args.point} is deleted." + (f" Your backup has {human(free)} free." if free else ""))
     return 0
 
 

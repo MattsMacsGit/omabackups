@@ -36,7 +36,7 @@ Column {
   NavRow {
     id: pick
     title: "Choose what gets backed up"
-    explainer: "Opens the picker in a terminal window."
+    explainer: "Opens the file selection window to make your choices."
     hasCursorHere: page.cursorOn(this)
     onActivated: page.service.pick()
   }

@@ -55,10 +55,9 @@ screen:
    there. Then a terminal window opens for the passwords and the questions
    SSH asks (see the next two sections for what each one is). The panel
    moves on by itself when it's done.
-4. **Your first backup.** **Back up now** opens the picker first, so you
-   can choose what gets backed up (your own files are ticked, the trash and
-   caches skipped). Saving starts the backup. While you wait, the panel
-   offers to make a Rescue USB; **Later** leaves a reminder.
+4. **Your first backup.** **Back up now** opens the file selection first
+   (your own files ticked, the trash and caches skipped); saving starts the
+   backup. Meanwhile the panel offers a Rescue USB; **Later** leaves a reminder.
 
 **Every day**, the panel shows:
 
@@ -208,9 +207,9 @@ An automatic backup over the limit simply waits: `omabackups status` shows
 ### When your backup is full
 
 Before sending anything, OmaBackups checks the backup has room. If it
-doesn't, the oldest restore points go first (never kept ones, never the
-newest). If it still won't fit, it stops before sending anything and says
-so: make your backup bigger, or skip big folders you don't need.
+doesn't, smart thinning removes the oldest restore points first (never kept
+ones, never the newest); with it off, nothing is deleted. Either way, if it
+won't fit, it stops before sending anything and says what to do.
 
 ### The nightly health check
 
@@ -325,8 +324,9 @@ ones and fewer old ones. Smart thinning keeps:
 - one a day for the 30 days before that;
 - one a week after that, for as long as there's room.
 
-Backing up every hour, that's about 100 restore points after a year. Switched
-off (Settings › **Restore points**), every backup stays until the room is needed.
+About 100 restore points after a year, backing up hourly. Switched off
+(Settings › **Restore points**), nothing is deleted by itself: a full backup
+stops and says so. Delete ones you don't need: `omabackups delete <point>`.
 
 ### Kept restore points
 

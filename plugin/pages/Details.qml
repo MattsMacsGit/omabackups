@@ -40,11 +40,12 @@ Column {
         + "·  one a day for the 30 days before that\n"
         + "·  one a week after that, for as long as there's room\n"
         + "Backing up every hour, that's about 100 restore points after a year. Kept ones are never thinned."
-      : "Off: every backup stays a restore point (24 a day, backing up every hour) until your backup "
-        + "needs the room. Then the oldest go first, never the kept ones."
+      : "Off: nothing is ever deleted by itself. Every backup stays a restore point (24 a day, backing "
+        + "up every hour). When your backup is full, backups stop and say so: turn this back on, or "
+        + "delete restore points you don't need."
     onToggled: page.service.setSetting("thinning.on", !checked)
   }
-  PanelSectionHeader { visible: page.step === "kept"; text: "Keep" }
+  PanelSectionHeader { visible: page.step === "kept"; text: "Select restore points to keep" }
   Prose {
     visible: page.step === "kept"
     width: parent.width

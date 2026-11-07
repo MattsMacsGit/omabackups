@@ -71,14 +71,25 @@ def away_limit(away: bool, anyway: bool, size: int | None, limit_mb: int) -> Non
         raise AwayWait(size, limit_mb)
 
 
-def make_room(gate, bid: str, needed: int, logger) -> list[str]:
-    """Make sure `needed` bytes fit; thin the oldest restore points if not."""
+def make_room(gate, bid: str, needed: int, logger, may_delete: bool = True) -> list[str]:
+    """Make sure `needed` bytes fit; thin the oldest restore points if not.
+    With smart thinning off (`may_delete` False, D35) nothing is ever deleted
+    by itself: the backup stops and says what to do."""
     gone = []
     while True:
         space = gate.call("space", bid)
         free = space.get("free")
         if free is None or needed <= free * ROOM:
             return gone
+        if not may_delete:
+            raise OmaError(
+                f"Your backup is full: this backup needs {human(needed)} and there's "
+                f"{human(free)} left. Smart thinning is off, so no restore points were deleted.",
+                "Turn on Smart thinning (Settings › Restore points), or make room by deleting "
+                "restore points you don't need: omabackups points lists them, and "
+                "omabackups delete <restore point> deletes one.",
+                f"box {human(space.get('box', 0))}, used {human(space.get('used', 0))}",
+                code="backup-full")
         info = gate.call("points", bid)
         kept = set(info["kept"].get("kept", [])) | {info["kept"].get("return_point")}
         candidates = thinning.space_order(info["points"], kept)
