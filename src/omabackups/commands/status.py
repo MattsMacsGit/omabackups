@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 
 from omabackups import __version__
+from omabackups.backup import health as backup_health
 from omabackups.backup import progress
 from omabackups.core import flow, ids, paths
 from omabackups.core.events import Events
@@ -48,6 +49,14 @@ def run(args, events: Events) -> int:
         data["lines"].append({"kind": "not-included", "paths": left_out})
         text += ("\nNot backed up (each is a separate btrfs subvolume, which a snapshot "
                  "can't include): " + ", ".join(left_out))
+    verdict = backup_health.load()
+    if verdict.get("state") in backup_health.PROBLEMS:
+        # Only when something's wrong (D18).
+        data["lines"].append({"kind": "health", "state": verdict["state"],
+                              "damaged": verdict.get("damaged", 0)})
+        text += ("\nYour backup's health check found a problem: "
+                 + ("damaged files (they're sent again at the next backup)"
+                    if verdict["state"] == "damaged" else "the disk reported read or write errors"))
     progress_now = progress.read()
     if progress_now.get("running"):
         text += f"\nRunning now: {progress.text(progress_now)}"

@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-from omabackups.backup import check, progress, run, schedule
+from omabackups.backup import check, health, progress, run, schedule
 from omabackups.core import log, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.events import Events
@@ -23,6 +23,7 @@ def add(sub) -> None:
     choice = answer.add_parser("answer", help="now: back up anyway; wait: until you're home")
     choice.add_argument("choice", choices=("now", "wait"))
     choice.set_defaults(run=run_away)
+    sub.add_parser("health-run", help=argparse.SUPPRESS).set_defaults(run=run_health)
     root = sub.add_parser("backup-run", help=argparse.SUPPRESS)
     root.add_argument("kind", choices=("now", "scheduled", "anyway"))
     root.set_defaults(run=run_root)
@@ -131,4 +132,31 @@ def run_root(args, events: Events) -> int:
         progress.write({"running": False, "ok": True, "kind": args.kind, "finished": int(time.time()),
                         **result})
     events.result(result, f"Backed up: restore point {result['point']}.")
+    return 0
+
+
+def run_health(args, events: Events) -> int:
+    """The health timer's hourly tick (as root): start tonight's slice when due."""
+    if os.geteuid() != 0 and not os.environ.get("OMABACKUPS_SYSROOT"):
+        raise OmaError("This part of OmaBackups only runs as its health service.", code="not-root")
+    if not paths.server_file().exists():
+        return 0
+    settings = schedule.user_settings(run.linked_user())
+    if not health.due(settings, health.load().get("started")):
+        return 0
+    import json
+
+    from omabackups.root import keys
+    from omabackups.where import network
+    from omabackups.where.server import Gate
+    server = json.loads(paths.server_file().read_text())
+    address, _away = network.route(server)
+    gate = Gate(address)
+    gate.check_version()
+    if gate.call("version").get("gate", 0) < 4:
+        log.get("health").info("the server's gatekeeper is too old for the health check")
+        return 0
+    verdict = health.start_tonight(gate, server["backup"], settings["health.minutes"],
+                                   keys.read_unlock_key())
+    events.result(verdict, f"Tonight's health check started ({settings['health.minutes']} minutes).")
     return 0

@@ -1,0 +1,10 @@
+[Unit]
+Description=OmaBackups: health check (runs at the hour set in Settings)
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

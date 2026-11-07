@@ -129,6 +129,20 @@ doesn't, the oldest restore points go first (never kept ones, never the
 newest). If it still won't fit, it stops before sending anything and says
 so: make your backup bigger, or skip big folders you don't need.
 
+### The nightly health check
+
+Disks wear out, and a damaged file in a backup is worst found on the day you
+need it. So every night (at midnight, for two hours, unless you change it in
+Settings: `health.on`, `health.at`, `health.minutes`) your backup server
+reads part of your backup back and checks every block against the checksum
+written with it. Each night carries on where the last stopped, so a big
+backup is fully checked over a few nights.
+
+You only hear about it when something's wrong. `omabackups status` then says
+either that the disk reported read or write errors (a loose cable or a tired
+disk: worth a look), or that damaged files were found. Those are sent again
+at the next backup, which compares the contents of every file to do it.
+
 ### What gets backed up
 
 - **System**: everything on your system disk, except temporary files, the

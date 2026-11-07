@@ -45,8 +45,11 @@ class Sender:
                            done.stderr.strip()[-2000:] or f"rsync exit {done.returncode}",
                            code="send-failed")
 
-    def full(self, part: str, source: str, skips: Skips) -> None:
-        self._rsync(part, source, ["--delete", "--delete-excluded", *skips.rsync_rules()])
+    def full(self, part: str, source: str, skips: Skips, checksum: bool = False) -> None:
+        """checksum: compare every file's contents, not just size and date
+        (after the health check found damaged files: they're sent again)."""
+        self._rsync(part, source, ["--delete", "--delete-excluded", *(["-c"] if checksum else []),
+                                   *skips.rsync_rules()])
 
     def everyday(self, part: str, snapshot: str, plan: Plan) -> None:
         if plan.ops:

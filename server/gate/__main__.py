@@ -23,10 +23,11 @@ import conf
 import stream
 import verbs
 import verbs_data
+import verbs_health
 import wire
 from registry import Refused
 
-VERBS = {**verbs.VERBS, **verbs_data.VERBS}
+VERBS = {**verbs.VERBS, **verbs_data.VERBS, **verbs_health.VERBS}
 
 
 def log(message: str) -> None:

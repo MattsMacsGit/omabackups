@@ -1,0 +1,8 @@
+[Unit]
+Description=OmaBackups: tonight's health check of your backup (it checks your settings)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/omabackups health-run

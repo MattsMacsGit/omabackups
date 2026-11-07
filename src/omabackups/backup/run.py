@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from omabackups import __version__
-from omabackups.backup import changes, check, schedule, skips, thinning
+from omabackups.backup import changes, check, health, schedule, skips, thinning
 from omabackups.backup.send import Sender
 from omabackups.backup.source import Snapshots, parts
 from omabackups.core import ids, log, paths
@@ -80,6 +80,12 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
     if not away:
         network.learn_away_addresses(gate, server)
     record = load_record()
+    try:
+        verdict = health.refresh(gate, bid)
+    except OmaError as exc:
+        logger.warning("health verdict: %s", exc.details)
+        verdict = {}
+    resend = health.resend_needed(verdict, record)    # damaged files go again, all of them
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     sender = Sender(gate, bid, line, compress=away)     # D25: zstd only when away
     run = datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -103,7 +109,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             left_out += [f"{part.mount.rstrip('/')}/{rel}" for rel in snaps.nested(part)
                          if not skip.skipped(rel)]
             old = since.get(part.name, "")
-            if (record.get("finished") and snaps.exists(old)
+            if (not resend and record.get("finished") and snaps.exists(old)
                     and record.get("skips", {}).get(part.name) == fingerprints[part.name]):
                 plan = changes.plan(snaps.dump(old, new), new.name, str(new), skip)
                 needed += check.size_of(plan, str(new))
@@ -127,8 +133,8 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                 sender.everyday(part.name, str(new), plan)
                 how[part.name] = f"changes ({len(plan.files)} files, {len(plan.ops)} moves/deletes)"
             else:
-                sender.full(part.name, str(new), skip)
-                how[part.name] = "full check"
+                sender.full(part.name, str(new), skip, checksum=resend)
+                how[part.name] = "full check, every file's contents" if resend else "full check"
             gate.call("hold", bid, hold)
 
         # 3. The restore point, then thinning.
@@ -147,7 +153,9 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         since.update(made)
         save_record({"finished": True, "since": since, "skips": fingerprints, "last_point": name,
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
-                     "away": away, "not_included": left_out})
+                     "away": away, "not_included": left_out,
+                     "resent_for_pass": verdict.get("pass_started") if resend
+                     else record.get("resent_for_pass")})
         for part_name, snap_name in old.items():
             opened[part_name].drop(snap_name)
     except BaseException:

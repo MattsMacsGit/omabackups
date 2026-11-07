@@ -17,6 +17,7 @@ import conf
 import holds
 import layout
 import registry
+import verbs_health
 from host import host, mountpoint
 from registry import Refused
 
@@ -218,6 +219,7 @@ def v_lock(call: Call) -> dict:
             holds.reset_quiet(bid)
             return {"locked": False, "holds": 0}
         holds.drop_all(bid)
+        verbs_health.before_lock(bid)
         host().close(bid)
         holds.clear_wanted(bid)
     return {"locked": True, "holds": 0}
@@ -317,10 +319,11 @@ def sweep() -> list[str]:
             h = host()
             if not h.is_open(bid):
                 continue
-            if holds.live(bid):
+            if holds.live(bid) or verbs_health.keep_open(bid):
                 holds.reset_quiet(bid)
                 continue
             if holds.quiet_long_enough(bid, h.activity(bid)):
+                verbs_health.before_lock(bid)
                 h.close(bid)
                 holds.reset_quiet(bid)
                 locked.append(bid)
