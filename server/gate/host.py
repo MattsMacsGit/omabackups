@@ -146,6 +146,29 @@ class RealHost:
             except Refused as exc:
                 raise Refused("that isn't your backup's current password") from exc
 
+    def add_computer_key(self, box: Path, password: bytes, key: bytes) -> None:
+        """Migrate (D22a): a new computer's own key file, added with the backup's
+        password. The password is what proves this computer may have it."""
+        with secret_files(password, key) as (pw, kf):
+            try:
+                run("cryptsetup", "luksAddKey", "--batch-mode", "--pbkdf", "argon2id",
+                    "--key-file", pw, str(box), kf)
+            except Refused as exc:
+                raise Refused("that password doesn't open this backup") from exc
+
+    def tries_password(self, box: Path, password: bytes) -> bool:
+        with secret_files(password) as (pw,):
+            try:
+                run("cryptsetup", "open", "--test-passphrase", "--type", "luks2", "--key-file", pw, str(box))
+                return True
+            except Refused:
+                return False
+
+    def writable_copy(self, point: Path, target: Path) -> None:
+        """A new backup line starts from a restore point (D22a): a writable
+        snapshot, sharing all its data, so nothing is stored twice."""
+        run("btrfs", "subvolume", "snapshot", str(point), str(target))
+
     def is_open(self, bid: str) -> bool:
         return Path("/dev/mapper", mapper(bid)).exists()
 

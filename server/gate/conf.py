@@ -13,11 +13,12 @@ import os
 import re
 from pathlib import Path
 
-VERSION = 12          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses;
+VERSION = 13          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses;
                      # 4: health; 5: scrub as its own service; 6: a disk of its own;
                      # 7: the check stands aside for backups; 8: reuse;
                      # 9: changes.json in restore points, info; 10: password;
-                     # 11: unlock checks the secret even when open; 12: browse)
+                     # 11: unlock checks the secret even when open; 12: browse;
+                     # 13: join, handover, newline)
 CONTRACT = 1         # the version of its verbs and answers (BUILD 5.10)
 ACCOUNT = "omabackups-gate"
 
@@ -62,4 +63,4 @@ HOLD_STALE = 600   # a hold nothing refreshes for this long belongs to something
 IDLE_LOCK = 600    # with no holds, a backup locks after this long with no disk activity
 MIN_BOX = 1 << 30  # the smallest backup box: 1 GiB
 
-ROLES = ("owner", "rescue")
+ROLES = ("owner", "rescue", "reader")   # reader: a computer migrating in, or handed over (D22a)

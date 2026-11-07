@@ -88,7 +88,7 @@ def v_fetch(call):
     if len(call.args) < 8:
         raise Refused("wrong number of arguments")
     bid, point, part = call.args[:3]
-    registry.the_backup(registry.load(), bid, call.kid, ("owner", "rescue"))
+    registry.the_backup(registry.load(), bid, call.kid, conf.ROLES)
     if part not in PARTS or not conf.POINT.match(point):
         raise Refused("that is not a restore point and part")
     if not host().is_mounted(bid):
@@ -106,7 +106,7 @@ def v_browse(call):
     if len(call.args) != 2:
         raise Refused("wrong number of arguments")
     bid, point = call.args
-    registry.the_backup(registry.load(), bid, call.kid, ("owner", "rescue"))
+    registry.the_backup(registry.load(), bid, call.kid, conf.ROLES)
     if not conf.POINT.match(point):
         raise Refused("that is not a restore point")
     if not host().is_mounted(bid):
@@ -280,7 +280,7 @@ def v_info(call):
     if len(call.args) != 2:
         raise Refused("wrong number of arguments")
     bid, name = call.args
-    registry.the_backup(registry.load(), bid, call.kid, ("owner", "rescue"))
+    registry.the_backup(registry.load(), bid, call.kid, conf.ROLES)
     if not conf.POINT.match(name):
         raise Refused("that is not a restore point name")
     if not host().is_mounted(bid):

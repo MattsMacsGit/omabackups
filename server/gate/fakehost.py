@@ -59,6 +59,19 @@ class FakeHost:
         held[0] = _h(new)
         (box / "secrets.json").write_text(json.dumps(held))
 
+    def add_computer_key(self, box: Path, password: bytes, key: bytes) -> None:
+        held = json.loads((box / "secrets.json").read_text())
+        if _h(password) != held[0]:
+            raise Refused("that password doesn't open this backup")
+        held.append(_h(key))
+        (box / "secrets.json").write_text(json.dumps(held))
+
+    def tries_password(self, box: Path, password: bytes) -> bool:
+        return _h(password) == json.loads((box / "secrets.json").read_text())[0]
+
+    def writable_copy(self, point: Path, target: Path) -> None:
+        shutil.copytree(point, target, symlinks=True)
+
     def is_open(self, bid: str) -> bool:
         return self.is_mounted(bid)
 
