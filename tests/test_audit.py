@@ -81,3 +81,12 @@ def test_the_real_audit_runs_quickly_and_well_formed(sandbox):
     for i in a["items"]:
         assert {"id", "group", "name", "suggest", "source", "paths", "why", "back"} <= set(i)
     json.dumps(a)       # it can be written as changes.json
+
+
+@pytest.mark.real_audit
+def test_the_audit_survives_missing_programs(sandbox, tmp_path, monkeypatch):
+    """On a system without pacman, pactree or Omarchy's commands (GitHub's runner
+    found this), the audit reports less, never crashes."""
+    monkeypatch.setenv("PATH", str(tmp_path / "nothing-here"))
+    a = scan.scan()
+    assert a["format"] == model.FORMAT

@@ -33,13 +33,18 @@ KEEP_DESKTOP = "it's part of what makes this desktop yours"
 BACK_DESKTOP = "a fresh Omarchy has the standard one instead"
 
 
-def version() -> str:
+def _out(cmd: list[str]) -> subprocess.CompletedProcess:
+    """A command's result; a missing program is simply nothing found."""
     try:
-        out = subprocess.run(["omarchy-version"], capture_output=True, text=True, timeout=10).stdout.strip()
-        if out:
-            return out
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired):
-        pass
+        return subprocess.CompletedProcess(cmd, 127, "", "")
+
+
+def version() -> str:
+    out = _out(["omarchy-version"]).stdout.strip()
+    if out:
+        return out
     try:
         return (SHARE / "version").read_text().strip()
     except OSError:
@@ -55,8 +60,7 @@ def stock_packages() -> set[str]:
             continue
         for line in f.read_text(errors="replace").splitlines():
             names.update(line.split("#", 1)[0].split())
-    tree = subprocess.run(["pactree", "-lu", "omarchy"], capture_output=True, text=True)
-    names.update(tree.stdout.split())
+    names.update(_out(["pactree", "-lu", "omarchy"]).stdout.split())
     return names
 
 
@@ -74,9 +78,8 @@ def made_by_omarchy(path: Path) -> bool:
     if stock.exists() or path.name.startswith("omarchy"):
         return True
     key = "/".join(path.parts[-3:] if path.parent.name in ("bin", "sbin") else path.parts[-2:])
-    done = subprocess.run(["grep", "-rlqF", key, str(SHARE / "install"), str(SHARE / "migrations"),
-                           str(SHARE / "default")], capture_output=True)
-    return done.returncode == 0
+    return _out(["grep", "-rlqF", key, str(SHARE / "install"), str(SHARE / "migrations"),
+                 str(SHARE / "default")]).returncode == 0
 
 
 def _differs(stock: Path, mine: Path) -> list[str]:
