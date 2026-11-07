@@ -80,3 +80,40 @@ def system_run_dir() -> Path:
 
 def machine_id_file() -> Path:
     return _sys("/etc/machine-id")
+
+
+def linked_user_file() -> Path:
+    """Which user this computer's OmaBackups belongs to (D27)."""
+    return system_config_dir() / "user.json"
+
+
+def server_file() -> Path:
+    """The backup server this computer backs up to (written after setup succeeded)."""
+    return system_config_dir() / "server.json"
+
+
+def keys_dir() -> Path:
+    """Root-only: the SSH key for the backup server, and the backup's unlock key."""
+    return system_state_dir() / "keys"
+
+
+def known_hosts_file() -> Path:
+    return system_state_dir() / "known_hosts"
+
+
+def requests_dir() -> Path:
+    """Where the linked user leaves inputs for root jobs (D27)."""
+    return system_run_dir() / "requests"
+
+
+def results_dir() -> Path:
+    return system_run_dir() / "results"
+
+
+def gate_bundle() -> Path:
+    """The gatekeeper, packed into one file by the package."""
+    return _sys("/usr/share/omabackups/gate.pyz")
+
+
+GROUP = "omabackups"
+SERVER_ALIAS = "omabackups-server"   # the name SSH files the server's host key under

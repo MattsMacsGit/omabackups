@@ -32,6 +32,8 @@ def sandbox(tmp_path, monkeypatch):
             monkeypatch.delenv(var)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("OMABACKUPS_SYSROOT", str(sysroot))
+    # Child processes (root jobs, link) run this source tree, not an installed copy.
+    monkeypatch.setenv("PYTHONPATH", str(SRC))
     return Sandbox(home, sysroot)
 
 

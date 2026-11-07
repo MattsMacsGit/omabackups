@@ -5,7 +5,8 @@
   gate.pyz client KEY      the forced command of every key: relays this SSH
                            login's request to the socket, nothing else
   gate.pyz sweep           from omabackups-gate-sweep.timer: lock quiet backups
-  gate.pyz admin ...       used once by `omabackups setup server` (as root)
+  gate.pyz install ...     set up this server (as root, by `omabackups setup server`)
+  gate.pyz admin ...       keys and the store (as root)
   gate.pyz version
 """
 
@@ -115,6 +116,9 @@ def main(argv: list[str]) -> int:
         return 0
     if argv[:1] == ["admin"]:
         return admin.main(argv[1:])
+    if argv[:1] == ["install"]:
+        import install
+        return install.main(argv[1:])
     sys.stderr.write(__doc__)
     return 2
 

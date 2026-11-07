@@ -1,0 +1,2 @@
+# The users linked to OmaBackups (D27): may start its root jobs (polkit rule).
+g omabackups - -

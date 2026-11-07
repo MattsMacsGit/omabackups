@@ -10,7 +10,7 @@ pkgdesc="Backups, rescue and migration for Omarchy"
 arch=(any)
 url="https://github.com/MattsMacsGit/omabackups"
 license=(MIT)
-depends=(python rsync openssh cryptsetup btrfs-progs)
+depends=(python rsync openssh cryptsetup btrfs-progs polkit)
 optdepends=('tailscale: back up when away from home')
 
 package() {
@@ -30,6 +30,18 @@ import sys
 from omabackups.cli import main
 sys.exit(main())
 EOF
+
+  # The gatekeeper, packed into one file that setup copies to backup servers.
+  python "$repo/packaging/pack-gate.py" "$repo/server/gate" "$pkgdir/usr/share/omabackups/gate.pyz"
+
+  # The root helper (5.2, D27): its unit, the polkit rule, the link pop-up,
+  # the omabackups group and its folders.
+  local files="$repo/packaging/files"
+  install -Dm644 "$files/omabackups-root@.service" "$pkgdir/usr/lib/systemd/system/omabackups-root@.service"
+  install -Dm644 "$files/50-omabackups.rules" "$pkgdir/usr/share/polkit-1/rules.d/50-omabackups.rules"
+  install -Dm644 "$files/org.omabackups.link.policy" "$pkgdir/usr/share/polkit-1/actions/org.omabackups.link.policy"
+  install -Dm644 "$files/omabackups.sysusers" "$pkgdir/usr/lib/sysusers.d/omabackups.conf"
+  install -Dm644 "$files/omabackups.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/omabackups.conf"
 
   install -Dm644 "$repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

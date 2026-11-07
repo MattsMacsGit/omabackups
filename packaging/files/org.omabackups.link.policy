@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>OmaBackups</vendor>
+  <action id="org.omabackups.link">
+    <description>Link this computer to OmaBackups</description>
+    <message>OmaBackups needs this computer's password once, to set up its backups.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/omabackups</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">--json</annotate>
+  </action>
+</policyconfig>

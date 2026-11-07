@@ -1,0 +1,8 @@
+[Unit]
+Description=OmaBackups root helper: %i
+Documentation=https://github.com/MattsMacsGit/omabackups
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/omabackups root-job %i
+PrivateTmp=yes

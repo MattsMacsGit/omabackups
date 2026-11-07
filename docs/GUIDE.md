@@ -9,7 +9,8 @@ the whole system, and move your setup onto a fresh install.
 ## Contents
 
 1. [Install and remove](#install-and-remove)
-2. [The omabackups command](#the-omabackups-command)
+2. [Set up backups to a backup server](#set-up-backups-to-a-backup-server)
+3. [The omabackups command](#the-omabackups-command)
 
 ## Install and remove
 
@@ -30,6 +31,58 @@ Your settings stay in `~/.config/omabackups/` and the log in
 `~/.local/state/omabackups/`, in case you install it again. Delete those two
 folders as well if you want nothing left behind. OmaBackups 1.x uses
 different names, so the two can sit side by side without touching each other.
+
+## Set up backups to a backup server
+
+A **backup server** is any always-on Linux computer on your network: a
+Raspberry Pi, an old laptop, a home server. It needs SSH, systemd, sudo and
+Python 3 (Debian, Ubuntu, Raspberry Pi OS, Arch and Fedora all have them).
+Other things running on it are left alone.
+
+### What you need
+
+- The server's address on your network (for example `192.168.1.20`).
+- Your login on the server (a user name and its password), with sudo.
+- A folder on one of the server's disks with room for your backup, for
+  example `/srv/backups/omabackups`. OmaBackups keeps your backup there as one
+  encrypted file of the size you choose.
+
+### Setting it up
+
+```
+omabackups setup server
+```
+
+It asks for the address, your user name there, the folder and the size, and
+then for three passwords, each once:
+
+1. **This computer's password** (a pop-up). This links your user to
+   OmaBackups, so everyday backups never need a password again.
+2. **Your password on the server**, to log in there.
+3. **The server's sudo password**, to set up OmaBackups on it.
+
+If the server is new to this computer, SSH first shows its fingerprint and
+asks if you trust it: answer `yes` if it's your server.
+
+Then you **choose your backup's password**. Write it down and keep it
+somewhere safe. Everyday backups don't need it, because this computer has its
+own key. You need it to open your backup from a Rescue USB, or from a new
+computer when you Migrate. Without it, nobody can open your backup, not even
+you.
+
+### What it sets up on the server
+
+- An account called `omabackups-gate`, which nobody logs in to. Your
+  computer's key can only reach OmaBackups' gatekeeper through it: no shell,
+  and nothing else on the server.
+- The gatekeeper: one small program with a fixed list of jobs. It only lets
+  each computer touch its own backup.
+- Your backup: an encrypted box in the folder you chose. It's unlocked only
+  while a backup or restore is using it, and locks itself again after 10 quiet
+  minutes.
+
+Several computers can back up to the same server. Each gets its own box and
+its own password, and none of them can see the others.
 
 ## The omabackups command
 
