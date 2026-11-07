@@ -11,7 +11,6 @@ out of the comparison. Expect: no differences.
 
 import json
 import os
-import shlex
 import subprocess
 import sys
 
@@ -19,8 +18,7 @@ from omabackups.backup import run, skips
 from omabackups.backup.source import Snapshots, parts
 from omabackups.core import paths
 from omabackups.root import keys
-from omabackups.where import ssh
-from omabackups.where.server import Gate
+from omabackups.where import location
 
 
 def main() -> int:
@@ -32,7 +30,8 @@ def main() -> int:
         sys.stderr.write("No backup has finished yet: run 'omabackups backup' first.\n")
         return 1
     server = json.loads(paths.server_file().read_text())
-    gate, bid, point = Gate(server["address"]), server["backup"], record["last_point"]
+    gate, _away = location.connect(server)
+    bid, point = server["backup"], record["last_point"]
     sys.stderr.write(f"\nComparing restore point {point} with this computer's snapshots...\n")
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     failures = 0
@@ -45,10 +44,10 @@ def main() -> int:
                 done = subprocess.run(
                     ["rsync", "-n", "-c", "-aHAX", "--numeric-ids", "--delete", "--itemize-changes",
                      *skips.for_part(part.name).rsync_rules(),
-                     "-e", shlex.join(ssh.gatekeeper_ssh()),
+                     "-e", gate.rsh(),
                      f"--rsync-path=fetch {bid} {point} {part.name}",
-                     f"{ssh.target(server['address'])}:x/", f"{local}/"],
-                    capture_output=True, text=True)
+                     f"{gate.rsync_target()}:x/", f"{local}/"],
+                    capture_output=True, text=True, env=gate.rsync_env())
                 # The top folder's own date may differ (it's a snapshot), and so may
                 # the empty placeholder a snapshot shows for another subvolume
                 # inside it (btrfs gives those inode 2 and a new date every time).
