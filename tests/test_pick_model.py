@@ -29,12 +29,10 @@ def names(model, node):
 def test_first_page(world):
     world.measure(world.home())
     shown = [n.name for n in world.listing(world.home())]
-    assert shown == ["Videos", "Projects", "Downloads", "System"]          # hidden ones aren't shown...
-    world.show_hidden = True                                               # ...until H
+    assert shown == ["Videos", "Projects", "Downloads", "Quick skips"]     # hidden ones aren't shown...
+    world.show_hidden = True                                               # ...until h
     assert [n.name for n in world.listing(world.home())] == ["Videos", "Projects", "Downloads",
-                                                             ".config", ".cache", "System"]
-    assert names(world, world.home()) == ["Videos", "Projects", "Downloads", ".config", ".cache", "System"]
-    assert "home" not in names(world, world.system())          # mount points aren't offered
+                                                             ".config", ".cache", "Quick skips"]
 
 
 def test_marks_colours_and_lines(world):
@@ -74,8 +72,8 @@ def test_a_cache_can_be_backed_up_on_its_own(world):
 def test_inside_a_skipped_folder(world):
     m = world
     iso = Node("home", "u/Downloads/big.iso", "big.iso", False)
-    assert "Tick that first" in m.toggle(iso)
-    assert "inside Downloads" in m.explain(iso)
+    assert m.toggle(iso) == "It's inside Downloads, which is skipped: tick Downloads to back it up."
+    assert m.explain(iso) == "big.iso: inside Downloads, which is skipped. Tick Downloads to back it up."
 
 
 def test_sizes_follow_the_ticks_and_the_bottom_line(world):
@@ -96,3 +94,54 @@ def test_names_with_wildcards_only_match_themselves(world, tmp_path):
     odd = Node("home", "u/Photos [2024]", "Photos [2024]", True)
     m.toggle(odd)
     assert m.skipped(odd) and not m.skipped(Node("home", "u/Photos 2", "Photos 2", True))
+
+
+def quick_row(model, qid):
+    return next(n for n in model.children(model.quick()) if n.rel == qid)
+
+
+def test_quick_skips(world):
+    m = world
+    names_ = [n.name for n in m.children(m.quick())]
+    assert names_[:4] == ["Downloads", "Caches", "Trash", "Package cache"] and "Game libraries" in names_
+    caches = quick_row(m, "caches")
+    m.rules["home"] += [".thumbnails", ".var/app/*/cache"]      # the full default set
+    m._refresh()
+    assert (m.mark(caches), m.colour(caches)) == (" ", "grey")
+    assert m.explain(caches) == "Caches: Made again whenever they're needed. Skipped: Space backs them up."
+    m.toggle(caches)
+    assert ".cache" not in m.rules["home"] and ".thumbnails" not in m.rules["home"]
+    assert m.mark(caches) == "✓" and m.colour(caches) == "blue"    # was skipped at the last backup
+
+
+def test_the_downloads_switch_and_folder_are_one_rule(world):
+    m = world
+    downloads = quick_row(m, "downloads")
+    assert m.mark(downloads) == " "                     # "/u/Downloads" is in the list already
+    m.toggle(downloads)
+    assert not m.skipped(Node("home", "u/Downloads", "Downloads", True))
+
+
+def test_partly_skipped_switch(world):
+    m = world
+    m.rules["system"] = ["/var/lib/docker"]
+    m._refresh()
+    vms = quick_row(m, "vms")
+    assert m.mark(vms) == "•" and "Part of it is skipped" in m.explain(vms)
+    m.toggle(vms)
+    assert m.mark(vms) == " " and "/var/lib/containers" in m.rules["system"]
+
+
+def test_quick_sizes_are_what_they_hold(world, tmp_path):
+    m = world
+    m.measure(m.quick())
+    assert m.size(quick_row(m, "caches")) == 700            # skipped, but its size still shows
+    assert m.size(quick_row(m, "downloads")) == 9000
+    assert "always backed up" in m.explain(m.quick())
+
+
+def test_folders_come_before_files(world, tmp_path):
+    (tmp_path / "home/u/huge-file.bin").write_bytes(b"x" * 50_000)
+    world.measure(world.home())
+    shown = [n.name for n in world.listing(world.home())]
+    assert shown == ["Videos", "Projects", "Downloads", "huge-file.bin", "Quick skips"]

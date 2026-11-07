@@ -14,6 +14,8 @@ from pathlib import Path
 
 from omabackups.backup import skips
 from omabackups.backup.check import human
+from omabackups.tui import quick
+from omabackups.tui.quick import QUICK
 
 HIDDEN_IN_SYSTEM = {"home", "boot", "proc", "sys", "dev", "run", "tmp", "mnt", "media", "lost+found"}
 PART_ROOT = {"home": Path("/home"), "system": Path("/")}
@@ -57,7 +59,22 @@ class Model:
         return Node("home", self.user, "Home", True)
 
     def system(self) -> Node:
+        """Measured for the total only: the system isn't browsed (Quick skips instead)."""
         return Node("system", "", "System", True)
+
+    def quick(self) -> Node:
+        return Node("quick", "", "Quick skips", True)
+
+    def _quick(self, node: Node):
+        return next(q for q in QUICK if q.id == node.rel)
+
+    def _present(self, node: Node) -> tuple[int, int, bool]:
+        """(how many of this switch's rules are in the list, how many it has,
+        were any in the list at the last backup)."""
+        mine = quick.rules(self._quick(node), self.user)
+        have = sum(r in self.rules[p] for p, rs in mine.items() for r in rs)
+        before = any(r in self.before[p].patterns for p, rs in mine.items() for r in rs)
+        return have, sum(len(rs) for rs in mine.values()), before
 
     def listing(self, node: Node) -> list[Node]:
         """What the screen shows: hidden (dot) files only when asked (H).
@@ -65,9 +82,11 @@ class Model:
         rows = self.children(node)
         if self.show_hidden:
             return rows
-        return [n for n in rows if not n.name.startswith(".") or n == self.system()]
+        return [n for n in rows if not n.name.startswith(".") or n.part == "quick"]
 
     def children(self, node: Node) -> list[Node]:
+        if node == self.quick():
+            return [Node("quick", q.id, q.label, False) for q in QUICK]
         out = []
         try:
             entries = list(os.scandir(node.path(self.roots)))
@@ -82,15 +101,20 @@ class Model:
                 is_dir = False
             out.append(Node(node.part, f"{node.rel}/{e.name}".lstrip("/"), e.name, is_dir))
         if node == self.home():
-            out.append(self.system())
-        # Visible folders biggest first, then hidden ones, then System last (as agreed).
-        key = lambda n: (n == self.system(), n.name.startswith("."),  # noqa: E731
+            out.append(self.quick())
+        # Folders before files, each biggest first; hidden ones after; Quick skips last.
+        key = lambda n: (n.part == "quick", n.name.startswith("."), not n.is_dir,  # noqa: E731
                          -(self.size(n) or 0), n.name.lower())
         return sorted(out, key=key)
 
     # --- what a row says -----------------------------------------------------
 
     def skipped(self, node: Node) -> bool:
+        if node.part == "quick":
+            if not node.rel:
+                return False
+            have, total, _ = self._present(node)
+            return have == total
         return bool(node.rel) and self.skips[node.part].skipped(node.rel)
 
     def inside_skipped(self, node: Node) -> int:
@@ -99,6 +123,11 @@ class Model:
             return self._inside.get(node, 0)
 
     def mark(self, node: Node) -> str:
+        if node.part == "quick":
+            if not node.rel:
+                return "•" if any(self._present(n)[0] for n in self.children(node)) else "✓"
+            have, total, _ = self._present(node)
+            return " " if have == total else "•" if have else "✓"
         if self.skipped(node):
             return " "
         return "•" if node.is_dir and self.inside_skipped(node) else "✓"
@@ -106,16 +135,29 @@ class Model:
     def colour(self, node: Node) -> str:
         if self.skipped(node):
             return "grey"
+        if node.part == "quick":
+            back_on = node.rel and self._present(node)[2] and not self._present(node)[0]
+            return "blue" if not self.backed_up_once or back_on else "green"
         if not self.backed_up_once or (node.rel and self.before[node.part].skipped(node.rel)):
             return "blue"
         return "green"
 
     def explain(self, node: Node) -> str:
+        if node == self.quick():
+            return ("Quick skips: big things you may not need backed up. The rest of the system "
+                    "is always backed up (the Rescue USB needs it).")
+        if node.part == "quick":
+            have, total, _ = self._present(node)
+            state = ("Skipped: Space backs them up." if have == total else
+                     "Part of it is skipped: Space skips all of it." if have else
+                     "Backed up: Space skips them.")
+            return f"{node.name}: {self._quick(node).note} {state}"
         why = node.rel and self.skips[node.part].why(node.rel)
         if why:
             rule, folder = why
             if folder != node.rel:
-                return f"{node.name}: inside {folder.split('/')[-1]}, which is skipped. Tick that first."
+                name = folder.split('/')[-1]
+                return f"{node.name}: inside {name}, which is skipped. Tick {name} to back it up."
             if not rule.startswith("/"):
                 return (f"{node.name}: skipped, like every {rule.split('/')[-1]} (caches and the trash "
                         "aren't backed up). Space backs this one up anyway.")
@@ -131,14 +173,30 @@ class Model:
 
     def toggle(self, node: Node) -> str | None:
         """Tick or skip; returns a message when it can't."""
-        if node == self.system() or node == self.home():
+        if node in (self.system(), self.home(), self.quick()):
             return "Open it to choose what's inside."
+        if node.part == "quick":
+            have, total, _ = self._present(node)
+            for part, rs in quick.rules(self._quick(node), self.user).items():
+                for r in rs:
+                    if have == total and r in self.rules[part]:
+                        self.rules[part].remove(r)       # all skipped: back them up
+                    elif have < total and r not in self.rules[part]:
+                        self.rules[part].append(r)       # skip all of it
+            self.dirty = True
+            self._refresh()
+            with self._lock:                            # sizes everywhere may change
+                for n in [n for n in self._sizes if n.part != "quick"]:
+                    self._sizes.pop(n, None)
+                    self._inside.pop(n, None)
+            return None
         rules, me = self.rules[node.part], "/" + "/".join(escape(p) for p in node.rel.split("/"))
         why = self.skips[node.part].why(node.rel)
         if why:
             rule, folder = why
             if folder != node.rel:
-                return f"It's inside {folder.split('/')[-1]}, which is skipped. Tick that first."
+                name = folder.split('/')[-1]
+                return f"It's inside {name}, which is skipped: tick {name} to back it up."
             if rule == me:
                 rules.remove(rule)
             else:
@@ -159,7 +217,17 @@ class Model:
             return self._sizes.get(node)
 
     def measure(self, node: Node, stop=lambda: False) -> int:
-        """Size of what's backed up under node (0 if skipped); counts skips inside."""
+        """Size of what's backed up under node (0 if skipped); counts skips inside.
+        A Quick skip's size is what it holds, skipped or not (what skipping saves)."""
+        if node.part == "quick":
+            items = self.children(node) if node == self.quick() else [node]
+            for item in items:
+                if stop():
+                    return 0
+                got = quick.size(quick.places(self._quick(item), self.user, self.roots))
+                with self._lock:
+                    self._sizes[item] = got
+            return 0
         if self.skipped(node):
             return 0
         if not node.is_dir:
@@ -183,7 +251,7 @@ class Model:
         return total
 
     def children_plain(self, node: Node) -> list[Node]:
-        return [c for c in self.children(node) if c != self.system()]
+        return [c for c in self.children(node) if c.part != "quick"]
 
     def _forget(self, node: Node) -> None:
         """A rule changed at node: its size and every folder above it again."""

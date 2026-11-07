@@ -51,15 +51,20 @@ class Screen:
         self.put(1, 0, "─" * (w - 1), self.col(GREY))
 
     def row(self, y: int, selected: bool, mark: str, name: str, size: str, note: str, colour: str,
-            opens: bool) -> None:
+            opens: bool, switch: bool = False, menu: bool = False) -> None:
+        """One line of a list. A switch (not a file) shows its mark in a box;
+        a menu row (a page of switches, not a folder) shows in the accent colour."""
         h, w = self.size()
         base = curses.A_REVERSE if selected else 0
-        tint = self.col(COLOURS.get(colour, GREY))
+        tint = self.col(ACCENT if menu else COLOURS.get(colour, GREY))
         self.put(y, 0, " " * (w - 1), base)
         x = self.put(y, 1, ("▸ " if selected else "  "), base | curses.A_BOLD)
-        x = self.put(y, x, f"{mark}  ", tint | base | curses.A_BOLD)
+        if menu:
+            x = self.put(y, x, "☰  ", tint | base | curses.A_BOLD)
+        else:
+            x = self.put(y, x, f"[{mark}] " if switch else f"{mark}   ", tint | base | curses.A_BOLD)
         name_width = max(10, w - 34)
-        self.put(y, x, name[:name_width], tint | base)
+        self.put(y, x, name[:name_width], tint | base | (curses.A_BOLD if menu else 0))
         self.put(y, x + name_width + 1, size.rjust(9), tint | base)
         self.put(y, x + name_width + 12, note, self.col(GREY) | base)
         if opens:

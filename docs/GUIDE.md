@@ -184,7 +184,8 @@ omabackups pick
 ```
 
 opens the picker in the terminal (the panel opens it for you from Settings).
-It starts with your home folders, biggest first, with **System** beside them:
+It starts with your home folders (folders first, then files, each biggest
+first), and **☰ Quick skips** at the bottom:
 
 - **✓** everything in it is backed up; **•** only part of it (open it to see
   what's skipped); no mark: skipped.
@@ -194,16 +195,23 @@ It starts with your home folders, biggest first, with **System** beside them:
 - The line under the list explains the highlighted row in plain words.
 
 Keys: **↑↓** move, **Enter** open a folder, **⌫** back, **Space** tick or
-skip, **H** show hidden files too, **s** save and quit, **q** quit (it asks
+skip, **h** show hidden files too, **s** save and quit, **q** quit (it asks
 first if you changed something). The mouse works too.
 
+Any folder can be opened, skipped ones too, so you can see what you're
+deciding about. Something inside a skipped folder can't be ticked on its
+own: tick the folder.
+
 Hidden files and folders (the ones starting with a dot, mostly settings)
-aren't shown unless you press H. They're still backed up; Migrate is what
+aren't shown unless you press h. They're still backed up; Migrate is what
 brings settings over to a new computer.
 
-Caches and the trash are skipped everywhere; Space on one of them backs that
-one up anyway. Something inside a skipped folder can't be ticked on its own:
-tick the folder first.
+**Quick skips** are switches for big things you may not need in your
+backup, each with its size and a note: Downloads, Caches, Trash, Package
+cache, Flatpak apps, Virtual machines & containers, AI models and Game
+libraries. Caches, Trash and the Package cache start skipped. The rest of
+the system is always backed up: the Rescue USB needs it to bring your
+computer back.
 
 After you save, the next backup follows your choices. Anything newly
 skipped leaves your backup's working copy, but stays in your older restore

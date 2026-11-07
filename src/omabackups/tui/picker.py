@@ -16,7 +16,7 @@ from omabackups.core.errors import OmaError
 from omabackups.tui import kit
 from omabackups.tui.pick_model import Model
 
-KEYS = "↑↓ move  Enter open  ⌫ back  Space tick  H hidden  s save & quit  q quit"
+KEYS = "↑↓ move  Enter open  ⌫ back  Space tick  h hidden  s save & quit  q quit"
 TITLE = "Choose what gets backed up"
 
 
@@ -31,7 +31,7 @@ class Picker:
 
     def _measure(self) -> None:
         while self.running:
-            for node in (self.stack[-1], self.model.home(), self.model.system()):
+            for node in (self.stack[-1], self.model.home(), self.model.quick(), self.model.system()):
                 if self.running and self.model.size(node) is None:
                     self.model.measure(node, stop=lambda: not self.running)
             time.sleep(0.3)
@@ -63,9 +63,14 @@ class Picker:
             inside = m.inside_skipped(child)
             if not skipped and inside:
                 note = f"{inside} thing{'s' if inside > 1 else ''} skipped"
+            menu = child == m.quick()                 # a page of switches, not a folder
+            if menu:
+                note, size = "switches for big things", None
+            show = (not skipped or child.part == "quick") and not menu   # a switch shows what it saves
             ui.row(2 + i, self.top + i == pos, m.mark(child), child.name,
-                   "" if skipped else (human(size) if size else "…" if size is None else "0 bytes"),
-                   note, m.colour(child), child.is_dir)
+                   "" if not show else (human(size) if size else "…" if size is None else "0 bytes"),
+                   note, m.colour(child), child.is_dir, switch=child.part == "quick" and not menu,
+                   menu=menu)
         if not self.rows:
             ui.put(3, 4, "(empty, or can't be read)", ui.col(kit.GREY))
         current = self.rows[pos] if self.rows else None
@@ -86,10 +91,7 @@ class Picker:
 
     def open(self) -> None:
         child = self.current()
-        if child and child.is_dir:
-            if self.model.skipped(child):
-                self.ui.say("It's skipped: tick it first to choose what's inside.")
-                return
+        if child and child.is_dir:            # skipped ones too: look before you choose
             self.stack.append(child)
             self.cursor.setdefault(child, 0)
             self.top = 0
@@ -122,15 +124,15 @@ class Picker:
                 self.move(-10)
             elif key == curses.KEY_NPAGE:
                 self.move(10)
-            elif key in (curses.KEY_ENTER, 10, 13, curses.KEY_RIGHT, ord("l")):
+            elif key in (curses.KEY_ENTER, 10, 13, curses.KEY_RIGHT):
                 self.open()
-            elif key in (curses.KEY_BACKSPACE, 127, 8, curses.KEY_LEFT, ord("h")):
+            elif key in (curses.KEY_BACKSPACE, 127, 8, curses.KEY_LEFT):
                 self.back()
             elif key == ord(" "):
                 child = self.current()
                 problem = self.model.toggle(child) if child else None
                 self.ui.say(problem or "")
-            elif key == ord("H"):
+            elif key in (ord("h"), ord("H")):
                 self.model.show_hidden = not self.model.show_hidden
                 self.ui.say("Showing hidden files too." if self.model.show_hidden
                             else "Hidden files aren't shown (they're still backed up).")
