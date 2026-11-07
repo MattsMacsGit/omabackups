@@ -31,6 +31,13 @@ def init(store: str) -> dict:
     return {"store": str(folder)}
 
 
+def current_store() -> str:
+    try:
+        return json.loads(conf.SETTINGS.read_text())["store"]
+    except (OSError, ValueError, KeyError):
+        return ""
+
+
 def main(argv: list[str]) -> int:
     if not conf.TEST and os.geteuid() != 0:
         sys.stderr.write("omabackups-gate admin: run as root\n")

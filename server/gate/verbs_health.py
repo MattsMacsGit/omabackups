@@ -56,11 +56,47 @@ def before_lock(bid: str) -> None:
         health.settle(bid, str(mountpoint(bid)), stop=True)
 
 
+def pause_for(bid: str, hid: str) -> None:
+    """A backup is about to write: tonight's check stands aside, keeping its place
+    (the two fighting over one disk slows both; 1.x)."""
+    record = health.load(bid)
+    mount = str(mountpoint(bid))
+    if not record.get("running") or record.get("paused_by"):
+        return
+    if health.scrub_status(mount, bid)["status"] != "running":
+        return
+    health.scrub("cancel", mount, bid)
+    for _ in range(30):
+        if health.scrub_status(mount, bid)["status"] != "running":
+            break
+        time.sleep(1)
+    record["paused_by"] = hid
+    health.save(bid, record)
+
+
+def carry_on(bid: str) -> None:
+    """The backup is done: the check picks up again (if tonight's time isn't up)."""
+    record = health.load(bid)
+    if not record.pop("paused_by", None):
+        return
+    health.save(bid, record)
+    mount = str(mountpoint(bid))
+    if time.time() < float(record.get("deadline") or 0):
+        health.scrub("resume", mount, bid)
+    else:
+        health.settle(bid, mount, stop=True)
+
+
 def keep_open(bid: str) -> bool:
     """For the sweep: True while tonight's check should go on (box stays open)."""
+    import holds
     record = health.load(bid)
     if not record.get("running"):
         return False
+    if record.get("paused_by"):
+        if record["paused_by"] not in holds.live(bid):   # the backup is gone (even if it died)
+            carry_on(bid)
+        return True
     mount = str(mountpoint(bid))
     if health.scrub_status(mount, bid)["status"] != "running":
         health.settle(bid, mount)           # it finished (or stopped) by itself

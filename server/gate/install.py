@@ -68,7 +68,8 @@ WantedBy=timers.target
 """,
 }
 
-NEEDED = {"cryptsetup": "cryptsetup", "mkfs.btrfs": "btrfs-progs", "btrfs": "btrfs-progs"}
+NEEDED = {"cryptsetup": "cryptsetup", "mkfs.btrfs": "btrfs-progs", "btrfs": "btrfs-progs",
+          "sfdisk": "fdisk", "wipefs": "util-linux", "mkfs.ext4": "e2fsprogs"}
 PACKAGE_MANAGERS = (
     ("apt-get", ["apt-get", "install", "-y", "--no-install-recommends"], {"cryptsetup": "cryptsetup-bin"}),
     ("pacman", ["pacman", "-S", "--needed", "--noconfirm"], {}),
@@ -173,7 +174,13 @@ def main(argv: list[str]) -> int:
         install_programs()
         make_account()
         place_gatekeeper(me)
-        if store != "-":          # "-": an update; keep the store as it is
+        if store.startswith("disk:"):   # "disk:/dev/sdX:SIZE": a disk of its own, erased
+            import store_disk
+            _, device, size = store.split(":")
+            say(f"Erasing {device} and setting it up as the backup store...")
+            store = str(store_disk.prepare(device, int(size)))
+            admin.init(store)
+        elif store != "-":        # "-": an update; keep the store as it is
             admin.init(store)
         elif not conf.SETTINGS.exists():
             raise Refused("there's no backup store on this server to keep; set it up first")
@@ -181,7 +188,10 @@ def main(argv: list[str]) -> int:
             kid = registry.add_key(data, pub, "computer", label, system=system)
         os.chown(conf.AUTHORIZED_KEYS, 0, 0)
         place_units()
-        result = {"key": kid, "store": store, "gate": conf.VERSION, "warnings": ssh_warnings()}
+        import shutil as _sh
+        free = _sh.disk_usage(admin.current_store()).free if admin.current_store() else 0
+        result = {"key": kid, "store": store, "gate": conf.VERSION, "store_free": free,
+                  "warnings": ssh_warnings()}
     except Refused as exc:
         sys.stderr.write(f"omabackups-gate: {exc}\n")
         return 1

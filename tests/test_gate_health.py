@@ -91,3 +91,28 @@ def test_verdict_rules():
     assert health.verdict({"checked_at": 1, "device": {"read_io_errs": 2},
                            "device_base": {"read_io_errs": 2}}) == "healthy"   # old errors only
     assert health.verdict({"checked_at": 1, "files": ["x"]}) == "damaged"
+
+
+def test_the_check_stands_aside_for_a_backup_and_carries_on(box):
+    srv, kid, bid = box
+    night = srv.ok(kid, f"unlock {bid}", KEY)["hold"]
+    srv.ok(kid, f"health-start {bid} 60")
+    scrub = srv.root / "run/omabackups-gate" / f"fake-scrub-{bid}.json"
+    backup = srv.ok(kid, f"unlock {bid}", KEY)["hold"]          # a backup arrives
+    assert json.loads(scrub.read_text())["status"] != "running"
+    assert srv.ok(kid, f"health {bid}")["running"] is True      # paused, still under way
+    srv.ok(kid, f"lock {bid} {backup}")                          # the backup is done
+    assert json.loads(scrub.read_text())["status"] == "running"
+    srv.ok(kid, f"lock {bid} {night}")
+
+
+def test_a_backup_that_died_doesnt_leave_the_check_paused(box):
+    srv, kid, bid = box
+    srv.ok(kid, f"unlock {bid}", KEY)
+    srv.ok(kid, f"health-start {bid} 60")
+    backup = srv.ok(kid, f"unlock {bid}", KEY)["hold"]
+    mark = srv.root / "run/omabackups-gate/holds" / bid / backup
+    os.utime(mark, (0, 0))                                        # it died: nothing refreshes it
+    srv.gate("sweep")
+    scrub = srv.root / "run/omabackups-gate" / f"fake-scrub-{bid}.json"
+    assert json.loads(scrub.read_text())["status"] == "running"

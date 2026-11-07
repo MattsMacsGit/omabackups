@@ -63,11 +63,28 @@ class Login:
         self.known_hosts = paths.runtime_dir() / "setup_known_hosts"
         self.base = ssh.as_user(address, user, self.known_hosts)
         self.base[1:1] = ["-o", "HashKnownHosts=no"]
+        # Keep the login open while the user reads the server's disk list.
+        self.base = [x if x != "ControlPersist=60" else "ControlPersist=900" for x in self.base]
 
     def run(self, command: str, data: bytes | None = None, terminal: bool = False):
         if terminal:   # sudo asks for its password on the terminal
             return subprocess.run([*self.base[:1], "-t", *self.base[1:], command])
         return subprocess.run([*self.base, command], input=data, capture_output=True)
+
+    def disks(self) -> list:
+        """The server's disks, with warnings (its own system disk left out).
+        The first call logs in: the server password is asked here."""
+        from omabackups.setup import disks
+        columns = disks.COLUMNS
+        listed = self.run(f"lsblk -J -b -e7 -o {columns}")
+        if listed.returncode == 255:
+            raise _failed("Couldn't log in to your backup server.", listed)
+        system = self.run('lsblk -J -s -o NAME,PATH,TYPE "$(findmnt -n -o SOURCE / | sed "s/\\[.*//")"')
+        try:
+            return disks.listing(json.loads(listed.stdout), disks.disks_in(json.loads(system.stdout)))
+        except ValueError:
+            raise _failed("Couldn't read the list of disks on your backup server.", listed,
+                          "Check that the server has lsblk (util-linux), then try again.") from None
 
     def close(self) -> None:
         subprocess.run([*self.base[:1], "-O", "exit", *self.base[1:]], capture_output=True)
@@ -88,7 +105,6 @@ def _failed(what: str, done, todo: str = "Check the address and your login, then
 def install(login: Login, store: str, pub: str) -> dict:
     gate = bundle.gate_file()
     say = sys.stderr.write
-    say("\nLogging in to your backup server (its password, for your login there)...\n")
     done = login.run("command -v python3 >/dev/null && command -v sudo >/dev/null && "
                      "command -v systemctl >/dev/null && mktemp -d")
     if done.returncode == 255:

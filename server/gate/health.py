@@ -204,7 +204,10 @@ def settle(bid: str, mount: str, stop: bool = False) -> dict:
                 break
             time.sleep(1)
     now = int(time.time())
-    running = status["status"] == "running"
+    if stop:
+        record.pop("paused_by", None)
+    # Paused for a backup is still under way, not over for the night.
+    running = status["status"] == "running" or bool(record.get("paused_by"))
     record["errors"] = {k: int(status.get(k, 0)) for k in ERRORS}
     record["device"] = device_stats(mount)
     record["done_bytes"] = int(status.get("data_bytes_scrubbed", 0)) + int(status.get("tree_bytes_scrubbed", 0))

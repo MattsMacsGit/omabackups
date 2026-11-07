@@ -46,9 +46,16 @@ Other things running on it are left alone.
 
 - The server's address on your network (for example `192.168.1.20`).
 - Your login on the server (a user name and its password), with sudo.
-- A folder on one of the server's disks with room for your backup, for
-  example `/srv/backups/omabackups`. OmaBackups keeps your backup there as one
-  encrypted file of the size you choose.
+- Where on the server your backup goes. Setup lists the server's disks and
+  offers two choices:
+  - **A disk of its own**: a disk plugged into the server, erased and used
+    whole (setup shows what's on each disk first; only the disk the server
+    runs from is left out).
+  - **A folder on a disk the server already has**, for example
+    `/srv/backups/omabackups`, with a size you choose. Nothing is erased.
+
+  Either way, your backup is one encrypted file inside, and it works the
+  same.
 
 ### Setting it up
 
@@ -56,8 +63,8 @@ Other things running on it are left alone.
 omabackups setup server
 ```
 
-It asks for the address, your user name there, the folder and the size, and
-then for three passwords, each once:
+It asks for the address and your user name there, where on the server your
+backup should go, and three passwords, each once:
 
 1. **This computer's password** (a pop-up). This links your user to
    OmaBackups, so everyday backups never need a password again.
@@ -160,6 +167,9 @@ Settings: `health.on`, `health.at`, `health.minutes`) your backup server
 reads part of your backup back and checks every block against the checksum
 written with it. Each night carries on where the last stopped, so a big
 backup is fully checked over a few nights.
+
+If a backup comes along while the check is running, the check steps aside
+and carries on afterwards, so neither slows the other down.
 
 You only hear about it when something's wrong. `omabackups status` then says
 either that the disk reported read or write errors (a loose cable or a tired

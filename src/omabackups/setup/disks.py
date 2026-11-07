@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from omabackups.backup.check import human
 
-COLUMNS = "NAME,PATH,SIZE,MODEL,TRAN,TYPE,RM,FSTYPE,LABEL,MOUNTPOINTS,PARTUUID"
+COLUMNS = "NAME,PATH,SIZE,MODEL,TRAN,TYPE,RM,FSTYPE,LABEL,PARTLABEL,MOUNTPOINTS,PARTUUID"
 FORMATS = {"apfs": "formatted for a Mac (APFS)", "hfsplus": "formatted for a Mac (HFS+)",
            "ntfs": "formatted for Windows (NTFS)", "vfat": "FAT", "exfat": "exFAT",
            "ext4": "Linux (ext4)", "btrfs": "Linux (btrfs)", "crypto_LUKS": "encrypted (LUKS)",
@@ -39,6 +39,11 @@ def system_disks() -> set[str]:
     """The disk(s) the running system is on (through encryption and LVM)."""
     source = subprocess.run(["findmnt", "-n", "-o", "SOURCE", "/"], capture_output=True,
                             text=True).stdout.strip().split("[")[0]
+    return disks_in(_lsblk("-s", source))
+
+
+def disks_in(tree: dict) -> set[str]:
+    """The whole disks in an inverse lsblk tree (what something is on)."""
     found = set()
 
     def walk(node):
@@ -46,9 +51,15 @@ def system_disks() -> set[str]:
             found.add(node["path"])
         for child in node.get("children", []):
             walk(child)
-    for node in _lsblk("-s", source).get("blockdevices", []):
+    for node in tree.get("blockdevices", []):
         walk(node)
     return found
+
+
+# Names 1.x (and 2.0) give their disks: a disk with one of these is somebody's backup.
+OMABACKUPS_NAMES = {"OmaBackups", "OmaRescue", "OMABOOT", "OmaNetRescue", "OMANETBOOT",
+                    "OmaNetKeys", "OMARCHY-BACKUPS", "OMARCHY-TM", "OmaBackups-store",
+                    "omabackups-store"}
 
 
 def _describe(node: dict, warnings: list) -> None:
@@ -65,9 +76,13 @@ def _describe(node: dict, warnings: list) -> None:
 
 
 def disks() -> list[Disk]:
-    skip = system_disks()
+    return listing(_lsblk("-e7"), system_disks())     # -e7: leave out loop devices
+
+
+def listing(tree: dict, skip: set[str]) -> list[Disk]:
+    """Every disk in an lsblk tree (this computer's or a server's), with warnings."""
     out = []
-    for node in _lsblk("-e7").get("blockdevices", []):    # -e7: leave out loop devices
+    for node in tree.get("blockdevices", []):
         if node.get("type") != "disk" or node["path"] in skip or int(node["size"] or 0) == 0:
             continue
         if node["name"].startswith(("zram", "ram")):
@@ -76,6 +91,10 @@ def disks() -> list[Disk]:
                     node.get("tran") or "", bool(node.get("rm")))
         if disk.transport in ("nvme", "sata", "ata", "") and not disk.removable:
             disk.warnings.append("This is your computer's internal drive.")
+        names = {c.get(k) for c in node.get("children") or [] for k in ("label", "partlabel")}
+        if names & OMABACKUPS_NAMES:
+            disk.warnings.append("This looks like an OmaBackups backup disk: "
+                                 "someone's backups may be on it.")
         if not node.get("children"):
             disk.warnings.append("No partitions found (it may still hold data).")
         _describe(node, disk.warnings)

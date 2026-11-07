@@ -201,7 +201,7 @@ def v_unlock(call: Call) -> dict:
     """unlock BACKUP -- input: this computer's key file, or the backup's password."""
     _argc(call, 1)
     bid = call.args[0]
-    registry.the_backup(registry.load(), bid, call.kid, ANY)
+    backup = registry.the_backup(registry.load(), bid, call.kid, ANY)
     # Read the secret before taking the turn, and every time (1.x lesson).
     secret = call.secret()
     started = time.time()
@@ -213,6 +213,8 @@ def v_unlock(call: Call) -> dict:
             host().close(bid)
             raise Refused("the backup was locked while this was opening; try again")
         hid = holds.add(bid)
+        if backup["roles"][call.kid] == "owner":
+            verbs_health.pause_for(bid, hid)     # a backup coming: the check stands aside
     return {"hold": hid}
 
 
@@ -239,6 +241,8 @@ def v_lock(call: Call) -> dict:
     with holds.turn(bid):
         if hid:
             holds.drop(bid, hid)
+            if verbs_health.health.load(bid).get("paused_by") == hid:
+                verbs_health.carry_on(bid)
             left = holds.live(bid)
             if left:
                 return {"locked": False, "holds": len(left)}
@@ -347,7 +351,8 @@ def sweep() -> list[str]:
             h = host()
             if not h.is_open(bid):
                 continue
-            if holds.live(bid) or verbs_health.keep_open(bid):
+            # The check first: it also wakes up after a backup that died without saying so.
+            if verbs_health.keep_open(bid) or holds.live(bid):
                 holds.reset_quiet(bid)
                 continue
             if holds.quiet_long_enough(bid, h.activity(bid)):

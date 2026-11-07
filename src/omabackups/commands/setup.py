@@ -82,6 +82,7 @@ def run_update(args, events: Events) -> int:
                    "are kept. This asks for your login on the server and its sudo password.")
     login = args.login or _ask("Your user name on the server", os.environ.get("USER", ""))
     session = server.Login(address, login)
+    events.message("\nLogging in to your backup server (its password, for your login there)...")
     try:
         installed = server.install(session, "-", server.public_key())
     finally:
@@ -89,6 +90,33 @@ def run_update(args, events: Events) -> int:
     events.result({"gate": installed.get("gate")},
                   f"OmaBackups on your backup server is up to date (gatekeeper version {installed.get('gate')}).")
     return 0
+
+
+def _where_on_server(args, events: Events, session) -> tuple[str, int, bool]:
+    """6.1 C step 2: [a disk of its own] or [space on a disk it has, size ___]."""
+    if args.folder:
+        size = args.size or int(_ask("Your backup's size in GB (it can grow later)", "100"))
+        events.message("\nLogging in to your backup server (its password, for your login there)...")
+        return server.check_store(args.folder), size, False
+    events.message("\nLogging in to your backup server (its password, for your login there)...")
+    found = session.disks()
+    events.message("\nWhere on the server should your backup go?\n")
+    for n, d in enumerate(found, 1):
+        events.message(f"  {n}. A disk of its own: {d.line()} (erased)\n"
+                       + "".join(f"       {w}\n" for w in d.warnings))
+    events.message(f"  {len(found) + 1}. A folder on a disk the server already has "
+                   "(you choose the size; nothing is erased)\n")
+    choice = _ask("Which (number)")
+    if not choice.isdigit() or not 1 <= int(choice) <= len(found) + 1:
+        raise OmaError("Nothing was picked, so nothing was changed.", code="cancelled")
+    if int(choice) == len(found) + 1:
+        folder = server.check_store(_ask("The folder on the server (on a disk with room)"))
+        size = args.size or int(_ask("Your backup's size in GB (it can grow later)", "100"))
+        return folder, size, False
+    chosen = found[int(choice) - 1]
+    events.message(f"\n{chosen.line()} on the server will be erased:\n"
+                   + "".join(f"  - {w}\n" for w in chosen.warnings))
+    return f"disk:{chosen.path}:{chosen.size}", 0, True
 
 
 def run_server(args, events: Events) -> int:
@@ -105,9 +133,6 @@ def run_server(args, events: Events) -> int:
                    "backup's own password.")
     address = args.address or _ask("The server's address (for example 192.168.1.20)")
     login = args.login or _ask("Your user name on the server", os.environ.get("USER", ""))
-    folder = server.check_store(args.folder or _ask(
-        "The folder on the server for the backup store (on a disk with room)"))
-    size = args.size or int(_ask("Your backup's size in GB (it can grow later)", "100"))
     if not address or not login:
         raise OmaError("The server's address and your user name on it are both needed.",
                        code="cancelled")
@@ -116,11 +141,14 @@ def run_server(args, events: Events) -> int:
     pub = server.link()
     login_session = server.Login(address, login)
     try:
-        installed = server.install(login_session, folder, pub)
+        store, size, disk = _where_on_server(args, events, login_session)
+        installed = server.install(login_session, store, pub)
     finally:
         login_session.close()
     for warning in installed.get("warnings", []):
         events.message(f"Note about the server: {warning}")
+    if disk:   # a disk of its own: the backup takes (almost) all of it
+        size = max(1, int(installed.get("store_free", 0) * 0.97) >> 30)
 
     events.message(PASSWORD_EXPLAINER)
     password = _password()
