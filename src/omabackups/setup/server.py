@@ -68,7 +68,7 @@ class Login:
 
     def run(self, command: str, data: bytes | None = None, terminal: bool = False):
         if terminal:   # sudo asks for its password on the terminal
-            return subprocess.run([*self.base[:1], "-t", *self.base[1:], command])
+            return subprocess.run([*self.base[:1], "-t", "-q", *self.base[1:], command])
         return subprocess.run([*self.base, command], input=data, capture_output=True)
 
     def places(self) -> list:

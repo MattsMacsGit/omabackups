@@ -38,6 +38,17 @@ def add(sub) -> None:
                    "itself is kept)").set_defaults(run=run_start_over)
 
 
+def _password() -> str:
+    while True:
+        first = menu.secret("Your backup's password")
+        if len(first) < 8:
+            menu.say("Use at least 8 characters.")
+            continue
+        if menu.secret("Type it again") == first:
+            return first
+        menu.say("Those two didn't match. Try again.")
+
+
 def cipher_name(cipher: str) -> str:
     if "adiantum" in cipher:
         return "Adiantum, the fast choice for a server without AES"

@@ -86,7 +86,9 @@ def places(tree: dict, system: set[str], store: str = "") -> list[Place]:
         elif mounts:
             place.mount, place.free = max(mounts, key=lambda m: m[1])
         listed = disks.listing({"blockdevices": [node]}, set())
-        place.contents = [w for w in (listed[0].warnings if listed else [])
+        # What's on it, as facts: erasing is said on the "whole disk" choice itself.
+        place.contents = [w.replace("in use: mounted at", "mounted at").replace(" (it will be unmounted)", "")
+                          for w in (listed[0].warnings if listed else [])
                           if w != "Everything on it will be erased."]
         if place.store:
             place.contents.insert(0, "This server's backup store is on it: other "
