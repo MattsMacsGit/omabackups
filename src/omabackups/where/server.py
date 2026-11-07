@@ -31,6 +31,19 @@ class Gate:
                     dict(os.environ, SSH_ORIGINAL_COMMAND=command))
         return [*ssh.as_gatekeeper(self.address), command], None
 
+    def rsh(self) -> str:
+        """rsync's -e program for this way in."""
+        import shlex
+        if os.environ.get("OMABACKUPS_SYSROOT") and os.environ.get("OMABACKUPS_TEST_RSH"):
+            return os.environ["OMABACKUPS_TEST_RSH"]
+        return shlex.join(ssh.gatekeeper_ssh())
+
+    def rsync_env(self) -> dict | None:
+        return None
+
+    def rsync_target(self) -> str:
+        return ssh.target(self.address)
+
     def call(self, verb: str, *args: str, data: bytes = b"") -> dict:
         command = " ".join([verb, *args])
         log.get("server").debug("gate: %s", verb)

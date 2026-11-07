@@ -25,7 +25,7 @@ from omabackups.core import ids, log, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
 from omabackups.root import keys
-from omabackups.where import network
+from omabackups.where import location, network
 from omabackups.where.server import Gate
 
 RECORD = "backup.json"
@@ -67,17 +67,13 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
     """Run one backup. `anyway`: the answer "Back up now" to the away limit.
     `source` (tests) stands in for this computer's parts and snapshots."""
     logger = log.get("backup")
-    try:
-        server = json.loads(paths.server_file().read_text())
-    except (OSError, ValueError):
-        raise OmaError("No backup location is set up on this computer.",
-                       "Set up backups first.", code="not-set-up") from None
-    address, away = network.route(server)
-    gate, bid, line = Gate(address), server["backup"], server.get("line", "001")
+    server = location.load()
+    gate, away = location.connect(server)
+    bid, line = server["backup"], server.get("line", "001")
 
     progress("unlock")
     gate.check_version()
-    if not away:
+    if not away and server.get("kind") != "disk":
         network.learn_away_addresses(gate, server)
     record = load_record()
     try:

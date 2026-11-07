@@ -10,8 +10,10 @@ the whole system, and move your setup onto a fresh install.
 
 1. [Install and remove](#install-and-remove)
 2. [Set up backups to a backup server](#set-up-backups-to-a-backup-server)
-3. [Backing up](#backing-up)
-4. [The omabackups command](#the-omabackups-command)
+3. [Set up backups to a backup disk](#set-up-backups-to-a-backup-disk)
+4. [Backing up](#backing-up)
+5. [Start over](#start-over)
+6. [The omabackups command](#the-omabackups-command)
 
 ## Install and remove
 
@@ -84,6 +86,27 @@ you.
 
 Several computers can back up to the same server. Each gets its own box and
 its own password, and none of them can see the others.
+
+## Set up backups to a backup disk
+
+A **backup disk** is a USB disk (or any disk) plugged into this computer.
+It's erased and becomes your encrypted backup.
+
+```
+omabackups setup disk
+```
+
+It lists every disk it can see, with what's on each one: "your computer's
+internal drive", "formatted for a Mac", "encrypted: can't see inside", "in
+use". Only the disk your system is running from is left out. Read the list
+carefully: **the disk you pick is erased**, whatever is on it.
+
+Then it asks for this computer's password once (a pop-up), and you choose
+your backup's password, as for a server. Inside, the disk holds exactly what
+a server would: the same restore points, the same health check.
+
+When the disk isn't plugged in, backups wait and `omabackups status` says
+so. Plug it in and the next one runs by itself.
 
 ## Backing up
 
@@ -173,6 +196,17 @@ still missing.
 
 One snapshot stays on your computer between backups. It's what the next
 backup compares against, and it's replaced each time.
+
+## Start over
+
+```
+omabackups start-over
+```
+
+This computer forgets where it backs up, and goes back to **Set up backups**.
+Its own snapshots go too. **Your backup is not deleted**: on the server or
+the disk, it's still there with all its restore points. Use this to move to a
+different backup location.
 
 ## The omabackups command
 

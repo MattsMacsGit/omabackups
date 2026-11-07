@@ -43,6 +43,7 @@ EOF
   install -Dm644 "$files/omabackups-health.timer" "$pkgdir/usr/lib/systemd/system/omabackups-health.timer"
   install -Dm644 "$files/org.omabackups.link.policy" "$pkgdir/usr/share/polkit-1/actions/org.omabackups.link.policy"
   install -Dm644 "$files/omabackups.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/omabackups.conf"
+  install -Dm644 "$files/99-omabackups.rules" "$pkgdir/usr/lib/udev/rules.d/99-omabackups.rules"
 
   install -Dm644 "$repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

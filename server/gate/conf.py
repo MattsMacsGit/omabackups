@@ -24,11 +24,21 @@ def _p(path: str) -> Path:
     return Path(os.environ["OMABACKUPS_GATE_ROOT"] + path) if TEST else Path(path)
 
 
-SETTINGS = _p("/etc/omabackups-gate/gate.json")        # where the backup store is
-REGISTRY = _p("/var/lib/omabackups-gate/registry.json")  # keys, backups, roles
-HOME = _p("/var/lib/omabackups-gate/home")               # the account's home (root-owned)
+# Local mode: the same gatekeeper, run as root on the computer itself for a
+# backup disk plugged in there (`direct`, never reachable over SSH).
+LOCAL = os.environ.get("OMABACKUPS_GATE_LOCAL") == "1"
+
+if LOCAL:
+    SETTINGS = _p("/var/lib/omabackups/disk-gate/gate.json")
+    REGISTRY = _p("/var/lib/omabackups/disk-gate/registry.json")
+    HOME = _p("/var/lib/omabackups/disk-gate/home")
+    RUN = _p("/run/omabackups/disk-gate")
+else:
+    SETTINGS = _p("/etc/omabackups-gate/gate.json")        # where the backup store is
+    REGISTRY = _p("/var/lib/omabackups-gate/registry.json")  # keys, backups, roles
+    HOME = _p("/var/lib/omabackups-gate/home")               # the account's home (root-owned)
+    RUN = _p("/run/omabackups-gate")                         # locks, holds, mount points
 AUTHORIZED_KEYS = HOME / ".ssh" / "authorized_keys"
-RUN = _p("/run/omabackups-gate")                         # locks, holds, mount points
 SOCKET = RUN / "gate.sock"
 INSTALLED = Path("/usr/lib/omabackups-gate/gate.pyz")    # where setup puts this file
 

@@ -147,16 +147,14 @@ def run_health(args, events: Events) -> int:
     import json
 
     from omabackups.root import keys
-    from omabackups.where import network
-    from omabackups.where.server import Gate
+    from omabackups.where import location
     server = json.loads(paths.server_file().read_text())
-    address, _away = network.route(server)
-    gate = Gate(address)
+    gate, _away = location.connect(server)
     gate.check_version()
     if gate.call("version").get("gate", 0) < 4:
         log.get("health").info("the server's gatekeeper is too old for the health check")
         return 0
     verdict = health.start_tonight(gate, server["backup"], settings["health.minutes"],
-                                   keys.read_unlock_key())
+                                   keys.read_unlock_key(), wait=server.get("kind") == "disk")
     events.result(verdict, f"Tonight's health check started ({settings['health.minutes']} minutes).")
     return 0

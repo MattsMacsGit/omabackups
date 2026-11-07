@@ -101,8 +101,9 @@ def write_result(name: str, uid: int, result: dict) -> None:
 
 
 def _jobs() -> dict:
-    from omabackups.root import job_server
-    return {"create-backup": job_server.create_backup}
+    from omabackups.root import job_disk, job_server
+    return {"create-backup": job_server.create_backup, "create-disk": job_disk.create_disk,
+            "start-over": job_disk.start_over}
 
 
 def run(args, events: Events) -> int:

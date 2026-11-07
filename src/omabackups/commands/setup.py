@@ -25,7 +25,7 @@ PASSWORD_EXPLAINER = (
 
 def add(sub) -> None:
     p = sub.add_parser("setup", help="set up where your backups go")
-    kinds = p.add_subparsers(dest="kind", metavar="server", required=True)
+    kinds = p.add_subparsers(dest="kind", metavar="server|disk", required=True)
     s = kinds.add_parser("server", help="a backup server on the network")
     s.add_argument("address", nargs="?", help="the server's address on your network")
     s.add_argument("--login", help="your user name on the server")
@@ -34,6 +34,11 @@ def add(sub) -> None:
     s.add_argument("--update", action="store_true",
                    help="update OmaBackups on the server you already back up to")
     s.set_defaults(run=run_server)
+    d = kinds.add_parser("disk", help="a backup disk plugged into this computer (it gets erased)")
+    d.add_argument("disk", nargs="?", help="the disk, e.g. /dev/sdb (asked if not given)")
+    d.set_defaults(run=run_disk)
+    sub.add_parser("start-over", help="forget this computer's backup location (the backup "
+                   "itself is kept)").set_defaults(run=run_start_over)
 
 
 def _ask(text: str, default: str = "") -> str:
@@ -125,4 +130,60 @@ def run_server(args, events: Events) -> int:
                   f"\nYour backup is set up on the server ({size} GB, encrypted with "
                   f"{cipher_name(made['cipher'])}).\n"
                   "Next: the first backup.")
+    return 0
+
+
+def run_disk(args, events: Events) -> int:
+    """6.1 C, a backup disk: pick it (every disk listed, its contents warned),
+    choose your backup's password, then it's erased and set up."""
+    from omabackups.core import rootjob, state
+    from omabackups.setup import disks
+    if flow.where() is not flow.Step.NOT_SET_UP:
+        raise OmaError("OmaBackups is already set up on this computer.",
+                       "To use a different backup location, Start over first: "
+                       "omabackups start-over", code="already-set-up")
+    found = disks.disks()
+    if not found:
+        raise OmaError("There's no disk to pick (only the one this system runs from).",
+                       "Plug in the backup disk, then try again.", code="no-disk")
+    if args.disk:
+        chosen = next((d for d in found if d.path == args.disk), None)
+        if chosen is None:
+            raise OmaError(f"{args.disk} isn't one of the disks you can pick.",
+                           "Run omabackups setup disk to see the list.", code="no-disk")
+    else:
+        events.message("Pick the backup disk. Read what's on each one: the disk you pick is erased.\n")
+        for n, d in enumerate(found, 1):
+            events.message(f"  {n}. {d.line()}\n" + "".join(f"       {w}\n" for w in d.warnings))
+        choice = _ask("Which disk (number)")
+        if not choice.isdigit() or not 1 <= int(choice) <= len(found):
+            raise OmaError("Nothing was picked, so nothing was erased.", code="cancelled")
+        chosen = found[int(choice) - 1]
+    events.message(f"\n{chosen.line()} will be erased:\n"
+                   + "".join(f"  - {w}\n" for w in chosen.warnings))
+    events.step("link", "Linking this computer to OmaBackups (this computer's password)...")
+    server.link()
+    events.message(PASSWORD_EXPLAINER)
+    password = _password()
+    events.step("create", "Erasing the disk and creating your backup on it...")
+    made = rootjob.run("create-disk", {"device": chosen.path, "size": chosen.size,
+                                       "model": chosen.model, "password": password})
+    state.write(flow.SETUP, {"where": "disk", "first_backup": False})
+    events.result(made, f"\nYour backup is set up on {chosen.line()}, encrypted with "
+                        f"{cipher_name(made['cipher'])}.\nNext: the first backup.")
+    return 0
+
+
+def run_start_over(args, events: Events) -> int:
+    """D28: this computer forgets its backup location; nothing in the backup is deleted."""
+    from omabackups.core import rootjob, state
+    if flow.where() is flow.Step.NOT_SET_UP and not paths.server_file().exists():
+        events.result({"forgot": None}, "OmaBackups isn't set up on this computer: nothing to forget.")
+        return 0
+    answer = rootjob.run("start-over", {})
+    state.remove(flow.SETUP)
+    where = {"disk": "on the backup disk", "server": "on your backup server"}.get(answer["forgot"], "")
+    events.result(answer, "This computer has forgotten its backup location.\n"
+                          f"Your backup is still there {where}, with all its restore points.\n"
+                          "Next: Set up backups (omabackups setup server, or setup disk).")
     return 0

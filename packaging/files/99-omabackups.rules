@@ -1,0 +1,7 @@
+# OmaBackups (1.x idea, kept): its backup disks stay out of the file manager.
+# OmaBackups opens and closes them itself; a pop-up for each is clutter.
+ACTION=="remove", GOTO="omabackups_end"
+SUBSYSTEM!="block", GOTO="omabackups_end"
+ENV{ID_PART_ENTRY_NAME}=="OmaBackups", ENV{UDISKS_IGNORE}="1"
+ENV{ID_FS_LABEL}=="omabackups", ENV{ID_FS_TYPE}=="btrfs", ENV{UDISKS_IGNORE}="1"
+LABEL="omabackups_end"

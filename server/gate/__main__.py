@@ -90,6 +90,36 @@ def serve(sock: socket.socket) -> int:
     return answer(0, out=(json.dumps(result, sort_keys=True) + "\n").encode())
 
 
+def direct(kid: str) -> int:
+    """Local mode (a backup disk on this computer): run one request straight
+    from SSH_ORIGINAL_COMMAND, as root, on stdin/stdout. Never over SSH."""
+    if not conf.LOCAL or (os.geteuid() != 0 and not conf.TEST):
+        sys.stderr.write("omabackups-gate: direct is for a backup disk on this computer only\n")
+        return 1
+    words = shlex.split(os.environ.get("SSH_ORIGINAL_COMMAND", ""))
+    if not words or words[0] not in VERBS:
+        sys.stderr.write(f"omabackups-gate: unknown request: {words[0] if words else '(nothing)'}\n")
+        return 2
+    try:
+        result = VERBS[words[0]](verbs.Call(kid, words[1:], wire.Reader(wire.FdInput(0), b"")))
+    except Refused as exc:
+        sys.stderr.write(f"omabackups-gate: {exc}\n")
+        return 1
+    if isinstance(result, stream.Stream):
+        os.chdir(result.cwd)
+        os.execvp(result.command[0], result.command)   # rsync takes over stdin/stdout
+    sys.stdout.write(json.dumps(result, sort_keys=True) + "\n")
+    return 0
+
+
+def direct_rsh(kid: str, args: list[str]) -> int:
+    """Local mode, as rsync's -e program: [-l USER] HOST <request words...>."""
+    if args[:1] == ["-l"]:
+        args = args[2:]
+    os.environ["SSH_ORIGINAL_COMMAND"] = " ".join(args[1:])
+    return direct(kid)
+
+
 def client(kid: str) -> int:
     command = os.environ.get("SSH_ORIGINAL_COMMAND", "")
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -110,6 +140,10 @@ def main(argv: list[str]) -> int:
         return serve(socket.socket(fileno=os.dup(0)))
     if argv[:1] == ["client"] and len(argv) == 2:
         return client(argv[1])
+    if argv[:1] == ["direct"] and len(argv) == 2:
+        return direct(argv[1])
+    if argv[:1] == ["direct-rsh"] and len(argv) >= 3:
+        return direct_rsh(argv[1], argv[2:])
     if argv[:1] == ["sweep"]:
         for bid in verbs.sweep():
             log(f"locked {bid[:12]}: nobody holding it, and quiet")

@@ -30,6 +30,13 @@ class FakeHost:
         self._mount(box, bid)
         return "fake"
 
+    def create_on_device(self, device: Path, password: bytes, key: bytes, bid: str) -> str:
+        device.mkdir(parents=True, exist_ok=True)
+        (device / "inside").mkdir()
+        (device / "secrets.json").write_text(json.dumps([_h(password), _h(key)]))
+        self._mount(device, bid)
+        return "fake"
+
     def open(self, box: Path, bid: str, secret: bytes) -> None:
         if self.is_mounted(bid):
             return

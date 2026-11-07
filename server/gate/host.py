@@ -73,7 +73,6 @@ def mountpoint(bid: str) -> Path:
 
 class RealHost:
     def create(self, box: Path, size: int, password: bytes, key: bytes, bid: str) -> str:
-        name, bits = cipher()
         box.parent.mkdir(parents=True, exist_ok=True)
         os.chmod(box.parent, 0o700)
         with open(box, "xb") as f:
@@ -83,6 +82,18 @@ class RealHost:
             except OSError as exc:
                 box.unlink(missing_ok=True)
                 raise Refused(f"not enough space for a box of that size ({exc.strerror})")
+        try:
+            return self._format(box, password, key, bid)
+        except BaseException:
+            box.unlink(missing_ok=True)
+            raise
+
+    def create_on_device(self, device: Path, password: bytes, key: bytes, bid: str) -> str:
+        """A backup disk plugged into the computer: the box is its partition."""
+        return self._format(device, password, key, bid)
+
+    def _format(self, box: Path, password: bytes, key: bytes, bid: str) -> str:
+        name, bits = cipher()
         try:
             with secret_files(password, key) as (pw, kf):
                 run("cryptsetup", "luksFormat", "--batch-mode", "--type", "luks2",
@@ -95,7 +106,6 @@ class RealHost:
             self._mount(bid)
         except BaseException:
             self.close(bid)
-            box.unlink(missing_ok=True)
             raise
         return name
 

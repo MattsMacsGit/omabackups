@@ -56,7 +56,8 @@ def store() -> Path:
 
 
 def _box(bid: str) -> Path:
-    return store() / f"{bid}.box"
+    device = registry.load()["backups"].get(bid, {}).get("device")
+    return Path(device) if device else store() / f"{bid}.box"
 
 
 def _need_open(bid: str) -> Path:
@@ -159,6 +160,32 @@ def v_create(call: Call) -> dict:
         data["backups"][bid] = {"size": size, "cipher": cipher, "created": int(time.time()),
                                 "roles": {call.kid: "owner"}}
     return {"id": bid, "cipher": cipher, "size": size}
+
+
+def v_create_disk(call: Call) -> dict:
+    """create-disk DEVICE -- local mode only: a backup disk's partition becomes
+    this computer's backup box. Input as for create."""
+    _argc(call, 1)
+    if not conf.LOCAL:
+        raise Refused("unknown request: create-disk")
+    device = Path(call.args[0])
+    data = registry.load()
+    key = registry.the_key(data, call.kid)
+    try:
+        given = json.loads(call.read_input(4 * conf.MAX_SECRET))
+        password = given["password"].encode("utf-8")
+        machine_key = base64.b64decode(given["key"], validate=True)
+    except (ValueError, KeyError, TypeError, AttributeError, binascii.Error):
+        raise Refused("create needs the password and the key") from None
+    bid = registry_new_id(data)
+    with holds.turn(bid):
+        cipher = host().create_on_device(device, password, machine_key, bid)
+        layout.make(mountpoint(bid), bid, key["system"], host())
+        host().close(bid)
+    with registry.changing() as data:
+        data["backups"][bid] = {"size": 0, "cipher": cipher, "created": int(time.time()),
+                                "device": str(device), "roles": {call.kid: "owner"}}
+    return {"id": bid, "cipher": cipher}
 
 
 def registry_new_id(data: dict) -> str:
@@ -299,6 +326,7 @@ def v_remove_key(call: Call) -> dict:
 
 VERBS = {
     "version": v_version, "status": v_status, "addresses": v_addresses, "create": v_create,
+    "create-disk": v_create_disk,
     "unlock": v_unlock, "hold": v_hold, "lock": v_lock,
     "points": v_points, "space": v_space, "delete": v_delete,
     "add-key": v_add_key, "remove-key": v_remove_key,

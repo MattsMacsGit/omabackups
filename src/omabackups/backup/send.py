@@ -7,8 +7,6 @@ everyday(): the improved mix: replay renames/deletes, send changed ranges of
 """
 
 import json
-import os
-import shlex
 import struct
 import subprocess
 import tempfile
@@ -18,7 +16,6 @@ from omabackups.backup.changes import Plan
 from omabackups.backup.skips import Skips
 from omabackups.core import log
 from omabackups.core.errors import OmaError
-from omabackups.where import ssh
 from omabackups.where.server import Gate
 
 BASE = ["-aHAX", "--numeric-ids", "--partial-dir=.rsync-partial"]
@@ -31,13 +28,13 @@ class Sender:
         self.compress = compress   # D25: zstd only when away
 
     def _rsync(self, part: str, source: str, extra: list[str]) -> None:
-        rsh = os.environ.get("OMABACKUPS_TEST_RSH") if os.environ.get("OMABACKUPS_SYSROOT") else None
         command = ["rsync", *BASE, *(["-z", "--zc=zstd"] if self.compress else []), *extra,
-                   "-e", rsh or shlex.join(ssh.gatekeeper_ssh()),
+                   "-e", self.gate.rsh(),
                    f"--rsync-path=send {self.backup} {self.line} {part}",
-                   f"{source.rstrip('/')}/", f"{ssh.target(self.gate.address)}:{part}/"]
+                   f"{source.rstrip('/')}/", f"{self.gate.rsync_target()}:{part}/"]
         log.get("send").debug("rsync %s %s", part, " ".join(extra))
-        done = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        done = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+                              env=self.gate.rsync_env())
         # 24: some files vanished while being sent (normal for a live /boot).
         if done.returncode not in (0, 24):
             raise OmaError(f"Sending the {part} part of your backup stopped.",

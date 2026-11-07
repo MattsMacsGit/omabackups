@@ -105,10 +105,20 @@ def relay(sock: socket.socket, key_id: str, command: str, stdin=None, stdout=Non
     return 255
 
 
+class FdInput:
+    """A plain file descriptor that reads like a socket (local mode: stdin)."""
+
+    def __init__(self, fd: int):
+        self.fd = fd
+
+    def recv(self, n: int) -> bytes:
+        return os.read(self.fd, n)
+
+
 class Reader:
     """The caller's input: bytes that came with the request, then the socket."""
 
-    def __init__(self, sock: socket.socket, early: bytes):
+    def __init__(self, sock, early: bytes):
         self.sock = sock
         self.buf = early
 

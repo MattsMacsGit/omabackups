@@ -48,11 +48,18 @@ def refresh(gate, bid: str) -> dict:
     return verdict
 
 
-def start_tonight(gate, bid: str, minutes: int, unlock_key: bytes) -> dict:
+def start_tonight(gate, bid: str, minutes: int, unlock_key: bytes, wait: bool = False) -> dict:
+    """wait: stay with it until it's done or the time is up (a backup disk on
+    this computer locks as soon as the job ends; a server keeps it open)."""
     logger = log.get("health")
     hold = gate.call("unlock", bid, data=unlock_key)["hold"]
     try:
         verdict = gate.call("health-start", bid, str(minutes))
+        until = time.time() + minutes * 60
+        while wait and verdict.get("running") and time.time() < until:
+            time.sleep(30)
+            gate.call("hold", bid, hold)
+            verdict = gate.call("health", bid)
     finally:
         # Let go: the server keeps the backup open while the check runs, and
         # pauses it when tonight's time is up.
