@@ -43,6 +43,11 @@ def run(args, events: Events) -> int:
         h = data["header"]
         when = datetime.fromtimestamp(h["last_finished"]).strftime("%A %-I:%M %p").replace(" 0", " ")
         text += f"\nLast backup: {when} (restore point {h['last_point']}), to {h['where']}."
+    left_out = (data["header"] or {}).get("not_included") or []
+    if left_out:
+        data["lines"].append({"kind": "not-included", "paths": left_out})
+        text += ("\nNot backed up (each is a separate btrfs subvolume, which a snapshot "
+                 "can't include): " + ", ".join(left_out))
     progress_now = progress.read()
     if progress_now.get("running"):
         text += f"\nRunning now: {progress.text(progress_now)}"
@@ -68,4 +73,5 @@ def _header() -> dict | None:
         record = {}
     return {"where": "your backup server", "address": server.get("address"),
             "last_point": record.get("last_point"), "last_finished": record.get("last_finished"),
+            "not_included": record.get("not_included", []),
             "size": server.get("size")}

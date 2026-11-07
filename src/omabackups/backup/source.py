@@ -109,6 +109,22 @@ class Snapshots:
         if name and self.path(name).exists():
             subprocess.run(["btrfs", "subvolume", "delete", str(self.path(name))], capture_output=True)
 
+    def nested(self, part: Part) -> list[str]:
+        """Subvolumes inside this part that hold something: a snapshot can't
+        include them, so they aren't backed up (paths relative to the part)."""
+        done = subprocess.run(["btrfs", "subvolume", "list", "-o",
+                               str(self.top / part.subvol.lstrip("/"))], capture_output=True, text=True)
+        found, base = [], part.subvol.strip("/") + "/"
+        for line in done.stdout.splitlines():
+            path = line.split(" path ", 1)[-1].strip()
+            rel = path[len(base):] if path.startswith(base) else ""
+            try:
+                if rel and any(os.scandir(self.top / path)):
+                    found.append(rel)
+            except OSError:
+                pass
+        return sorted(found)
+
     def names(self) -> list[str]:
         try:
             return sorted(p.name for p in (self.top / SNAPSHOTS).iterdir())

@@ -61,6 +61,9 @@ class FakeSnapshots:
         if name and self.path(name).exists():
             shutil.rmtree(self.path(name))
 
+    def nested(self, part) -> list[str]:
+        return list(getattr(self.part, "nested_for_test", []))
+
     def names(self) -> list[str]:
         return sorted(os.listdir(self.store))
 

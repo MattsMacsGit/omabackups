@@ -88,7 +88,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
     try:
         # 1. Check first: snapshots and change lists for every part, and the size.
         progress("check")
-        needed, known = 0, True
+        needed, known, left_out = 0, True, []
         for part in (source.parts() if source else parts()):
             skip = skips.for_part(part.name)
             fingerprints[part.name] = skip.fingerprint()
@@ -100,6 +100,8 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             opened[part.name] = snaps
             new = snaps.take(part, run)
             made[part.name] = new.name
+            left_out += [f"{part.mount.rstrip('/')}/{rel}" for rel in snaps.nested(part)
+                         if not skip.skipped(rel)]
             old = since.get(part.name, "")
             if (record.get("finished") and snaps.exists(old)
                     and record.get("skips", {}).get(part.name) == fingerprints[part.name]):
@@ -135,6 +137,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         name = point_name(line, latest)
         point = {"owner": ids.system_id(), "user": linked_user(), "omarchy": omarchy_version(),
                  "omabackups": __version__, "follows": latest, "how": how, "away": away,
+                 "not_included": left_out,
                  "skips": {p: skips.for_part(p).patterns for p in how}, "created": int(time.time())}
         gate.call("snapshot", bid, line, name, data=json.dumps(point).encode())
         thinned = thin(gate, bid, logger)
@@ -144,7 +147,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         since.update(made)
         save_record({"finished": True, "since": since, "skips": fingerprints, "last_point": name,
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
-                     "away": away})
+                     "away": away, "not_included": left_out})
         for part_name, snap_name in old.items():
             opened[part_name].drop(snap_name)
     except BaseException:

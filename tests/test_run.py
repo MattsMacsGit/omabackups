@@ -204,3 +204,13 @@ def test_a_backup_that_doesnt_fit_thins_then_says_full(world, monkeypatch):
     left = sorted(p.name for p in points.iterdir())
     assert "001-2020-01-01-1000" not in left and "001-2020-02-01-1000" not in left
     assert len(left) == 1          # the newest stays, always
+
+
+def test_nested_subvolumes_are_reported_not_hidden(world, sandbox):
+    srv, kid, bid, src, box = world
+    src.list[1].nested_for_test = ["u/vms", "u/.cache/x"]        # the second one is skipped anyway
+    run.backup(source=src)
+    assert run.load_record()["not_included"] == [f"{src.root}/home/u/vms"]
+    assert json.loads((latest(box) / "point.json").read_text())["not_included"]
+    done = sandbox.run("status")
+    assert "Not backed up" in done.stdout and "u/vms" in done.stdout
