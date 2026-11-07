@@ -13,7 +13,7 @@ the whole system, and move your setup onto a fresh install.
 3. [Set up backups to a backup server](#set-up-backups-to-a-backup-server)
 4. [Set up backups to a backup disk](#set-up-backups-to-a-backup-disk)
 5. [Backing up](#backing-up)
-6. [Restore points](#restore-points)
+6. [Restore points](#restore-points) (and [getting things back](RESTORING.md))
 7. [Your changes to Omarchy](#your-changes-to-omarchy)
 8. [Start over](#start-over)
 9. [The omabackups command](#the-omabackups-command) ([its own page](COMMANDS.md))
@@ -66,7 +66,7 @@ screen:
   known network, can't reach your backup, the last backup failed, automatic
   backups are off, a health check problem, no Rescue USB yet;
 - **Back up now**, or, while a backup runs, what it's doing and **Stop**;
-- your restore points, newest first (**More…** shows them all).
+- your restore points, newest first: click one to open it (**More…**: all).
 
 The gear opens **Settings**: choose what gets backed up, automatic backups,
 the health check, away from home, restore points (smart thinning, and the
@@ -312,8 +312,8 @@ backup compares against, and it's replaced each time.
 
 ## Restore points
 
-Each backup makes a **restore point**: your computer as it was at that
-moment. `omabackups points` lists them, newest first.
+Each backup makes a **restore point**: your computer as it was then. To look
+inside one or bring files back, see [Getting things back](RESTORING.md).
 
 ### Smart thinning
 
@@ -324,9 +324,9 @@ ones and fewer old ones. Smart thinning keeps:
 - one a day for the 30 days before that;
 - one a week after that, for as long as there's room.
 
-About 100 restore points after a year, backing up hourly. Switched off
-(Settings › **Restore points**), nothing is deleted by itself: a full backup
-stops and says so. Delete ones you don't need: `omabackups delete <point>`.
+About 100 restore points after a year, backing up hourly. Off (Settings ›
+**Restore points**), nothing is deleted by itself: a full backup stops and
+says so. To delete one: `omabackups delete <point>`.
 
 ### Kept restore points
 

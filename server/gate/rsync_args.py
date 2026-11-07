@@ -11,7 +11,7 @@ import re
 from registry import Refused
 
 # One cluster of short options, ending in rsync's protocol letters ("e.xxx").
-_SHORT = re.compile(r"^-[lHogDtpAXrRSzcvnxIW]*e\.[A-Za-z]*$")
+_SHORT = re.compile(r"^-[lHogDtpAXrRSzcvnxIWu]*e\.[A-Za-z]*$")      # u: --update (Restore my files)
 _LONG = {
     "--delete", "--delete-during", "--delete-after", "--delete-delay", "--delete-excluded",
     "--numeric-ids", "--inplace", "--stats", "--ignore-errors", "--force",

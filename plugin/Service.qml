@@ -35,6 +35,11 @@ Item {
     return out
   }
   readonly property bool firstBackupDone: status.first_backup_done === true
+  // D37: the restore point open in the file manager, and Restore my files.
+  readonly property var browsing: status.browsing && status.browsing.ready ? status.browsing : null
+  readonly property string opening: expected["browse"] !== undefined
+                                    && !(browsing && browsing.point === expected["browse"]) ? expected["browse"] : ""
+  readonly property var restoring: status.restoring || null
 
   // The live theme's status colours (BUILD 7.0); fallbacks until it's read.
   property var theme: ({ green: "#9ece6a", blue: "#7aa2f7", yellow: "#e0af68", red: "#f7768e" })
@@ -89,6 +94,8 @@ Item {
 
   FileView { path: "/run/omabackups/progress.json"; watchChanges: true; onFileChanged: root.refresh() }
   FileView { path: "/var/lib/omabackups/backup.json"; watchChanges: true; onFileChanged: root.refresh() }
+  FileView { path: "/run/omabackups/browse.json"; watchChanges: true; printErrors: false; onFileChanged: root.refresh() }
+  FileView { path: "/run/omabackups/restore.json"; watchChanges: true; printErrors: false; onFileChanged: root.refresh() }
 
   FileView {
     id: themeFile
@@ -175,6 +182,11 @@ Item {
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }
   function keep(point, on) { run([on ? "keep" : "release", point], "keep:" + point, on) }
   function rescueLater() { run(["rescue-usb", "later"]) }
+  // Opens it in the default file manager (the command does that, D37).
+  function browse(point) { run(["browse", point], "browse", point) }
+  function browseDone() { run(["browse", "done"]) }
+  function restoreFiles(point) { run(["restore-files", point]) }
+  function restoreStop() { run(["restore-files", "stop"]) }
   function startOver() { run(["start-over"]) }
   function pick() { terminal("omabackups pick") }
   function changePassword() { terminal("omabackups password change") }

@@ -18,6 +18,7 @@ import os
 import shutil
 import stat
 import struct
+import sys
 from pathlib import Path
 
 import conf
@@ -97,6 +98,23 @@ def v_fetch(call):
         raise Refused("no such restore point")
     options = rsync_args.check(call.args[3:], sender=True)
     return Stream(["rsync", *options, ".", str(root) + "/"], cwd=str(root))
+
+
+def v_browse(call):
+    """browse BACKUP POINT: the restore point, read-only, over SFTP (D37:
+    Browse; the computer mounts it with sshfs). Owner and rescue keys."""
+    if len(call.args) != 2:
+        raise Refused("wrong number of arguments")
+    bid, point = call.args
+    registry.the_backup(registry.load(), bid, call.kid, ("owner", "rescue"))
+    if not conf.POINT.match(point):
+        raise Refused("that is not a restore point")
+    if not host().is_mounted(bid):
+        raise Refused("this backup is locked (unlock it first)")
+    root = mountpoint(bid) / "points" / point
+    if not root.is_dir():
+        raise Refused("no such restore point")
+    return Stream([sys.executable, os.path.abspath(sys.argv[0]), "sftp", str(root)], cwd=str(root))
 
 
 def v_apply(call):
@@ -297,5 +315,5 @@ def _kept(call, keep: bool):
     return {"kept": sorted(names)}
 
 
-VERBS = {"send": v_send, "fetch": v_fetch, "apply": v_apply, "reuse": v_reuse, "info": v_info, "ranges": v_ranges, "snapshot": v_snapshot,
+VERBS = {"send": v_send, "fetch": v_fetch, "browse": v_browse, "apply": v_apply, "reuse": v_reuse, "info": v_info, "ranges": v_ranges, "snapshot": v_snapshot,
          "keep": lambda call: _kept(call, True), "release": lambda call: _kept(call, False)}

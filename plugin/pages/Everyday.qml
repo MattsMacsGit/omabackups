@@ -18,10 +18,72 @@ Column {
   readonly property var shownPoints: service ? (showAll ? service.points : service.points.slice(0, 5)) : []
   readonly property var targets: {
     var out = []
+    if (browseBar.visible) out.push(doneButton)
+    if (restoreBox.visible && restoreStop.visible) out.push(restoreStop)
     for (var i = 0; i < lineRepeater.count; i++) out.push(lineRepeater.itemAt(i))
     out.push(service && service.running ? stopButton : backupButton)
+    for (var j = 0; j < pointRepeater.count; j++) out.push(pointRepeater.itemAt(j))
     if (service && service.points.length > 5) out.push(moreButton)
     return out
+  }
+  function whenOf(name) {
+    var found = (service ? service.points : []).filter(function(p) { return p.name === name })
+    return found.length ? Model.capital(Model.when(found[0].when)) : name
+  }
+
+  // --- Browsing (D37, as 1.x): what's open, and Done ------------------------------------
+  CursorSurface {
+    id: browseBar
+    visible: !!(page.service && (page.service.browsing || page.service.opening !== ""))
+    width: parent.width
+    bordered: true
+    implicitHeight: Math.max(browseText.implicitHeight, doneButton.implicitHeight) + Style.space(12)
+    Prose {
+      id: browseText
+      anchors.left: parent.left
+      anchors.right: doneButton.left
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(8)
+      anchors.verticalCenter: parent.verticalCenter
+      text: !page.service ? "" : page.service.browsing
+            ? "Browsing " + page.whenOf(page.service.browsing.point) + " · read-only"
+            : "Opening " + page.whenOf(page.service.opening) + "… this can take a few seconds."
+    }
+    ActionButton {
+      id: doneButton
+      visible: !!(page.service && page.service.browsing)
+      anchors.right: parent.right
+      anchors.rightMargin: Style.space(6)
+      anchors.verticalCenter: parent.verticalCenter
+      text: "Done"
+      tooltipText: "Close it and lock your backup again"
+      hasCursorHere: page.cursorOn(this)
+      onClicked: page.service.browseDone()
+    }
+  }
+
+  // --- Restore my files: how it's going (D37) --------------------------------------------
+  Column {
+    id: restoreBox
+    readonly property var r: page.service ? page.service.restoring : null
+    visible: !!(r && (r.running || r.error))
+    width: parent.width
+    spacing: Style.space(6)
+    Prose {
+      width: parent.width
+      color: restoreBox.r && restoreBox.r.error ? page.service.colour("red") : Commons.Color.foreground
+      text: !restoreBox.r ? "" : restoreBox.r.error
+            ? restoreBox.r.error.what + " " + (restoreBox.r.error.todo || "")
+            : "Bringing back your files · " + (restoreBox.r.percent || 0) + "%"
+    }
+    ActionButton {
+      id: restoreStop
+      visible: !!(restoreBox.r && restoreBox.r.running)
+      width: parent.width
+      text: "Stop (carry on later)"
+      hasCursorHere: page.cursorOn(this)
+      onClicked: page.service.restoreStop()
+    }
   }
   function cursorOn(item) { return panel && panel.cursorTarget === item }
 
@@ -105,26 +167,16 @@ Column {
   }
 
   Repeater {
+    id: pointRepeater
     model: page.shownPoints
-    Item {
+    PointRow {
       required property var modelData
-      width: page.width
-      implicitHeight: label.implicitHeight + Style.space(6)
-      Prose {
-        id: label
-        anchors.left: parent.left
-        anchors.right: tag.left
-        text: Model.capital(Model.when(modelData.when))
-        wrapMode: Text.NoWrap
-        elide: Text.ElideRight
-      }
-      Prose {
-        id: tag
-        anchors.right: parent.right
-        dim: true
-        wrapMode: Text.NoWrap
-        text: modelData.return_point ? "Return point" : (modelData.kept ? "kept" : "")
-      }
+      title: Model.capital(Model.when(modelData.when))
+      tag: page.service && page.service.opening === modelData.name ? "Opening…"
+           : page.service && page.service.browsing && page.service.browsing.point === modelData.name ? "Open"
+           : modelData.return_point ? "Return point" : (modelData.kept ? "★ kept" : "")
+      hasCursorHere: page.cursorOn(this)
+      onActivated: page.service.browse(modelData.name)
     }
   }
 

@@ -96,6 +96,11 @@ def lines(step, settings: dict, record: dict, now: dict, mine: dict) -> list[dic
     return out
 
 
+def _browsing() -> dict | None:
+    from omabackups.restore import browse
+    return browse.still_open(browse.current())
+
+
 def build() -> dict:
     step = flow.where()
     system = ids.system_id()
@@ -116,4 +121,6 @@ def build() -> dict:
         "running": now if now.get("running") else None,
         "lines": lines(step, settings, record, now, mine),
         "rescue_usb": mine.get("rescue_usb"), "rescue_later": bool(mine.get("rescue_later")),
+        "browsing": _browsing(),      # D37
+        "restoring": _read(paths.system_run_dir() / "restore.json") or None,
     }

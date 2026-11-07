@@ -7,6 +7,7 @@
   gate.pyz sweep           from omabackups-gate-sweep.timer: lock quiet backups
   gate.pyz install ...     set up this server (as root, by `omabackups setup server`)
   gate.pyz admin ...       keys and the store (as root)
+  gate.pyz sftp ROOT       read-only SFTP inside one restore point (the browse verb)
   gate.pyz version
 """
 
@@ -144,6 +145,9 @@ def main(argv: list[str]) -> int:
         return direct(argv[1])
     if argv[:1] == ["direct-rsh"] and len(argv) >= 3:
         return direct_rsh(argv[1], argv[2:])
+    if argv[:1] == ["sftp"] and len(argv) == 2:     # run by the browse verb (D37)
+        import sftp
+        return sftp.serve(argv[1])
     if argv[:1] == ["sweep"]:
         for bid in verbs.sweep():
             log(f"locked {bid[:12]}: nobody holding it, and quiet")
