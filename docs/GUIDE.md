@@ -177,6 +177,35 @@ either that the disk reported read or write errors (a loose cable or a tired
 disk: worth a look), or that damaged files were found. Those are sent again
 at the next backup, which compares the contents of every file to do it.
 
+### Choose what gets backed up
+
+```
+omabackups pick
+```
+
+opens the picker in the terminal (the panel opens it for you from Settings).
+It starts with your home folders, biggest first, with **System** beside them:
+
+- **✓** everything in it is backed up; **•** only part of it (open it to see
+  what's skipped); no mark: skipped.
+- **Green**: in your backup already. **Blue**: ticked, goes at the next
+  backup. **Grey**: skipped. The line at the bottom turns **red** if it all
+  won't fit.
+- The line under the list explains the highlighted row in plain words.
+
+Keys: **↑↓** move, **Enter** open a folder, **⌫** back, **Space** tick or
+skip, **s** save and quit, **q** quit (it asks first if you changed
+something). The mouse works too.
+
+Caches and the trash are skipped everywhere; Space on one of them backs that
+one up anyway. Something inside a skipped folder can't be ticked on its own:
+tick the folder first.
+
+After you save, the next backup follows your choices. Anything newly
+skipped leaves your backup's working copy, but stays in your older restore
+points. Anything newly ticked is backed up, and if your backup already had
+it from before, it's reused rather than sent again.
+
 ### What gets backed up
 
 - **System**: everything on your system disk, except temporary files, the

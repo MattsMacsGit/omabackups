@@ -164,6 +164,10 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             write_atomic(paths.system_state_dir() / "changes.json",
                          (json.dumps({**changes_now, "point": name}) + "\n").encode(), 0o644)
         thinned = thin(gate, bid, logger)
+        try:
+            space = gate.call("space", bid)      # for the picker's bottom line
+        except OmaError:
+            space = {}
 
         # 4. Done: the new snapshots are the next "since" point; the old ones go.
         old = {p: n for p, n in since.items() if made.get(p) and made[p] != n}
@@ -172,6 +176,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                      "skip_patterns": {p: skips.for_part(p).patterns for p in fingerprints},
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
                      "away": away, "not_included": left_out, "manifests": manifests,
+                     "space": {k: space.get(k) for k in ("box", "used", "free")},
                      "resent_for_pass": verdict.get("pass_started") if resend
                      else record.get("resent_for_pass")})
         for part_name, snap_name in old.items():
