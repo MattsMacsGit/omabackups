@@ -1,6 +1,7 @@
 """A whole backup run, through the fake server, with stand-in snapshots."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -302,3 +303,23 @@ def test_a_file_brought_back_from_a_restore_point_is_reused(world, monkeypatch):
     assert any(a["files"] == 1 and a["bytes"] == 40_000 for a in answers)
     assert result["how"]["home"].startswith("changes (")
     same(latest(box), src)
+
+
+def test_the_hold_is_kept_alive_during_a_long_part(world, monkeypatch):
+    srv, kid, bid, src, box = world
+    monkeypatch.setattr(run.HoldKeeper, "EVERY", 0.2)
+    real = run.Sender.full
+    seen = []
+
+    def slow(self, part, *args, **kwargs):
+        if part == "home":
+            import time
+            folder = srv.root / "run/omabackups-gate/holds" / bid
+            hold = next(folder.iterdir())
+            os.utime(hold, (0, 0))                 # as if 10+ minutes had passed...
+            time.sleep(1)                          # ...the keeper refreshes it meanwhile
+            seen.append(hold.stat().st_mtime > 1000)
+        return real(self, part, *args, **kwargs)
+    monkeypatch.setattr(run.Sender, "full", slow)
+    run.backup(source=src)
+    assert seen == [True]

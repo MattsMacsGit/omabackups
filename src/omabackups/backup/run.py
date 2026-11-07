@@ -12,6 +12,7 @@ rsync only sends what's still missing.
 
 import json
 import subprocess
+import threading
 import time
 from contextlib import ExitStack
 from datetime import datetime
@@ -83,6 +84,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         verdict = {}
     resend = health.resend_needed(verdict, record)    # damaged files go again, all of them
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
+    keeper = HoldKeeper(gate, bid, hold, logger)        # still here, however long a part takes
     sender = Sender(gate, bid, line, compress=away)     # D25: zstd only when away
     run = datetime.now().strftime("%Y%m%dT%H%M%S")
     made, since, how, fingerprints, work, opened = {}, dict(record.get("since", {})), {}, {}, [], {}
@@ -141,7 +143,6 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             else:
                 sender.full(part.name, str(new), skip, checksum=resend)
                 how[part.name] = "full check, every file's contents" if resend else "full check"
-            gate.call("hold", bid, hold)
 
         # 3. The restore point, then thinning.
         progress("point")
@@ -173,6 +174,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                 opened[part_name].drop(snap_name)
         raise
     finally:
+        keeper.stop()
         stack.close()
         try:
             gate.call("lock", bid, hold)
@@ -180,6 +182,31 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             logger.warning("lock after backup: %s", exc.details)
     logger.info("backup %s done (%s): %s", name, "away" if away else "home", how)
     return {"point": name, "how": how, "away": away}
+
+
+class HoldKeeper:
+    """Says "still here" to the server every 2 minutes for the whole backup. A
+    hold nobody refreshes for 10 minutes counts as abandoned (1.x lesson: long
+    jobs say so as they go); one slow part once outlasted it (stage 3 test)."""
+
+    EVERY = 120
+
+    def __init__(self, gate, bid: str, hold: str, logger):
+        self.gate, self.bid, self.hold, self.logger = gate, bid, hold, logger
+        self.done = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self) -> None:
+        while not self.done.wait(self.EVERY):
+            try:
+                self.gate.call("hold", self.bid, self.hold)
+            except OmaError as exc:
+                self.logger.warning("keeping the hold: %s", exc.details)
+
+    def stop(self) -> None:
+        self.done.set()
+        self.thread.join(timeout=5)
 
 
 def thin(gate: Gate, bid: str, logger) -> list[str]:
