@@ -54,6 +54,14 @@ def print_err(text: str) -> None:
     sys.stderr.write(text + "\n")
 
 
+def cipher_name(cipher: str) -> str:
+    if "adiantum" in cipher:
+        return "Adiantum, the fast choice for a server without AES"
+    if cipher.startswith("aes-xts"):
+        return "AES"
+    return cipher
+
+
 def run_server(args, events: Events) -> int:
     if flow.where() is not flow.Step.NOT_SET_UP:
         raise OmaError("OmaBackups is already set up on this computer.",
@@ -88,6 +96,6 @@ def run_server(args, events: Events) -> int:
     made = server.create(address, login_session.host_keys(), size << 30, password)
     events.result({"backup": made["backup"], "cipher": made["cipher"], "size": made["size"]},
                   f"\nYour backup is set up on the server ({size} GB, encrypted with "
-                  f"{made['cipher'].split(',')[-1].split('-')[0]}).\n"
+                  f"{cipher_name(made['cipher'])}).\n"
                   "Next: the first backup.")
     return 0

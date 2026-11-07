@@ -151,3 +151,9 @@ def test_a_shared_request_folder_is_refused(world):
     with pytest.raises(OmaError) as caught:
         jobs.read_request("create-backup", os.getuid())
     assert caught.value.code == "bad-request"
+
+
+def test_the_cipher_is_named_right():
+    from omabackups.commands.setup import cipher_name
+    assert cipher_name("xchacha12,aes-adiantum-plain64").startswith("Adiantum")
+    assert cipher_name("aes-xts-plain64") == "AES"
