@@ -52,6 +52,19 @@ Panel {
     var place = placeOn[name !== "" ? name : defaultPage]
     cursorIndex = returning && place !== undefined ? place : firstIndex
   }
+  // The mouse moves the same cursor the keys do: one highlight, always (D32).
+  function pointAt(from, x, y) {
+    for (var i = 0; i < targets.length; i++) {
+      var t = targets[i]
+      if (!t || !t.mapFromItem || !t.visible) continue
+      var p = t.mapFromItem(from, x, y)
+      if (p.x >= 0 && p.y >= 0 && p.x < t.width && p.y < t.height) {
+        cursorActive = true
+        cursorIndex = i
+        return
+      }
+    }
+  }
   function heroPressed() { shown === "everyday" ? go("settings") : back() }
 
   QtObject {
@@ -143,6 +156,10 @@ Panel {
           id: column
           width: parent.width
           spacing: Style.space(12)
+
+          HoverHandler {
+            onPointChanged: if (hovered) root.pointAt(column, point.position.x, point.position.y)
+          }
 
           PanelHero {
             width: parent.width

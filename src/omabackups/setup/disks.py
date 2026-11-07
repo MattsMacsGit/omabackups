@@ -26,8 +26,8 @@ class Disk:
     warnings: list = field(default_factory=list)
 
     def line(self) -> str:
-        what = f"{self.model or 'disk'} ({self.transport or 'internal'})"
-        return f"{self.path}  {human(self.size)}  {what}"
+        kind = "USB" if self.transport == "usb" else self.transport or "internal"
+        return f"{self.model or 'Disk'} ({kind})  ·  {human(self.size)}  ·  {self.path}"
 
 
 def _lsblk(*args: str) -> dict:

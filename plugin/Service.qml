@@ -20,9 +20,21 @@ Item {
   readonly property string flow: status.flow || ""
   readonly property var running: status.running || null
   readonly property var header: status.header || null
-  readonly property var points: status.points || []
+  // D32: a switch shows its new state at once. `expected` holds what the
+  // panel asked for until status confirms it (or the command fails: then it
+  // goes, and the switch flips back).
+  property var expected: ({})
+  readonly property var points: (status.points || []).map(function(p) {
+    var want = root.expected["keep:" + p.name]
+    return want === undefined ? p : Object.assign({}, p, { kept: want })
+  })
   readonly property var lines: status.lines || []
-  readonly property var settings: status.settings || ({})
+  readonly property var settings: {
+    var out = Object.assign({}, status.settings || {})
+    for (var key in root.expected)
+      if (key.indexOf("setting:") === 0) out[key.slice(8)] = root.expected[key]
+    return out
+  }
   readonly property bool firstBackupDone: status.first_backup_done === true
 
   // The live theme's status colours (BUILD 7.0); fallbacks until it's read.
@@ -43,17 +55,28 @@ Item {
     return null
   }
 
-  function refresh() { if (!statusProc.running) statusProc.running = true }
+  function refresh() {
+    if (statusProc.running) return
+    statusProc.startedAfter = root.actionsDone
+    statusProc.running = true
+  }
 
   Process {
     id: statusProc
+    property int startedAfter: 0
     command: ["sh", "-c", "command -v omabackups >/dev/null || exit 127; exec omabackups --json status"]
     stdout: StdioCollector { id: statusOut; waitForEnd: true }
     onExited: function(code) {
       if (code === 127) { root.installed = false; root.loaded = true; return }
       root.installed = true
       var result = root.lastResult(statusOut.text)
-      if (result && result.event === "result") { root.status = result; root.loaded = true }
+      if (result && result.event === "result") {
+        root.status = result
+        root.loaded = true
+        // Status read after every asked-for change: it shows them now.
+        if (startedAfter === root.actionsDone && !actionProc.running && root.queue.length === 0)
+          root.expected = ({})
+      }
     }
   }
 
@@ -88,25 +111,50 @@ Item {
   // --- doing ----------------------------------------------------------------------
 
   // A quick command; its error (what happened, what to do, details) becomes the notice.
+  // Clicks wait their turn: none is dropped while an earlier one runs (D32).
+  property var queue: []
+  property int actionsDone: 0
+
   Process {
     id: actionProc
+    property string expects: ""
     stdout: StdioCollector { id: actionOut; waitForEnd: true }
     onExited: function(code) {
       var result = root.lastResult(actionOut.text)
-      if (code !== 0 && result && result.event === "error") {
-        root.notice = (result.what + " " + (result.todo || "")).trim()
-        root.noticeDetails = result.details || ""
+      if (code !== 0) {
+        root.notice = result && result.event === "error" ? (result.what + " " + (result.todo || "")).trim()
+                                                         : "That didn't work: the omabackups command stopped."
+        root.noticeDetails = result && result.details ? result.details : ""
+        if (expects !== "") {         // flip it back
+          var undo = Object.assign({}, root.expected)
+          delete undo[expects]
+          root.expected = undo
+        }
       }
       if (result && result.event === "result" && result.items) root.changes = result
-      root.refresh()
+      root.actionsDone++
+      root.next()
     }
   }
 
-  function run(args) {
-    if (actionProc.running) return
+  function run(args, expectKey, expectValue) {
+    if (expectKey) {
+      var want = Object.assign({}, expected)
+      want[expectKey] = expectValue
+      expected = want
+    }
     notice = ""
     noticeDetails = ""
-    actionProc.command = ["omabackups", "--json"].concat(args)
+    queue = queue.concat([{ args: args, expects: expectKey || "" }])
+    if (!actionProc.running) next()
+  }
+
+  function next() {
+    if (queue.length === 0) { refresh(); return }
+    var job = queue[0]
+    queue = queue.slice(1)
+    actionProc.expects = job.expects
+    actionProc.command = ["omabackups", "--json"].concat(job.args)
     actionProc.running = true
   }
 
@@ -126,8 +174,8 @@ Item {
   }
   function stop() { run(["stop"]) }
   function awayAnswer(now) { if (now) start(["away", "answer", "now"]); else run(["away", "answer", "wait"]) }
-  function setSetting(name, value) { run(["settings", "set", name, String(value)]) }
-  function keep(point, on) { run([on ? "keep" : "release", point]) }
+  function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }
+  function keep(point, on) { run([on ? "keep" : "release", point], "keep:" + point, on) }
   function rescueLater() { run(["rescue-usb", "later"]) }
   function loadChanges() { run(["changes"]) }
   function startOver() { run(["start-over"]) }

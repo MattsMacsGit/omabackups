@@ -34,51 +34,51 @@ Column {
 
   // --- A. The package isn't installed -------------------------------------------
   Prose { visible: page.step === "missing"; width: parent.width; text: "The OmaBackups plugin needs the omabackups package." }
-  ActionButton {
+  NavRow {
     id: install
     visible: page.step === "missing"
-    text: "Install"
+    title: "Install it"
+    explainer: "From the AUR, in a terminal window. It asks for your password once."
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.service.installPackage()
+    onActivated: page.service.installPackage()
   }
-  Prose { visible: page.step === "missing"; width: parent.width; dim: true; text: "Installs it from the AUR in a terminal window. It asks for your password once." }
 
   // --- B. First start: two choices only ---------------------------------------------
-  ActionButton {
+  NavRow {
     id: setUp
     visible: page.step === "first"
-    text: "Set up backups"
+    title: "Set up backups"
+    explainer: "Back up this computer to a backup server or a disk plugged in here."
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.panel.go("where")
+    onActivated: page.panel.go("where")
   }
-  Prose { visible: page.step === "first"; width: parent.width; dim: true; text: "Back up this computer to a backup server or a disk plugged in here." }
-  ActionButton {
+  NavRow {
     id: migrate
     visible: page.step === "first"
-    text: "Migrate from another system"
+    title: "Migrate from another system"
+    explainer: "Bring your apps and settings over from another computer's backup."
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.service.notice = "Migrate comes with a later version of OmaBackups."
+    onActivated: page.service.notice = "Migrate comes with a later version of OmaBackups."
   }
-  Prose { visible: page.step === "first"; width: parent.width; dim: true; text: "Bring your apps and settings over from another computer's backup." }
 
   // --- C1. Where? ----------------------------------------------------------------------
   Prose { visible: page.step === "where"; width: parent.width; text: "Where should your backups go?" }
-  ActionButton {
+  NavRow {
     id: toServer
     visible: page.step === "where"
-    text: "A backup server on the network"
+    title: "A backup server on the network"
+    explainer: "Any always-on Linux computer (a Pi, an old laptop). Backs up wherever you are."
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.panel.go("server")
+    onActivated: page.panel.go("server")
   }
-  Prose { visible: page.step === "where"; width: parent.width; dim: true; text: "Any always-on Linux computer (a Pi, an old laptop). Backs up wherever you are." }
-  ActionButton {
+  NavRow {
     id: toDisk
     visible: page.step === "where"
-    text: "A backup disk plugged in here"
+    title: "A backup disk plugged in here"
+    explainer: "A USB disk. It's erased and used only for your backups."
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.panel.go("disk")
+    onActivated: page.panel.go("disk")
   }
-  Prose { visible: page.step === "where"; width: parent.width; dim: true; text: "A USB disk. It's erased and used only for your backups." }
 
   // --- C2. Details: a server ----------------------------------------------------------
   Prose { visible: page.step === "server"; width: parent.width; text: "The server's address" }
@@ -101,6 +101,7 @@ Column {
   }
   ActionButton {
     id: goServer
+    width: parent.width
     visible: page.step === "server"
     enabled: address.text.trim() !== "" && login.text.trim() !== ""
     text: "Continue in a terminal window"
@@ -120,6 +121,7 @@ Column {
   Prose { visible: page.step === "disk"; width: parent.width; text: "Plug in the disk you want to use, then continue." }
   ActionButton {
     id: goDisk
+    width: parent.width
     visible: page.step === "disk"
     text: "Continue in a terminal window"
     hasCursorHere: page.cursorOn(this)
@@ -142,6 +144,7 @@ Column {
   }
   ActionButton {
     id: firstBackup
+    width: parent.width
     visible: page.step === "firstBackup" && !(page.service && page.service.running)
     text: "Back up now"
     hasCursorHere: page.cursorOn(this)

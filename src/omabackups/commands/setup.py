@@ -4,7 +4,6 @@ Asks in the terminal for anything not given. Passwords are never taken on
 the command line (anyone on the computer could read them there).
 """
 
-import getpass
 import json
 import os
 
@@ -12,15 +11,13 @@ import os
 from omabackups.core import flow, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.events import Events
-from omabackups.setup import server
+from omabackups.backup.check import human
+from omabackups.setup import menu, places, server
 
-PASSWORD_EXPLAINER = (
-    "\nChoose your backup's password.\n"
-    "Everyday backups don't need it: this computer has its own key. You need it to\n"
-    "open your backup from a Rescue USB or from a new computer (Migrate). Write it\n"
-    "down and keep it somewhere safe: without it, nobody can open your backup, not\n"
-    "even you."
-)
+PASSWORD_TITLE = "Choose your backup's password"
+PASSWORD_NOTE = ("Everyday backups don't need it: this computer has its own key.\n"
+                 "You need it for a Rescue USB or a new computer. Write it down:\n"
+                 "without it, nobody can open your backup, not even you.")
 
 
 def add(sub) -> None:
@@ -41,28 +38,6 @@ def add(sub) -> None:
                    "itself is kept)").set_defaults(run=run_start_over)
 
 
-def _ask(text: str, default: str = "") -> str:
-    shown = f"{text} [{default}]: " if default else f"{text}: "
-    answer = input(shown).strip()
-    return answer or default
-
-
-def _password() -> str:
-    while True:
-        first = getpass.getpass("Your backup's password: ")
-        if len(first) < 8:
-            print_err("Use at least 8 characters.")
-            continue
-        if getpass.getpass("Type it again: ") == first:
-            return first
-        print_err("Those two didn't match. Try again.")
-
-
-def print_err(text: str) -> None:
-    import sys
-    sys.stderr.write(text + "\n")
-
-
 def cipher_name(cipher: str) -> str:
     if "adiantum" in cipher:
         return "Adiantum, the fast choice for a server without AES"
@@ -80,7 +55,7 @@ def run_update(args, events: Events) -> int:
                        "Set one up first: omabackups setup server", code="not-set-up") from None
     events.message("Update OmaBackups on your backup server. Your backup and its restore points\n"
                    "are kept. This asks for your login on the server and its sudo password.")
-    login = args.login or _ask("Your user name on the server", os.environ.get("USER", ""))
+    login = args.login or menu.ask("Your user name on the server", os.environ.get("USER", ""))
     session = server.Login(address, login)
     events.message("\nLogging in to your backup server (its password, for your login there)...")
     try:
@@ -92,31 +67,59 @@ def run_update(args, events: Events) -> int:
     return 0
 
 
+def _size(place) -> int:
+    """How big the backup in a disk's free space is, in GB (D30)."""
+    offered = places.sizes(place.free)
+    if not offered:
+        raise OmaError(f"{place.name} has only {human(place.free)} free: not enough for a backup.",
+                       "Pick another disk, or make room on this one, then run setup again.",
+                       code="no-room")
+    options = [f"{n} GB" for n in offered] + ["Another size"]
+    picked = menu.choose(f"How big should your backup be? ({human(place.free)} free; "
+                         "it can grow later)", options, selected=min(1, len(offered) - 1))
+    if picked < len(offered):
+        return offered[picked]
+    typed = menu.ask("Size in GB", str(offered[-1]))
+    if not typed.isdigit() or not 1 <= int(typed) <= place.free >> 30:
+        raise OmaError(f"The size must be a number of GB, at most {place.free >> 30}.",
+                       "Run setup again and pick or type a size.", code="cancelled")
+    return int(typed)
+
+
 def _where_on_server(args, events: Events, session) -> tuple[str, int, bool]:
-    """6.1 C step 2: [a disk of its own] or [space on a disk it has, size ___]."""
+    """6.1 C step 2 (D30): pick a disk, then the whole disk or its free space."""
+    menu.say("\nLogging in to your backup server (its password, for your login there)...")
     if args.folder:
-        size = args.size or int(_ask("Your backup's size in GB (it can grow later)", "100"))
-        events.message("\nLogging in to your backup server (its password, for your login there)...")
-        return server.check_store(args.folder), size, False
-    events.message("\nLogging in to your backup server (its password, for your login there)...")
-    found = session.disks()
-    events.message("\nWhere on the server should your backup go?\n")
-    for n, d in enumerate(found, 1):
-        events.message(f"  {n}. A disk of its own: {d.line()} (erased)\n"
-                       + "".join(f"       {w}\n" for w in d.warnings))
-    events.message(f"  {len(found) + 1}. A folder on a disk the server already has "
-                   "(you choose the size; nothing is erased)\n")
-    choice = _ask("Which (number)")
-    if not choice.isdigit() or not 1 <= int(choice) <= len(found) + 1:
-        raise OmaError("Nothing was picked, so nothing was changed.", code="cancelled")
-    if int(choice) == len(found) + 1:
-        folder = server.check_store(_ask("The folder on the server (on a disk with room)"))
-        size = args.size or int(_ask("Your backup's size in GB (it can grow later)", "100"))
-        return folder, size, False
-    chosen = found[int(choice) - 1]
-    events.message(f"\n{chosen.line()} on the server will be erased:\n"
-                   + "".join(f"  - {w}\n" for w in chosen.warnings))
-    return f"disk:{chosen.path}:{chosen.size}", 0, True
+        return server.check_store(args.folder), args.size or 100, False
+    found = session.places()
+    if not found:
+        raise OmaError("Your backup server has no disks that OmaBackups can see.",
+                       "Check the server's disks are plugged in, then run setup again.",
+                       code="no-disk")
+    while True:
+        menu.title("Where on the server should your backup go?",
+                   "Pick a disk. Next you choose: the whole disk, or its free space.")
+        place = found[menu.choose("Disks on your backup server", [p.line() for p in found])]
+        way = _way(place)
+        if way:
+            break
+    if way == "whole":
+        return f"disk:{place.path}:{place.size}", 0, True
+    size = args.size or _size(place)
+    menu.say(f"\nYour backup goes in {place.folder} on the server ({size} GB).")
+    return place.folder, size, False
+
+
+def _way(place) -> str:
+    """The whole disk or its free space: "whole", "space", or "" to pick again."""
+    menu.title(place.name, "\n".join(f"  {w}" for w in place.contents) or "  Empty.")
+    ways = []
+    if place.mount:
+        ways.append(("space", f"Its free space  ·  {human(place.free)}  ·  nothing is erased"))
+    if not place.system:
+        ways.append(("whole", f"The whole disk  ·  {human(place.size)}  ·  everything on it is erased"))
+    ways.append(("", "Pick another disk"))
+    return ways[menu.choose("How should your backup use it?", [w[1] for w in ways])][0]
 
 
 def run_server(args, events: Events) -> int:
@@ -127,12 +130,11 @@ def run_server(args, events: Events) -> int:
                        "To update OmaBackups on the server: omabackups setup server --update. "
                        "To use a different backup location, Start over from Settings first.",
                        code="already-set-up")
-    events.message("Set up backups to a backup server.\n"
-                   "This asks for three passwords, each once: this computer's, your login\n"
-                   "on the server, and the server's sudo password. Then you choose your\n"
-                   "backup's own password.")
-    address = args.address or _ask("The server's address (for example 192.168.1.20)")
-    login = args.login or _ask("Your user name on the server", os.environ.get("USER", ""))
+    menu.title("Set up backups to a backup server",
+               "Three passwords, each asked once: this computer's, your login on the\n"
+               "server, and the server's sudo password. Then your backup's own password.")
+    address = args.address or menu.ask("The server's address", placeholder="for example 192.168.1.20")
+    login = args.login or menu.ask("Your user name on the server", os.environ.get("USER", ""))
     if not address or not login:
         raise OmaError("The server's address and your user name on it are both needed.",
                        code="cancelled")
@@ -150,7 +152,7 @@ def run_server(args, events: Events) -> int:
     if disk:   # a disk of its own: the backup takes (almost) all of it
         size = max(1, int(installed.get("store_free", 0) * 0.97) >> 30)
 
-    events.message(PASSWORD_EXPLAINER)
+    menu.title(PASSWORD_TITLE, PASSWORD_NOTE)
     password = _password()
     events.step("create", "Creating your backup on the server (this takes a minute)...")
     made = server.create(address, login_session.host_keys(), size << 30, password)
@@ -180,18 +182,17 @@ def run_disk(args, events: Events) -> int:
             raise OmaError(f"{args.disk} isn't one of the disks you can pick.",
                            "Run omabackups setup disk to see the list.", code="no-disk")
     else:
-        events.message("Pick the backup disk. Read what's on each one: the disk you pick is erased.\n")
-        for n, d in enumerate(found, 1):
-            events.message(f"  {n}. {d.line()}\n" + "".join(f"       {w}\n" for w in d.warnings))
-        choice = _ask("Which disk (number)")
-        if not choice.isdigit() or not 1 <= int(choice) <= len(found):
-            raise OmaError("Nothing was picked, so nothing was erased.", code="cancelled")
-        chosen = found[int(choice) - 1]
-    events.message(f"\n{chosen.line()} will be erased:\n"
-                   + "".join(f"  - {w}\n" for w in chosen.warnings))
+        while True:
+            menu.title("Set up backups to a backup disk",
+                       "Pick the disk. The one you pick is erased and used only for backups.")
+            chosen = found[menu.choose("Disks plugged in here", [d.line() for d in found])]
+            menu.title(chosen.line(), "\n".join(f"  {w}" for w in chosen.warnings))
+            if menu.choose("Use this disk?", ["Use it: erase it and back up to it",
+                                              "Pick another disk"]) == 0:
+                break
     events.step("link", "Linking this computer to OmaBackups (this computer's password)...")
     server.link()
-    events.message(PASSWORD_EXPLAINER)
+    menu.title(PASSWORD_TITLE, PASSWORD_NOTE)
     password = _password()
     events.step("create", "Erasing the disk and creating your backup on it...")
     made = rootjob.run("create-disk", {"device": chosen.path, "size": chosen.size,

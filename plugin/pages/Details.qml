@@ -106,26 +106,28 @@ Column {
             + (page.service && page.service.points.length ? ", the oldest from "
                + Model.when(page.service.points[page.service.points.length - 1].when) : "")
     }
-    ActionButton {
+    NavRow {
       id: password
       visible: !page.confirming
-      text: "Change its password"
+      title: "Change its password"
+      explainer: "In a terminal window: your backup's current password, then the new one."
       hasCursorHere: page.cursorOn(this)
-      onClicked: page.service.changePassword()
+      onActivated: page.service.changePassword()
     }
-    Prose { visible: !page.confirming; width: parent.width; dim: true; text: "In a terminal window: your backup's current password, then the new one." }
-    ActionButton {
+    NavRow {
       id: startOver
       visible: !page.confirming
-      text: "Start over"
+      title: "Start over"
+      explainer: "This computer forgets where it backs up, and you set backups up again. "
+                 + "Your backup isn't deleted: it stays where it is, with all its restore points."
       hasCursorHere: page.cursorOn(this)
-      onClicked: page.confirming = true
+      onActivated: page.confirming = true
     }
     Prose {
+      visible: page.confirming
       width: parent.width
-      dim: !page.confirming
-      text: "This computer forgets where it backs up, and you set backups up again. Your backup isn't "
-            + "deleted: it stays where it is, with all its restore points."
+      text: "Start over? This computer forgets where it backs up. Your backup isn't deleted: "
+            + "it stays where it is, with all its restore points."
     }
     Row {
       visible: page.confirming

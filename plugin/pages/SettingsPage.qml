@@ -4,27 +4,31 @@ import qs.Ui
 import "../parts"
 import "../Model.js" as Model
 
-// Settings (BUILD 6.1 E, 7.1). Switches are real switches; a gear
-// only shows that switch's own options (1.x rule).
+// Settings (BUILD 6.1 E, 7.1, D32). Every row is one big button; switches
+// flip from anywhere on their row, and a gear at the far end shows only that
+// switch's own options, as labelled choices (1.x).
 Column {
   id: page
   property var service: null
   property var panel: null
-  spacing: Style.space(8)
+  spacing: Style.space(6)
 
   readonly property var s: service ? service.settings : ({})
   // The cursor's path, top to bottom; an open gear's options come right after its switch.
-  readonly property var targets: [pick, automatic].concat(items(automatic.gearOpen ? everyRepeater : null),
-                                   [awayMinus, awayPlus, health],
-                                   health.gearOpen ? [atMinus, atPlus].concat(items(minutesRepeater)) : [],
-                                   [kept, changes, yourBackup])
-  function items(repeater) {
-    var out = []
-    for (var i = 0; repeater && i < repeater.count; i++) out.push(repeater.itemAt(i))
-    return out
-  }
+  readonly property var targets: [pick, automatic].concat(
+      automatic.gearShown && automatic.gearOpen ? every.buttons : [],
+      [health],
+      health.gearShown && health.gearOpen ? startAt.buttons.concat(howLong.buttons) : [],
+      away.buttons, [kept, changes, yourBackup])
   function cursorOn(item) { return panel && panel.cursorTarget === item }
   function set(name, value) { service.setSetting(name, value) }
+
+  readonly property var hours: [[22, "10 pm"], [0, "Midnight"], [2, "2 am"], [4, "4 am"]]
+  readonly property var lengths: [[60, "1 hour"], [120, "2 hours"], [240, "4 hours"]]
+  function label(list, value, fallback) {
+    var found = list.filter(function(c) { return c[0] === value })
+    return found.length ? found[0][1] : fallback
+  }
 
   NavRow {
     id: pick
@@ -43,86 +47,77 @@ Column {
     explainer: checked ? ({ hourly: "Every hour.", daily: "Once a day.", weekly: "Once a week." })[page.s["automatic.every"]] || ""
                        : "Off: only Back up now backs up."
     onToggled: page.set("automatic.on", !checked)
-    options: Row {
-      spacing: Style.space(6)
-      Repeater {
-        id: everyRepeater
-        model: [["hourly", "Every hour"], ["daily", "Every day"], ["weekly", "Every week"]]
-        OptionButton {
-          required property var modelData
-          owner: page
-          text: modelData[1]
-          selected: page.s["automatic.every"] === modelData[0]
-          onClicked: page.set("automatic.every", modelData[0])
-        }
-      }
-    }
-  }
-
-  Item {
-    id: away
-    width: parent.width
-    implicitHeight: awayColumn.implicitHeight + Style.space(14)
-    Column {
-      id: awayColumn
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
-      anchors.margins: Style.space(10)
-      spacing: Style.space(4)
-      Prose { width: parent.width; text: "Away from home" }
-      Row {
-        spacing: Style.space(8)
-        Prose { anchors.verticalCenter: parent.verticalCenter; dim: true; wrapMode: Text.NoWrap; text: "Ask first above" }
-        OptionButton { id: awayMinus; owner: page; text: "−"; onClicked: page.set("away.limit_mb", Math.max(50, (page.s["away.limit_mb"] || 500) - 100)) }
-        Prose { anchors.verticalCenter: parent.verticalCenter; wrapMode: Text.NoWrap; text: (page.s["away.limit_mb"] || 500) + " MB" }
-        OptionButton { id: awayPlus; owner: page; text: "+"; onClicked: page.set("away.limit_mb", (page.s["away.limit_mb"] || 500) + 100) }
-      }
-      Prose { width: parent.width; dim: true; text: "Away from home, a backup bigger than this asks first: it counts against your data." }
+    options: Choices {
+      id: every
+      owner: page
+      label: "How often"
+      model: [["hourly", "Every hour"], ["daily", "Every day"], ["weekly", "Every week"]]
+      value: page.s["automatic.every"]
+      onChosen: function(v) { page.set("automatic.every", v) }
     }
   }
 
   SwitchRow {
     id: health
-    title: "Health check"
+    title: "Nightly health check"
     checked: page.s["health.on"] === true
     hasGear: true
     hasCursorHere: page.cursorOn(this)
-    explainer: checked ? "Each night at " + Model.clock(new Date(2000, 0, 1, page.s["health.at"] || 0)).replace(":00", "")
-                         + ", for up to " + ((page.s["health.minutes"] || 120) >= 60 ? (page.s["health.minutes"] / 60) + " hour"
-                         + (page.s["health.minutes"] > 60 ? "s" : "") : page.s["health.minutes"] + " minutes") + ". You only hear about it if something's wrong."
-                       : "Off: your backup isn't checked."
+    explainer: checked
+      ? "Each night from " + page.label(page.hours, page.s["health.at"], "midnight").toLowerCase()
+        + ", for up to " + page.label(page.lengths, page.s["health.minutes"], (page.s["health.minutes"] || 120) + " minutes")
+        + ". You only hear about it if something's wrong."
+      : "Off: damage in your backup would only be found when you restore."
     onToggled: page.set("health.on", !checked)
     options: Column {
-      spacing: Style.space(6)
-      Row {
-        spacing: Style.space(8)
-        Prose { anchors.verticalCenter: parent.verticalCenter; dim: true; wrapMode: Text.NoWrap; text: "Starts at" }
-        OptionButton { id: atMinus; owner: page; text: "−"; onClicked: page.set("health.at", ((page.s["health.at"] || 0) + 23) % 24) }
-        Prose { anchors.verticalCenter: parent.verticalCenter; wrapMode: Text.NoWrap; text: Model.clock(new Date(2000, 0, 1, page.s["health.at"] || 0)) }
-        OptionButton { id: atPlus; owner: page; text: "+"; onClicked: page.set("health.at", ((page.s["health.at"] || 0) + 1) % 24) }
+      width: parent ? parent.width : 300
+      spacing: Style.space(8)
+      Choices {
+        id: startAt
+        owner: page
+        label: "Start at"
+        model: page.hours
+        value: page.s["health.at"]
+        onChosen: function(v) { page.set("health.at", v) }
       }
-      Row {
-        spacing: Style.space(6)
-        Repeater {
-          id: minutesRepeater
-          model: [30, 60, 120, 240, 480]
-          OptionButton {
-            required property var modelData
-            owner: page
-            text: modelData < 60 ? modelData + " min" : (modelData / 60) + " h"
-            selected: page.s["health.minutes"] === modelData
-            onClicked: page.set("health.minutes", modelData)
-          }
-        }
+      Choices {
+        id: howLong
+        owner: page
+        label: "Check for up to, each night"
+        model: page.lengths
+        value: page.s["health.minutes"]
+        onChosen: function(v) { page.set("health.minutes", v) }
       }
+    }
+  }
+
+  Column {
+    width: parent.width
+    spacing: Style.space(4)
+    topPadding: Style.space(6)
+    bottomPadding: Style.space(6)
+    leftPadding: Style.space(10)
+    rightPadding: Style.space(10)
+    Prose { width: parent.width - Style.space(20); text: "Away from home" }
+    Prose {
+      width: parent.width - Style.space(20)
+      dim: true
+      text: "A backup bigger than this asks first, because it counts against your data."
+    }
+    Choices {
+      id: away
+      width: parent.width - Style.space(20)
+      owner: page
+      model: [[100, "100 MB"], [250, "250 MB"], [500, "500 MB"], [1000, "1 GB"], [2000, "2 GB"]]
+      value: page.s["away.limit_mb"]
+      onChosen: function(v) { page.set("away.limit_mb", v) }
     }
   }
 
   NavRow {
     id: kept
     title: "Kept restore points"
-    explainer: "Never thinned or deleted. " + (page.service ? page.service.status.kept ? page.service.status.kept.length : 0 : 0) + " kept."
+    explainer: "Never thinned or deleted. " + (page.service && page.service.status.kept ? page.service.status.kept.length : 0) + " kept."
     hasCursorHere: page.cursorOn(this)
     onActivated: page.panel.go("kept")
   }
@@ -130,8 +125,7 @@ Column {
   NavRow {
     id: changes
     title: "Your changes to Omarchy"
-    explainer: page.service && page.service.header && page.service.header.last_finished
-               ? "Latest backup was " + Model.when(page.service.header.last_finished) : "Made with your first backup."
+    explainer: "What you've added and changed on top of a fresh Omarchy."
     hasCursorHere: page.cursorOn(this)
     onActivated: { page.service.loadChanges(); page.panel.go("changes") }
   }

@@ -71,17 +71,22 @@ class Login:
             return subprocess.run([*self.base[:1], "-t", *self.base[1:], command])
         return subprocess.run([*self.base, command], input=data, capture_output=True)
 
-    def disks(self) -> list:
-        """The server's disks, with warnings (its own system disk left out).
+    def places(self) -> list:
+        """D30: every disk on the server, with its free space and what's on it.
         The first call logs in: the server password is asked here."""
-        from omabackups.setup import disks
-        columns = disks.COLUMNS
-        listed = self.run(f"lsblk -J -b -e7 -o {columns}")
+        from omabackups.setup import disks, places
+        listed = self.run(f"lsblk -J -b -e7 -o {places.COLUMNS}")
         if listed.returncode == 255:
             raise _failed("Couldn't log in to your backup server.", listed)
         system = self.run('lsblk -J -s -o NAME,PATH,TYPE "$(findmnt -n -o SOURCE / | sed "s/\\[.*//")"')
+        known = self.run("cat /etc/omabackups-gate/gate.json 2>/dev/null")
         try:
-            return disks.listing(json.loads(listed.stdout), disks.disks_in(json.loads(system.stdout)))
+            store = json.loads(known.stdout or b"{}").get("store", "")
+        except ValueError:
+            store = ""
+        try:
+            return places.places(json.loads(listed.stdout), disks.disks_in(json.loads(system.stdout)),
+                                 store)
         except ValueError:
             raise _failed("Couldn't read the list of disks on your backup server.", listed,
                           "Check that the server has lsblk (util-linux), then try again.") from None

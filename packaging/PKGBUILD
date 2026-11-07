@@ -10,7 +10,7 @@ pkgdesc="Backups, rescue and migration for Omarchy"
 arch=(any)
 url="https://github.com/MattsMacsGit/omabackups"
 license=(MIT)
-depends=(python rsync openssh cryptsetup btrfs-progs polkit)
+depends=(python rsync openssh cryptsetup btrfs-progs polkit gum)
 optdepends=('tailscale: back up when away from home')
 
 package() {
