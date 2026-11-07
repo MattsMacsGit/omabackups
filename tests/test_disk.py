@@ -42,6 +42,8 @@ def test_set_up_and_back_up_to_a_disk(disk, monkeypatch):
     assert first["how"]["home"] == "full check" and first["away"] is False
     same(latest(box), src)
     assert flow.where() is flow.Step.EVERYDAY
+    from omabackups.commands.status import _header
+    assert _header()["where"] == "your backup disk (Test)"
 
     (src.root / "home/u/new.txt").write_text("new")
     monkeypatch.setattr(run, "point_name", lambda line, latest: f"{line}-2099-01-01-0000")

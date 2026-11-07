@@ -80,7 +80,9 @@ def _header() -> dict | None:
         record = json.loads((paths.system_state_dir() / "backup.json").read_text())
     except (OSError, ValueError):
         record = {}
-    return {"where": "your backup server", "address": server.get("address"),
+    where = (f"your backup disk ({server.get('model') or 'plugged in here'})"
+             if server.get("kind") == "disk" else "your backup server")
+    return {"where": where, "kind": server.get("kind", "server"), "address": server.get("address"),
             "last_point": record.get("last_point"), "last_finished": record.get("last_finished"),
             "not_included": record.get("not_included", []),
             "size": server.get("size")}
