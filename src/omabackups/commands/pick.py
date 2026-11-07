@@ -8,7 +8,10 @@ from omabackups.core.events import Events
 
 
 def add(sub) -> None:
-    sub.add_parser("pick", help="choose what gets backed up (opens the picker)").set_defaults(run=run)
+    p = sub.add_parser("pick", help="choose what gets backed up (opens the picker)")
+    p.add_argument("--then-backup", action="store_true",
+                   help="the first backup: saving starts it (D29)")
+    p.set_defaults(run=run)
 
 
 def run(args, events: Events) -> int:
@@ -18,6 +21,12 @@ def run(args, events: Events) -> int:
                        code="no-terminal")
     from omabackups.tui import picker
     saved = picker.run(getpass.getuser())
+    if saved and args.then_backup:
+        from omabackups.commands import backup
+        backup.start("now")
+        events.result({"saved": True, "backup": "started"},
+                      "Saved. Your first backup has started: the panel shows how it's going.")
+        return 0
     events.result({"saved": saved},
                   "Saved. The next backup follows your choices: anything newly skipped leaves\n"
                   "the backup's working copy (older restore points keep it), anything newly\n"

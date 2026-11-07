@@ -110,12 +110,17 @@ class RealHost:
         return name
 
     def open(self, box: Path, bid: str, secret: bytes) -> None:
-        if not self.is_open(bid):
-            with secret_files(secret) as (kf,):
-                try:
+        """Unlock. The secret is checked EVERY time, also when the backup is open
+        already (for another job): an open backup is no way in without it."""
+        with secret_files(secret) as (kf,):
+            try:
+                if self.is_open(bid):
+                    run("cryptsetup", "open", "--test-passphrase", "--type", "luks2",
+                        "--key-file", kf, str(box))
+                else:
                     run("cryptsetup", "open", "--type", "luks2", "--key-file", kf, str(box), mapper(bid))
-                except Refused as exc:
-                    raise Refused("that password or key doesn't open this backup") from exc
+            except Refused as exc:
+                raise Refused("that password or key doesn't open this backup") from exc
         if not self.is_mounted(bid):
             self._mount(bid)
 
@@ -131,6 +136,15 @@ class RealHost:
             run("umount", str(mountpoint(bid)))
         if self.is_open(bid):
             run("cryptsetup", "close", mapper(bid))
+
+    def change_password(self, box: Path, old: bytes, new: bytes) -> None:
+        """Replace the password slot (the one `old` opens) with `new`."""
+        with secret_files(old, new) as (oldf, newf):
+            try:
+                run("cryptsetup", "luksChangeKey", "--batch-mode", "--pbkdf", "argon2id",
+                    "--key-file", oldf, str(box), newf)
+            except Refused as exc:
+                raise Refused("that isn't your backup's current password") from exc
 
     def is_open(self, bid: str) -> bool:
         return Path("/dev/mapper", mapper(bid)).exists()

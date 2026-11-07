@@ -46,7 +46,8 @@ def run_now(args, events: Events) -> int:
     return _start_and_follow("now", events)
 
 
-def _start_and_follow(kind: str, events: Events) -> int:
+def start(kind: str) -> float:
+    """Start a backup (the service), without waiting for it. Returns when."""
     if not paths.server_file().exists():
         raise OmaError("No backup location is set up on this computer yet.",
                        "Set up backups first: omabackups setup server", code="not-set-up")
@@ -59,6 +60,11 @@ def _start_and_follow(kind: str, events: Events) -> int:
             raise OmaError("OmaBackups isn't allowed to start a backup on this computer.",
                            "Set up backups again, or refresh the link (see the guide).",
                            done.stderr.strip(), code="not-linked")
+    return started
+
+
+def _start_and_follow(kind: str, events: Events) -> int:
+    started = start(kind)
     shown = ""
     while True:
         state = progress.read()
@@ -77,6 +83,8 @@ def _start_and_follow(kind: str, events: Events) -> int:
         error = state.get("error") or {}
         raise OmaError(error.get("what", "The backup didn't finish."), error.get("todo", ""),
                        error.get("details", ""), code=error.get("code", "backup-failed"))
+    from omabackups.core import config
+    config.automatic(True, "a Back up now finished (D29)")
     events.result({"point": state["point"], "how": state.get("how", {})},
                   f"Backed up: restore point {state['point']}.")
     return 0
@@ -105,13 +113,17 @@ def run_root(args, events: Events) -> int:
         if args.kind == "scheduled":
             if not paths.server_file().exists():
                 return 0
+            if run.load_record().get("automatic_paused"):
+                logger.info("automatic backup skipped: waiting for a Back up now (D29)")
+                return 0
             settings = schedule.user_settings(run.linked_user())
             go, why = schedule.due(settings, run.load_record().get("last_finished"))
             if not go:
                 logger.info("automatic backup skipped: %s", why)
                 return 0
         try:
-            result = run.backup(progress.reporter(args.kind), anyway=args.kind == "anyway")
+            result = run.backup(progress.reporter(args.kind), anyway=args.kind == "anyway",
+                                manual=args.kind != "scheduled")
         except check.AwayWait as exc:
             # Not a failure: it waits for your answer, or for a known network (D17).
             progress.write({"running": False, "ok": False, "waiting": "away", "size": exc.size,

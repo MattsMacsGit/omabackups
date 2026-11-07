@@ -123,6 +123,22 @@ def save(values: dict) -> None:
     write_atomic(paths.settings_file(), ("\n".join(lines) + "\n").encode("utf-8"), 0o644)
 
 
+def set_one(name: str, value) -> None:
+    """Change one setting, keeping the rest."""
+    values = load()
+    values[name] = value
+    save(values)
+
+
+def automatic(on: bool, why: str = "") -> None:
+    """D29: automatic backups only run on choices you've backed up yourself:
+    off after setup, Migrate, Rescue or a picker change; on when a Back up now finishes."""
+    from omabackups.core import log
+    if load()["automatic.on"] != on:
+        set_one("automatic.on", on)
+        log.get("settings").info("automatic backups %s (%s)", "on" if on else "off", why)
+
+
 def _toml(value) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"

@@ -38,11 +38,10 @@ class FakeHost:
         return "fake"
 
     def open(self, box: Path, bid: str, secret: bytes) -> None:
-        if self.is_mounted(bid):
-            return
-        if _h(secret) not in json.loads((box / "secrets.json").read_text()):
+        if _h(secret) not in json.loads((box / "secrets.json").read_text()):   # checked every time
             raise Refused("that password or key doesn't open this backup")
-        self._mount(box, bid)
+        if not self.is_mounted(bid):
+            self._mount(box, bid)
 
     def _mount(self, box: Path, bid: str) -> None:
         point = mountpoint(bid)
@@ -52,6 +51,13 @@ class FakeHost:
 
     def close(self, bid: str) -> None:
         mountpoint(bid).unlink(missing_ok=True)
+
+    def change_password(self, box: Path, old: bytes, new: bytes) -> None:
+        held = json.loads((box / "secrets.json").read_text())
+        if _h(old) != held[0]:
+            raise Refused("that isn't your backup's current password")
+        held[0] = _h(new)
+        (box / "secrets.json").write_text(json.dumps(held))
 
     def is_open(self, bid: str) -> bool:
         return self.is_mounted(bid)

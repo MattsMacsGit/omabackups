@@ -196,3 +196,25 @@ def test_addresses(owned):
     answer = server.ok(kid, "addresses")
     assert "127.0.0.1" not in answer["addresses"] and isinstance(answer["tailscale"], dict)
     assert server.call("0" * 16, "addresses")[0] == 1      # unknown keys get nothing
+
+
+def test_changing_the_password(owned):
+    server, kid, bid = owned
+    change = json.dumps({"old": "wrong", "new": "new one!"}).encode()
+    assert "current password" in server.call(kid, f"password {bid}", change)[2]
+    server.ok(kid, f"password {bid}", json.dumps({"old": "correct horse", "new": "new one!"}).encode())
+    assert server.call(kid, f"unlock {bid}", b"correct horse")[0] == 1      # the old one no longer opens it
+    server.ok(kid, f"unlock {bid}", b"new one!")
+    server.ok(kid, f"unlock {bid}", KEY)                                    # the computer's key still does
+    rescue = server.ok(kid, f"add-key {bid} stick", make_pubkey(9).encode())["key"]
+    assert server.call(rescue, f"password {bid}", change)[0] == 1           # owners only
+
+
+def test_an_open_backup_still_needs_the_right_secret(owned):
+    """Found in stage 6: while one job had it open, any secret got a hold."""
+    server, kid, bid = owned
+    server.ok(kid, f"unlock {bid}", KEY)                                     # open for a job
+    rescue = server.ok(kid, f"add-key {bid} stick", make_pubkey(9).encode())["key"]
+    code, _, error = server.call(rescue, f"unlock {bid}", b"not the password")
+    assert code == 1 and "doesn't open" in error
+    server.ok(rescue, f"unlock {bid}", b"correct horse")                     # the right one does

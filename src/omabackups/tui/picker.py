@@ -108,7 +108,7 @@ class Picker:
         except OmaError as exc:
             self.ui.say(f"Not saved: {exc.what}", kit.RED)
             return False
-        self.saved = True
+        self.saved = True       # (the root job paused automatic backups: D29)
         return True
 
     def run(self) -> bool:

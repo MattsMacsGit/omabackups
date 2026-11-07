@@ -117,6 +117,8 @@ def create_disk(request: dict) -> dict:
         {"kind": "disk", "device": partition, "backup": bid, "cipher": made["cipher"],
          "size": size, "model": request.get("model", ""), "set_up": int(time.time())},
         indent=2) + "\n").encode(), 0o644)
+    from omabackups.backup import run
+    run.pause_automatic("a fresh setup")
     return {"backup": bid, "cipher": made["cipher"], "size": size}
 
 

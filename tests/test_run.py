@@ -214,7 +214,7 @@ def test_nested_subvolumes_are_reported_not_hidden(world, sandbox):
     assert run.load_record()["not_included"] == [f"{src.root}/home/u/vms"]
     assert json.loads((latest(box) / "point.json").read_text())["not_included"]
     done = sandbox.run("status")
-    assert "Not backed up" in done.stdout and "u/vms" in done.stdout
+    assert "Some folders aren't backed up" in done.stdout and "u/vms" in done.stdout
 
 
 def test_health_is_due_once_a_night_at_its_hour():
@@ -234,7 +234,8 @@ def test_health_is_due_once_a_night_at_its_hour():
 def test_damage_found_means_one_full_checksum_backup(world, monkeypatch):
     srv, kid, bid, src, box = world
     run.backup(source=src)
-    hold = srv.ok(kid, f"unlock {bid}", b"K" * 64)["hold"]
+    from omabackups.root import keys
+    hold = srv.ok(kid, f"unlock {bid}", keys.read_unlock_key())["hold"]     # this computer's real key
     srv.ok(kid, f"health-start {bid} 60")
     scrub = srv.root / "run/omabackups-gate" / f"fake-scrub-{bid}.json"
     scrub.write_text(json.dumps({"status": "finished", "csum_errors": 1}))
@@ -359,3 +360,34 @@ def test_an_unskipped_single_file_is_reused_not_sent(world, monkeypatch):
     run.backup(source=src)
     assert any(a["files"] == 1 and a["bytes"] == 60_000 for a in answers)
     same(latest(box), src)
+
+
+def test_keep_release_and_the_password(world, sandbox, monkeypatch):
+    srv, kid, bid, src, box = world
+    point = run.backup(source=src)["point"]
+    from omabackups.core import rootjob
+    rootjob.run("keep", {"point": point, "keep": True})
+    assert run.load_record()["kept"] == [point]
+    assert "(kept)" in sandbox.run("points").stdout
+    rootjob.run("keep", {"point": point, "keep": False})
+    assert run.load_record()["kept"] == []
+    import pytest as _pytest
+    with _pytest.raises(OmaError):
+        rootjob.run("change-password", {"old": "wrong", "new": "a new password"})
+    rootjob.run("change-password", {"old": "password1", "new": "a new password"})
+    assert srv.call(kid, f"unlock {bid}", b"password1")[0] == 1
+    srv.ok(kid, f"unlock {bid}", b"a new password")
+
+
+def test_d29_automatic_backups_wait_for_a_back_up_now(world, sandbox):
+    srv, kid, bid, src, box = world
+    assert run.load_record().get("automatic_paused") is True          # a fresh setup
+    run.backup(source=src, manual=False)
+    assert run.load_record()["automatic_paused"] is True              # automatic ones don't end it
+    run.backup(source=src)                                            # a Back up now
+    assert run.load_record()["automatic_paused"] is False
+    from omabackups.root import job_skips
+    job_skips.set_skips({"skips": {"home": []}})                      # the picker saved
+    assert run.load_record()["automatic_paused"] is True
+    done = sandbox.run("--json", "status")
+    assert "automatic-off" in done.stdout

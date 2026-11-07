@@ -33,4 +33,6 @@ def set_skips(request: dict) -> dict:
     paths.system_config_dir().mkdir(parents=True, exist_ok=True)
     write_atomic(paths.system_config_dir() / "skips.json",
                  (json.dumps(clean, indent=1) + "\n").encode(), 0o644)
+    from omabackups.backup import run
+    run.pause_automatic("the picker's choices changed")
     return {"saved": {p: len(clean[p]) for p in PARTS}}

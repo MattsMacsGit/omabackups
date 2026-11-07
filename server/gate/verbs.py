@@ -328,9 +328,26 @@ def v_remove_key(call: Call) -> dict:
     return {"removed": kid}
 
 
+def v_password(call: Call) -> dict:
+    """password BACKUP -- change your backup's password. Input JSON {"old", "new"}."""
+    _argc(call, 1)
+    bid = call.args[0]
+    registry.the_backup(registry.load(), bid, call.kid, OWNER)
+    try:
+        given = json.loads(call.read_input(4 * conf.MAX_SECRET))
+        old, new = given["old"].encode("utf-8"), given["new"].encode("utf-8")
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise Refused("password change needs the old and the new password") from None
+    if not old or not new or len(new) > conf.MAX_SECRET:
+        raise Refused("password change needs the old and the new password")
+    with holds.turn(bid):
+        host().change_password(_box(bid), old, new)
+    return {"changed": True}
+
+
 VERBS = {
     "version": v_version, "status": v_status, "addresses": v_addresses, "create": v_create,
-    "create-disk": v_create_disk,
+    "create-disk": v_create_disk, "password": v_password,
     "unlock": v_unlock, "hold": v_hold, "lock": v_lock,
     "points": v_points, "space": v_space, "delete": v_delete,
     "add-key": v_add_key, "remove-key": v_remove_key,

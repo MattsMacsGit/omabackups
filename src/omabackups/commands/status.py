@@ -1,12 +1,10 @@
-"""`omabackups status`: everything the panel shows, in one answer."""
+"""`omabackups status`: where OmaBackups is up to, in words (or everything
+the panel shows, with --json: status_data.py builds it)."""
 
-import json
 from datetime import datetime
 
-from omabackups import __version__
-from omabackups.backup import health as backup_health
-from omabackups.backup import progress
-from omabackups.core import flow, ids, paths
+from omabackups.commands import status_data
+from omabackups.core import flow
 from omabackups.core.events import Events
 
 _TEXT = {
@@ -28,61 +26,16 @@ def add(sub) -> None:
 
 
 def run(args, events: Events) -> int:
-    step = flow.where()
-    system = ids.system_id()
-    data = {
-        "flow": step.value,
-        "system": {"id": system, "short": ids.short(system)},
-        "version": __version__,
-        # Filled in by later stages: the panel header and the lines that
-        # appear only when true (BUILD 6.1 D).
-        "header": _header(),
-        "lines": [],
-    }
-    text = _TEXT[step]
-    if data["header"] and data["header"].get("last_point"):
-        h = data["header"]
-        when = datetime.fromtimestamp(h["last_finished"]).strftime("%A %-I:%M %p").replace(" 0", " ")
+    data = status_data.build()
+    text = _TEXT[flow.Step(data["flow"])]
+    h = data["header"] or {}
+    if h.get("last_point"):
+        when = datetime.fromtimestamp(h["last_finished"]).strftime("%A %-I:%M %p")
         text += f"\nLast backup: {when} (restore point {h['last_point']}), to {h['where']}."
-    left_out = (data["header"] or {}).get("not_included") or []
-    if left_out:
-        data["lines"].append({"kind": "not-included", "paths": left_out})
-        text += ("\nNot backed up (each is a separate btrfs subvolume, which a snapshot "
-                 "can't include): " + ", ".join(left_out))
-    verdict = backup_health.load()
-    if verdict.get("state") in backup_health.PROBLEMS:
-        # Only when something's wrong (D18).
-        data["lines"].append({"kind": "health", "state": verdict["state"],
-                              "damaged": verdict.get("damaged", 0)})
-        text += ("\nYour backup's health check found a problem: "
-                 + ("damaged files (they're sent again at the next backup)"
-                    if verdict["state"] == "damaged" else "the disk reported read or write errors"))
-    progress_now = progress.read()
-    if progress_now.get("running"):
-        text += f"\nRunning now: {progress.text(progress_now)}"
-    elif progress_now.get("waiting") == "away":
-        # A line that appears only when true (BUILD 6.1 D, D17).
-        data["lines"].append({"kind": "waiting-network", "size": progress_now.get("size"),
-                              "limit_mb": progress_now.get("limit_mb")})
-        text += ("\nWaiting for a known network: " + progress_now["error"]["what"]
-                 + "\n" + progress_now["error"]["todo"])
-    events.result({**data, "running": progress_now if progress_now.get("running") else None}, text)
+    for item in data["lines"]:
+        text += f"\n{item['title']}" + (f": {item['text']}" if item["text"] else "")
+    if data["running"]:
+        from omabackups.backup import progress
+        text += f"\nRunning now: {progress.text(data['running'])}"
+    events.result(data, text)
     return 0
-
-
-def _header() -> dict | None:
-    """Last backup and where it went (BUILD 6.1 D). Both files are readable by everyone."""
-    try:
-        server = json.loads(paths.server_file().read_text())
-    except (OSError, ValueError):
-        return None
-    try:
-        record = json.loads((paths.system_state_dir() / "backup.json").read_text())
-    except (OSError, ValueError):
-        record = {}
-    where = (f"your backup disk ({server.get('model') or 'plugged in here'})"
-             if server.get("kind") == "disk" else "your backup server")
-    return {"where": where, "kind": server.get("kind", "server"), "address": server.get("address"),
-            "last_point": record.get("last_point"), "last_finished": record.get("last_finished"),
-            "not_included": record.get("not_included", []),
-            "size": server.get("size")}

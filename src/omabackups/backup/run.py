@@ -48,6 +48,13 @@ def save_record(record: dict) -> None:
     write_atomic(record_file(), (json.dumps(record, indent=2) + "\n").encode(), 0o644)
 
 
+def pause_automatic(why: str) -> None:
+    """D29: automatic backups wait for a Back up now (fresh setup, Migrate,
+    Rescue, the picker's choices changed). Root jobs call this."""
+    save_record({**load_record(), "automatic_paused": True})
+    log.get("backup").info("automatic backups wait for a Back up now (%s)", why)
+
+
 def omarchy_version() -> str:
     try:
         return subprocess.run(["omarchy-version"], capture_output=True, text=True,
@@ -65,7 +72,8 @@ def point_name(line: str, latest: str | None) -> str:
         time.sleep(5)   # a backup within the same minute as the last: wait for the next
 
 
-def backup(progress=lambda step, part="": None, source=None, anyway: bool = False) -> dict:
+def backup(progress=lambda step, part="": None, source=None, anyway: bool = False,
+           manual: bool = True) -> dict:
     """Run one backup. `anyway`: the answer "Back up now" to the away limit.
     `source` (tests) stands in for this computer's parts and snapshots."""
     logger = log.get("backup")
@@ -179,6 +187,10 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
                      "away": away, "not_included": left_out, "manifests": manifests,
                      "sent": sender.stats,
+                     # D29: a manual backup ends the wait; an automatic one leaves it as it was.
+                     "automatic_paused": False if manual else record.get("automatic_paused", False),
+                     "kept": KEPT.get("kept", record.get("kept", [])),
+                     "return_point": KEPT.get("return_point", record.get("return_point")),
                      "space": {k: space.get(k) for k in ("box", "used", "free")},
                      "resent_for_pass": verdict.get("pass_started") if resend
                      else record.get("resent_for_pass")})
@@ -227,6 +239,9 @@ class HoldKeeper:
         self.thread.join(timeout=5)
 
 
+KEPT = {}     # the kept restore points, as thinning last saw them
+
+
 def thin(gate: Gate, bid: str, logger) -> tuple[list[str], list[str] | None]:
     """Smart thinning after each backup (D18). A problem here never fails the backup.
     Returns (the restore points removed, the ones left; None if unknown)."""
@@ -238,6 +253,8 @@ def thin(gate: Gate, bid: str, logger) -> tuple[list[str], list[str] | None]:
             gate.call("delete", bid, old)
             gone.append(old)
         left = [n for n in info["points"] if n not in gone]
+        KEPT.clear()
+        KEPT.update(info["kept"])
     except OmaError as exc:
         logger.warning("thinning: %s | %s", exc.what, exc.details)
     return gone, left

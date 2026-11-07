@@ -62,4 +62,6 @@ def create_backup(request: dict) -> dict:
     server = {"address": address, "backup": bid, "cipher": made["cipher"], "size": size,
               "gate": version["gate"], "set_up": int(time.time())}
     write_atomic(paths.server_file(), (json.dumps(server, indent=2) + "\n").encode(), 0o644)
+    from omabackups.backup import run
+    run.pause_automatic("a fresh setup")
     return {"backup": bid, "cipher": made["cipher"], "size": size, "hold_checked": bool(hold)}
