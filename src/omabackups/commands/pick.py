@@ -20,7 +20,7 @@ def run(args, events: Events) -> int:
                        "Run omabackups pick in a terminal (the panel opens one for it).",
                        code="no-terminal")
     from omabackups.tui import picker
-    saved = picker.run(getpass.getuser())
+    saved = picker.run(getpass.getuser(), first=args.then_backup)
     if saved and args.then_backup:
         from omabackups.commands import backup
         backup.start("now")

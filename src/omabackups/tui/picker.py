@@ -17,12 +17,14 @@ from omabackups.tui import kit
 from omabackups.tui.pick_model import Model
 
 KEYS = "↑↓ move  Enter open  ⌫/Esc back  Space tick  h hidden  s save  q quit"
+FIRST_KEYS = "↑↓ move  Enter open  ⌫/Esc back  Space tick  h hidden  s save & start backup  q quit"
+FIRST_NOTE = "Make your choices, then press s to save: your first backup starts straight away."
 TITLE = "Choose what gets backed up"
 
 
 class Picker:
-    def __init__(self, scr, model: Model):
-        self.ui, self.model = kit.Screen(scr), model
+    def __init__(self, scr, model: Model, first: bool = False):
+        self.ui, self.model, self.first = kit.Screen(scr), model, first
         self.stack, self.cursor, self.top = [model.home()], {model.home(): 0}, 0
         self.rows, self.running, self.saved = [], True, False
         threading.Thread(target=self._measure, daemon=True).start()
@@ -49,7 +51,7 @@ class Picker:
         node = self.stack[-1]
         self.rows = m.listing(node)
         ui.header(TITLE, self.where())
-        height = max(1, h - 7)
+        height = max(1, h - 2 - kit.Screen.BOTTOM)
         pos = min(self.cursor.get(node, 0), max(0, len(self.rows) - 1))
         self.cursor[node] = pos
         if pos < self.top:
@@ -76,7 +78,8 @@ class Picker:
             ui.put(3, 4, "(empty, or can't be read)", ui.col(kit.GREY))
         current = self.rows[pos] if self.rows else None
         text, fits = m.bottom()
-        ui.bottom(m.explain(current) if current else "", text, fits, KEYS)
+        ui.bottom(m.explain(current) if current else "", text, fits,
+                  FIRST_KEYS if self.first else KEYS, FIRST_NOTE if self.first else "")
         ui.scr.refresh()
 
     # --- keys --------------------------------------------------------------------
@@ -139,7 +142,8 @@ class Picker:
                             else "Hidden files aren't shown (they're still backed up).")
             elif key == ord("s"):
                 # Always asked first: easy to hit by accident.
-                if self.ui.ask("Save your changes and quit?") and self.save():
+                question = "Save and start your first backup?" if self.first else "Save your changes and quit?"
+                if self.ui.ask(question) and self.save():
                     break
             elif key == ord("q"):
                 if self.ui.ask("Quit without saving your changes?" if self.model.dirty else "Quit?"):
@@ -168,7 +172,8 @@ def load_record() -> dict:
         return {}
 
 
-def run(user: str) -> bool:
+def run(user: str, first: bool = False) -> bool:
+    """The picker; `first`: saving starts the first backup, and it says so."""
     import os
     os.environ.setdefault("ESCDELAY", "25")   # Esc means "back" at once, not after a second
     from pathlib import Path
@@ -177,4 +182,4 @@ def run(user: str) -> bool:
         roots = {"home": Path.home().parent, "system": Path(os.environ["OMABACKUPS_SYSROOT"])}
         user = Path.home().name
     model = Model(user, load_record(), roots=roots)
-    return curses.wrapper(lambda scr: Picker(scr, model).run())
+    return curses.wrapper(lambda scr: Picker(scr, model, first).run())

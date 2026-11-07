@@ -70,12 +70,24 @@ class Screen:
         if opens:
             self.put(y, w - 3, "›", base)
 
-    def bottom(self, explain: str, total: str, fits: bool, keys: str) -> None:
+    # The bottom of the screen: a rule, the highlighted row's explainer (two
+    # lines, wrapped, so a long one isn't cut off), a message or the standing
+    # note, the total, and the keys.
+    BOTTOM = 6
+
+    def bottom(self, explain: str, total: str, fits: bool, keys: str, note: str = "") -> None:
+        import textwrap
         h, w = self.size()
-        self.put(h - 5, 0, "─" * (w - 1), self.col(GREY))
-        self.put(h - 4, 2, explain)
+        self.put(h - 6, 0, "─" * (w - 1), self.col(GREY))
+        lines = textwrap.wrap(explain, max(10, w - 5)) or [""]
+        if len(lines) > 2:
+            lines = [lines[0], textwrap.shorten(" ".join(lines[1:]), max(10, w - 5), placeholder="…")]
+        for n, line in enumerate(lines):
+            self.put(h - 5 + n, 2, line)
         if self.message:
             self.put(h - 3, 2, self.message, self.col(self.message_colour, curses.A_BOLD))
+        elif note:
+            self.put(h - 3, 2, note, self.col(BLUE, curses.A_BOLD))
         self.put(h - 2, 2, total, self.col(RED, curses.A_BOLD) if not fits else curses.A_BOLD)
         self.put(h - 1, 2, keys, self.col(GREY))
 
