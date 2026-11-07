@@ -4,6 +4,7 @@
   fetch BACKUP POINT PART <rsync server args>  rsync out of a restore point (read only)
   apply BACKUP LINE PART                       replay renames/deletes (JSON input)
   ranges BACKUP LINE PART                      write changed ranges into one file
+  reuse BACKUP LINE PART                       clone what's unchanged in a restore point
   snapshot BACKUP LINE NAME                    a restore point (point.json input)
   keep / release BACKUP POINT                  kept restore points
 
@@ -14,6 +15,7 @@ and every path stays inside the part: no "..", no following links out.
 import json
 import os
 import shutil
+import stat
 import struct
 from pathlib import Path
 
@@ -170,6 +172,61 @@ def v_ranges(call):
     return {"written": written}
 
 
+def v_reuse(call):
+    """reuse BACKUP LINE PART -- input: {"dirs": [path], "files": [[path, size, mtime_ns]]}.
+    Never send the same data twice (D25): what the working copy lacks but a
+    restore point holds unchanged (same place; for files, same size and date)
+    is cloned from there (btrfs: instant, no space). rsync checks again after."""
+    if len(call.args) != 3:
+        raise Refused("wrong number of arguments")
+    bid, line, part = call.args
+    root = _part(call, bid, line, part)
+    inside = root.parent.parent.parent
+    try:
+        asked = json.loads(call.read_input(MAX_OPS))
+        dirs, files = list(asked.get("dirs", [])), list(asked.get("files", []))
+    except (ValueError, AttributeError, TypeError):
+        raise Refused("the list to reuse is damaged") from None
+    sources = [inside / "points" / name / part for name in reversed(layout.points(inside))]
+    done = {"dirs": 0, "files": 0, "bytes": 0}
+
+    def found_in(src_root: Path, rel: str) -> Path | None:
+        try:
+            return _inside(src_root, rel) if src_root.is_dir() else None
+        except Refused:
+            return None
+
+    for rel in dirs:
+        target = _inside(root, str(rel))
+        if os.path.lexists(target):
+            continue
+        for src_root in sources:
+            src = found_in(src_root, str(rel))
+            if src and src.is_dir() and not src.is_symlink():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                host().clone(src, target)
+                done["dirs"] += 1
+                break
+    for entry in files:
+        rel, size, mtime = str(entry[0]), int(entry[1]), int(entry[2])
+        target = _inside(root, rel)
+        if os.path.lexists(target):
+            continue
+        for src_root in sources:
+            src = found_in(src_root, rel)
+            try:
+                info = os.lstat(src) if src else None
+            except OSError:
+                continue
+            if info and stat.S_ISREG(info.st_mode) and info.st_size == size and info.st_mtime_ns == mtime:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                host().clone(src, target)
+                done["files"] += 1
+                done["bytes"] += size
+                break
+    return done
+
+
 def v_snapshot(call):
     if len(call.args) != 3:
         raise Refused("wrong number of arguments")
@@ -209,5 +266,5 @@ def _kept(call, keep: bool):
     return {"kept": sorted(names)}
 
 
-VERBS = {"send": v_send, "fetch": v_fetch, "apply": v_apply, "ranges": v_ranges, "snapshot": v_snapshot,
+VERBS = {"send": v_send, "fetch": v_fetch, "apply": v_apply, "reuse": v_reuse, "ranges": v_ranges, "snapshot": v_snapshot,
          "keep": lambda call: _kept(call, True), "release": lambda call: _kept(call, False)}

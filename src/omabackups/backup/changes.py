@@ -29,6 +29,7 @@ WHOLE = ("clone", "write", "encoded_write", "fallocate", "fileattr", "enable_ver
 class Plan:
     ops: list = field(default_factory=list)       # ["rename", a, b] / ["delete", a]
     files: list = field(default_factory=list)     # paths for rsync
+    fresh: list = field(default_factory=list)     # of those, the ones new since the last backup
     ranges: dict = field(default_factory=dict)    # path -> [(offset, length), ...]
 
 
@@ -125,7 +126,9 @@ def plan(text: str, name: str, snapshot: str, skips: Skips) -> Plan:
             out.ops.append(["delete", op[1]])   # moved into a skipped place
         elif skips.skipped(op[1]):
             # Moved out of a skipped place: the server never had it; send it all.
-            changed |= {op[2]} | _walk(snapshot, op[2])
+            moved_out = {op[2]} | _walk(snapshot, op[2])
+            changed |= moved_out
+            new |= moved_out
         else:
             out.ops.append(op)
     for path in sorted(changed):
@@ -139,6 +142,8 @@ def plan(text: str, name: str, snapshot: str, skips: Skips) -> Plan:
             out.ranges[path] = _merge(spans)
         else:
             out.files.append(path)
+            if path in new:
+                out.fresh.append(path)
     return out
 
 

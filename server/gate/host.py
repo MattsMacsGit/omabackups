@@ -149,6 +149,10 @@ class RealHost:
     def make_subvolume(self, path: Path) -> None:
         run("btrfs", "subvolume", "create", str(path))
 
+    def clone(self, source: Path, target: Path) -> None:
+        """Reuse (D25): a copy that shares the data (btrfs reflink)."""
+        run("cp", "-a", "--reflink=always", "--no-target-directory", str(source), str(target))
+
     def snapshot(self, source: Path, target: Path) -> None:
         run("btrfs", "subvolume", "snapshot", "-r", str(source), str(target))
 

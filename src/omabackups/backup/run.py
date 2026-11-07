@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from omabackups import __version__
-from omabackups.backup import changes, check, health, schedule, skips, thinning
+from omabackups.backup import changes, check, health, reuse, schedule, skips, thinning
 from omabackups.backup.send import Sender
 from omabackups.backup.source import Snapshots, parts
 from omabackups.core import ids, log, paths
@@ -72,7 +72,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
     bid, line = server["backup"], server.get("line", "001")
 
     progress("unlock")
-    gate.check_version()
+    gate_version = gate.check_version().get("gate", 0)
     if not away and server.get("kind") != "disk":
         network.learn_away_addresses(gate, server)
     record = load_record()
@@ -107,13 +107,21 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             left_out += [f"{part.mount.rstrip('/')}/{rel}" for rel in snaps.nested(part)
                          if not skip.skipped(rel)]
             old = since.get(part.name, "")
+            reusing = gate_version >= reuse.NEEDS_GATE
             if (not resend and record.get("finished") and snaps.exists(old)
                     and record.get("skips", {}).get(part.name) == fingerprints[part.name]):
                 plan = changes.plan(snaps.dump(old, new), new.name, str(new), skip)
                 needed += check.size_of(plan, str(new))
+                if reusing:   # never send the same data twice (D25)
+                    needed -= reuse.ask(gate, bid, line, part.name, [],
+                                        reuse.fresh_files(plan, str(new)))["bytes"]
                 work.append((part, skip, new, plan))
             else:
                 known = False
+                old_patterns = record.get("skip_patterns", {}).get(part.name)
+                if reusing and old_patterns is not None:
+                    reuse.ask(gate, bid, line, part.name,
+                              reuse.unskipped(str(new), old_patterns, skip), [])
                 work.append((part, skip, new, None))
         limit = schedule.user_settings(linked_user())["away.limit_mb"]
         check.away_limit(away, anyway, needed if known else None, limit)
@@ -150,6 +158,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         old = {p: n for p, n in since.items() if made.get(p) and made[p] != n}
         since.update(made)
         save_record({"finished": True, "since": since, "skips": fingerprints, "last_point": name,
+                     "skip_patterns": {p: skips.for_part(p).patterns for p in fingerprints},
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
                      "away": away, "not_included": left_out, "manifests": manifests,
                      "resent_for_pass": verdict.get("pass_started") if resend

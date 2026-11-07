@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -210,3 +211,31 @@ def test_fetch_never_writes_and_stays_in_points(box):
                     f"fetch {bid} 001-2026-11-07-1000 etc --server --sender -le.x . x"):
         code, _, error = srv.call(kid, command)
         assert code == 1, (command, error)
+
+
+def test_reuse_clones_only_what_is_unchanged(box, tmp_path):
+    srv, kid, bid, line = box
+    home = line / "home"
+    (home / "Videos").mkdir(parents=True)
+    (home / "Videos" / "big.mkv").write_bytes(b"V" * 1000)
+    (home / "restored.iso").write_bytes(b"I" * 500)
+    (home / "edited.txt").write_text("old")
+    srv.ok(kid, f"snapshot {bid} 001 001-2026-11-01-1000", b"{}")
+    point = line.parent.parent / "points" / "001-2026-11-01-1000" / "home"
+    iso, edited = (point / "restored.iso").stat(), (point / "edited.txt").stat()
+    for name in ("Videos", "restored.iso", "edited.txt"):          # gone from the working copy
+        p = home / name
+        shutil.rmtree(p) if p.is_dir() else p.unlink()
+    asked = {"dirs": ["Videos", "NotThere"],
+             "files": [["restored.iso", iso.st_size, iso.st_mtime_ns],
+                       ["edited.txt", edited.st_size, edited.st_mtime_ns + 1]]}   # a different date
+    done = srv.ok(kid, f"reuse {bid} 001 home", json.dumps(asked).encode())
+    assert done == {"dirs": 1, "files": 1, "bytes": 500}
+    assert (home / "Videos" / "big.mkv").read_bytes() == b"V" * 1000
+    assert (home / "restored.iso").exists() and not (home / "edited.txt").exists()
+
+
+def test_reuse_stays_inside(box):
+    srv, kid, bid, line = box
+    for asked in ({"dirs": ["../../points"]}, {"files": [["/etc/passwd", 1, 1]]}):
+        assert srv.call(kid, f"reuse {bid} 001 home", json.dumps(asked).encode())[0] == 1

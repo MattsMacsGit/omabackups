@@ -200,6 +200,11 @@ only that:
   sends the parts that changed;
 - everything else that changed is sent as it is.
 
+**The same data is never sent twice.** A folder you stop skipping, or a file
+you brought back from a restore point, is already in your backup: the server
+checks it's unchanged (same place, size and date) and reuses its copy, which
+takes no time and no extra space. Only what's really different is sent.
+
 If a backup is cut off (the network drops, the computer turns off), the next
 one checks every file instead and finishes the job: it only sends what's
 still missing.
