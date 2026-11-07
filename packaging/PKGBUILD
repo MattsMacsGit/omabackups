@@ -20,7 +20,8 @@ package() {
 
   # The omabackups command's code, compiled ahead so it starts fast.
   cd "$repo/src"
-  find omabackups -name '*.py' -exec install -Dm644 {} "$pkgdir$site/{}" \;
+  # Every file (code and data such as audit/known.json), never caches.
+  find omabackups -type f ! -name '*.pyc' ! -path '*__pycache__*' -exec install -Dm644 {} "$pkgdir$site/{}" \;
   python -m compileall -q -s "$pkgdir" -p / "$pkgdir$site/omabackups"
 
   # The command itself.

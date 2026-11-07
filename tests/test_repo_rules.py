@@ -54,3 +54,13 @@ def test_standard_library_only():
     outside = {m for m in imports
                if m != "omabackups" and m not in sys.stdlib_module_names} - allowed_third_party
     assert not outside, outside
+
+
+def test_the_package_installs_every_file_the_code_needs():
+    """known.json was once left out (the recipe copied only *.py)."""
+    recipe = (ROOT / "packaging" / "PKGBUILD").read_text()
+    data = [p for p in SRC.rglob("*") if p.is_file() and p.suffix not in (".py", ".pyc")
+            and "__pycache__" not in p.parts]
+    assert data, "expected data files (e.g. audit/known.json)"
+    assert "-name '*.py'" not in recipe, "the recipe would leave out " + ", ".join(p.name for p in data)
+    assert "find omabackups -type f" in recipe

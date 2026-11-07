@@ -100,5 +100,6 @@ def safely(user: str | None) -> dict | None:
     try:
         return scan(user)
     except Exception as exc:  # noqa: BLE001
-        log.get("audit").warning("the audit didn't finish: %r", exc)
+        log.get("audit").warning("the audit didn't finish: %r %s", exc, getattr(exc, "filename", "") or "",
+                                 exc_info=True)
         return None
