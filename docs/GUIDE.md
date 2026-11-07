@@ -70,8 +70,9 @@ screen:
 - your restore points, newest first (**More…** shows them all).
 
 The gear opens **Settings**: choose what gets backed up, automatic backups,
-away from home, the health check, kept restore points, your changes to
-Omarchy, and your backup (its size and room, its password, Start over).
+the health check, away from home, restore points (smart thinning, and the
+ones to keep), and your backup (its size and room, its password, Start
+over).
 Each switch is a real switch; its gear shows only that switch's own options.
 
 **Keys:** **↑↓** move, **Enter** or **Space** press, **→** open a switch's
@@ -193,8 +194,10 @@ both have it (OmaBackups learns the server's Tailscale address while you're
 home; there's nothing to set up).
 
 Away from home, backups are compressed, and anything bigger than your limit
-(500 MB to start with, see `away.limit_mb` in Settings) asks first, because
-it counts against your data on both ends:
+(500 MB to start with) asks first. That's for slow or metered connections,
+where a big backup counts against your data on both ends. Settings › **Away
+from home** sets the limit (its gear), or switches the question off: then
+backups never ask, on any network. The question looks like this:
 
 - **Back up now**: `omabackups away answer now`
 - **Wait until I'm on a known network**: `omabackups away answer wait`
@@ -311,19 +314,24 @@ backup compares against, and it's replaced each time.
 ## Restore points
 
 Each backup makes a **restore point**: your computer as it was at that
-moment. Old ones are thinned out as they age, so you keep plenty of recent
-points and fewer old ones.
+moment. `omabackups points` lists them, newest first.
 
-```
-omabackups points
-```
+### Smart thinning
 
-lists them, newest first.
+Old restore points are thinned out as they age, so you keep plenty of recent
+ones and fewer old ones. Smart thinning keeps:
+
+- every backup from the last 24 hours;
+- one a day for the 30 days before that;
+- one a week after that, for as long as there's room.
+
+Backing up every hour, that's about 100 restore points after a year. Switched
+off (Settings › **Restore points**), every backup stays until the room is needed.
 
 ### Kept restore points
 
 A **kept** restore point is never thinned or deleted. In the panel: Settings ›
-Kept restore points, and switch on the ones to keep. Or:
+Restore points, and switch on the ones to keep. Or:
 
 ```
 omabackups keep 001-2026-11-07-1400
@@ -354,8 +362,7 @@ everything you had.
 omabackups changes
 ```
 
-shows the list as of your latest backup (in the panel: Settings › Your
-changes to Omarchy):
+shows the list as of your latest backup:
 
 - **Apps** you installed (from Arch, the AUR, Flatpak, or tools like mise),
   and web apps you added to the menu. Each one says where its settings are.

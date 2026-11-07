@@ -134,8 +134,9 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                     folders, files = reuse.unskipped(str(new), old_patterns, skip)
                     reuse.ask(gate, bid, line, part.name, folders, files)
                 work.append((part, skip, new, None))
-        limit = schedule.user_settings(linked_user())["away.limit_mb"]
-        check.away_limit(away, anyway, needed if known else None, limit)
+        settings = schedule.user_settings(linked_user())
+        if settings["away.on"]:
+            check.away_limit(away, anyway, needed if known else None, settings["away.limit_mb"])
         if known:
             check.make_room(gate, bid, needed, logger)
 
@@ -171,7 +172,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         if changes_now is not None:
             write_atomic(paths.system_state_dir() / "changes.json",
                          (json.dumps({**changes_now, "point": name}) + "\n").encode(), 0o644)
-        thinned, left = thin(gate, bid, logger)
+        thinned, left = thin(gate, bid, logger, smart=settings["thinning.on"])
         try:
             space = gate.call("space", bid)      # for the picker's bottom line
         except OmaError:
@@ -242,14 +243,16 @@ class HoldKeeper:
 KEPT = {}     # the kept restore points, as thinning last saw them
 
 
-def thin(gate: Gate, bid: str, logger) -> tuple[list[str], list[str] | None]:
-    """Smart thinning after each backup (D18). A problem here never fails the backup.
-    Returns (the restore points removed, the ones left; None if unknown)."""
+def thin(gate: Gate, bid: str, logger, smart: bool = True) -> tuple[list[str], list[str] | None]:
+    """Smart thinning after each backup (D18); switched off (D35), every
+    restore point stays until the backup needs the room. A problem here never
+    fails the backup. Returns (the restore points removed, the ones left; None
+    if unknown)."""
     gone, left = [], None
     try:
         info = gate.call("points", bid)
         kept = set(info["kept"].get("kept", [])) | {info["kept"].get("return_point")}
-        for old in thinning.to_delete(info["points"], datetime.now(), kept):
+        for old in thinning.to_delete(info["points"], datetime.now(), kept) if smart else []:
             gate.call("delete", bid, old)
             gone.append(old)
         left = [n for n in info["points"] if n not in gone]

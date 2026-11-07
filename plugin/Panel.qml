@@ -34,7 +34,7 @@ Panel {
   readonly property var pages: panel.loadedContent ? panel.loadedContent.pages : ({})
   readonly property Item pageItem: ["missing", "first", "where", "server", "disk", "firstBackup"].indexOf(shown) >= 0
                                    ? pages.start || null : shown === "settings" ? pages.settings || null
-                                   : ["kept", "changes", "yourBackup"].indexOf(shown) >= 0 ? pages.details || null
+                                   : ["kept", "yourBackup"].indexOf(shown) >= 0 ? pages.details || null
                                    : shown === "everyday" ? pages.everyday || null : null
   // The header's own button (gear or back) comes first, where it sits on screen.
   readonly property bool heroButtonShown: shown === "everyday" || page !== ""
@@ -73,13 +73,13 @@ Panel {
     function activate() { root.heroPressed() }
   }
   function back() {
-    if (["kept", "changes", "yourBackup"].indexOf(shown) >= 0) go("settings", true)
+    if (["kept", "yourBackup"].indexOf(shown) >= 0) go("settings", true)
     else if (shown === "settings") go("", true)
     else if (shown === "server" || shown === "disk") go("where", true)
     else if (shown === "where") go("", true)
   }
   function titleFor(name) {
-    return ({ settings: "Settings", kept: "Kept restore points", changes: "Your changes to Omarchy",
+    return ({ settings: "Settings", kept: "Restore points",
               yourBackup: "Your backup", where: "Set up backups", server: "Set up backups",
               disk: "Set up backups", firstBackup: "Set up backups" })[name] || "OmaBackups"
   }

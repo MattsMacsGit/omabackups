@@ -19,11 +19,14 @@ Column {
       automatic.gearShown && automatic.gearOpen ? every.buttons : [],
       [health],
       health.gearShown && health.gearOpen ? startAt.buttons.concat(howLong.buttons) : [],
-      away.buttons, [kept, changes, yourBackup])
+      [away],
+      away.gearShown && away.gearOpen ? awayLimit.buttons : [],
+      [points, yourBackup])
   function cursorOn(item) { return panel && panel.cursorTarget === item }
   function set(name, value) { service.setSetting(name, value) }
 
   readonly property var hours: [[22, "10 pm"], [0, "Midnight"], [2, "2 am"], [4, "4 am"]]
+  readonly property var limits: [[100, "100 MB"], [250, "250 MB"], [500, "500 MB"], [1000, "1 GB"], [2000, "2 GB"]]
   readonly property var lengths: [[60, "1 hour"], [120, "2 hours"], [240, "4 hours"]]
   function label(list, value, fallback) {
     var found = list.filter(function(c) { return c[0] === value })
@@ -91,43 +94,35 @@ Column {
     }
   }
 
-  Column {
-    width: parent.width
-    spacing: Style.space(4)
-    topPadding: Style.space(6)
-    bottomPadding: Style.space(6)
-    leftPadding: Style.space(10)
-    rightPadding: Style.space(10)
-    Prose { width: parent.width - Style.space(20); text: "Away from home" }
-    Prose {
-      width: parent.width - Style.space(20)
-      dim: true
-      text: "A backup bigger than this asks first, because it counts against your data."
-    }
-    Choices {
-      id: away
-      width: parent.width - Style.space(20)
+  SwitchRow {
+    id: away
+    title: "Away from home"
+    checked: page.s["away.on"] !== false
+    hasGear: true
+    hasCursorHere: page.cursorOn(this)
+    explainer: checked
+      ? "When you're away (over Tailscale, or any network your backup server isn't on), a backup "
+        + "bigger than " + page.label(page.limits, page.s["away.limit_mb"], (page.s["away.limit_mb"] || 500) + " MB")
+        + " asks first. Useful on slow or metered connections."
+      : "Off: backups never ask first, whatever network you're on."
+    onToggled: page.set("away.on", !checked)
+    options: Choices {
+      id: awayLimit
       owner: page
-      model: [[100, "100 MB"], [250, "250 MB"], [500, "500 MB"], [1000, "1 GB"], [2000, "2 GB"]]
+      label: "Ask first above"
+      model: page.limits
       value: page.s["away.limit_mb"]
       onChosen: function(v) { page.set("away.limit_mb", v) }
     }
   }
 
   NavRow {
-    id: kept
-    title: "Kept restore points"
-    explainer: "Never thinned or deleted. " + (page.service && page.service.status.kept ? page.service.status.kept.length : 0) + " kept."
+    id: points
+    title: "Restore points"
+    explainer: "Smart thinning " + (page.s["thinning.on"] === false ? "off" : "on") + " · "
+               + (page.service && page.service.status.kept ? page.service.status.kept.length : 0) + " kept"
     hasCursorHere: page.cursorOn(this)
     onActivated: page.panel.go("kept")
-  }
-
-  NavRow {
-    id: changes
-    title: "Your changes to Omarchy"
-    explainer: "What you've added and changed on top of a fresh Omarchy."
-    hasCursorHere: page.cursorOn(this)
-    onActivated: { page.service.loadChanges(); page.panel.go("changes") }
   }
 
   NavRow {

@@ -30,7 +30,9 @@ omabackups settings set automatic.every daily
 |---|---|---|
 | `automatic.on` | Automatic backups, on or off | on |
 | `automatic.every` | How often: `hourly`, `daily` or `weekly` | hourly |
+| `away.on` | Away from home, a big backup asks first; off: it never asks | on |
 | `away.limit_mb` | Away from home, a backup bigger than this (in MB) asks first | 500 |
+| `thinning.on` | Smart thinning of old restore points; off: they all stay until the backup needs the room | on |
 | `health.on` | The nightly health check of your backup | on |
 | `health.at` | The hour it starts (0-23) | 0 (midnight) |
 | `health.minutes` | How long it runs each night: 30, 60, 120, 240 or 480 | 120 |

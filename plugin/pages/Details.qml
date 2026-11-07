@@ -4,20 +4,20 @@ import qs.Ui
 import "../parts"
 import "../Model.js" as Model
 
-// Settings' detail pages (BUILD 6.1 E, 7.1): kept restore
-// points, Your changes to Omarchy, and Your backup.
+// Settings' detail pages (BUILD 6.1 E, 7.1, D35): Restore points (smart
+// thinning and the kept ones), and Your backup.
 Column {
   id: page
   property var service: null
   property var panel: null
-  property string step: "kept"          // kept | changes | yourBackup
+  property string step: "kept"          // kept (Restore points) | yourBackup
   property bool confirming: false
   spacing: Style.space(8)
 
   readonly property var h: service && service.header ? service.header : ({})
   readonly property var targets: {
     if (step === "kept") {
-      var out = []
+      var out = [thinningSwitch]
       for (var i = 0; i < keptRepeater.count; i++) out.push(keptRepeater.itemAt(i))
       return out
     }
@@ -26,7 +26,25 @@ Column {
   }
   function cursorOn(item) { return panel && panel.cursorTarget === item }
 
-  // --- Kept restore points ------------------------------------------------------------
+  // --- Restore points: smart thinning, and the kept ones (D35) -----------------------------
+  SwitchRow {
+    id: thinningSwitch
+    visible: page.step === "kept"
+    title: "Smart thinning"
+    checked: !!page.service && page.service.settings["thinning.on"] !== false
+    hasCursorHere: page.cursorOn(this)
+    // The rules are backup/thinning.py's: keep these words in step with it.
+    explainer: checked
+      ? "Thins out old restore points as they age. It keeps:\n"
+        + "·  every backup from the last 24 hours\n"
+        + "·  one a day for the 30 days before that\n"
+        + "·  one a week after that, for as long as there's room\n"
+        + "Backing up every hour, that's about 100 restore points after a year. Kept ones are never thinned."
+      : "Off: every backup stays a restore point (24 a day, backing up every hour) until your backup "
+        + "needs the room. Then the oldest go first, never the kept ones."
+    onToggled: page.service.setSetting("thinning.on", !checked)
+  }
+  PanelSectionHeader { visible: page.step === "kept"; text: "Keep" }
   Prose {
     visible: page.step === "kept"
     width: parent.width
@@ -43,42 +61,6 @@ Column {
       checked: modelData.kept || modelData.return_point
       hasCursorHere: page.cursorOn(this)
       onToggled: page.service.keep(modelData.name, !checked)
-    }
-  }
-
-  // --- Your changes to Omarchy (read only) ---------------------------------------------
-  Prose {
-    visible: page.step === "changes"
-    width: parent.width
-    text: "A record, kept with every backup, of what you've added and changed on top of a fresh "
-          + "Omarchy: apps, settings, keybindings, your theme. When you move to a new computer, "
-          + "Migrate offers to bring all of it over."
-  }
-  Prose {
-    visible: page.step === "changes"
-    width: parent.width
-    dim: true
-    text: page.service && page.service.changes ? "Latest backup was " + Model.when(page.service.changes.made)
-                                                 : "Loading…"
-  }
-  Repeater {
-    model: page.step === "changes" && page.service && page.service.changes ? page.service.changes.groups : []
-    Column {
-      required property var modelData
-      readonly property var mine: page.service.changes.items.filter(function(i) { return i.group === modelData.id })
-      visible: mine.length > 0
-      width: page.width
-      spacing: Style.space(4)
-      PanelSectionHeader { text: modelData.title + " (" + parent.mine.length + ")" }
-      Repeater {
-        model: parent.mine
-        Column {
-          required property var modelData
-          width: page.width
-          Prose { width: parent.width; text: modelData.name + (modelData.bytes ? "  ·  " + Model.human(modelData.bytes) : "") }
-          Prose { width: parent.width; visible: text !== ""; dim: true; text: modelData.what || "" }
-        }
-      }
     }
   }
 

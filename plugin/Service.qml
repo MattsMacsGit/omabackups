@@ -13,7 +13,6 @@ Item {
   property bool installed: true
   property bool loaded: false
   property var status: ({})
-  property var changes: null
   property string notice: ""
   property string noticeDetails: ""
 
@@ -131,7 +130,6 @@ Item {
           root.expected = undo
         }
       }
-      if (result && result.event === "result" && result.items) root.changes = result
       root.actionsDone++
       root.next()
     }
@@ -177,7 +175,6 @@ Item {
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }
   function keep(point, on) { run([on ? "keep" : "release", point], "keep:" + point, on) }
   function rescueLater() { run(["rescue-usb", "later"]) }
-  function loadChanges() { run(["changes"]) }
   function startOver() { run(["start-over"]) }
   function pick() { terminal("omabackups pick") }
   function changePassword() { terminal("omabackups password change") }
