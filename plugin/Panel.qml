@@ -44,7 +44,14 @@ Panel {
   readonly property int firstIndex: heroButtonShown && targets.length > 1 ? 1 : 0
   readonly property var cursorTarget: cursorActive && targets.length ? targets[Math.min(cursorIndex, targets.length - 1)] : null
 
-  function go(name) { page = name; cursorIndex = firstIndex }
+  // Back puts the cursor on the row you left from.
+  property var placeOn: ({})
+  function go(name, returning) {
+    placeOn[shown] = cursorIndex
+    page = name
+    var place = placeOn[name !== "" ? name : defaultPage]
+    cursorIndex = returning && place !== undefined ? place : firstIndex
+  }
   function heroPressed() { shown === "everyday" ? go("settings") : back() }
 
   QtObject {
@@ -53,10 +60,10 @@ Panel {
     function activate() { root.heroPressed() }
   }
   function back() {
-    if (["kept", "changes", "yourBackup"].indexOf(shown) >= 0) go("settings")
-    else if (shown === "settings") go("")
-    else if (shown === "server" || shown === "disk") go("where")
-    else if (shown === "where") go("")
+    if (["kept", "changes", "yourBackup"].indexOf(shown) >= 0) go("settings", true)
+    else if (shown === "settings") go("", true)
+    else if (shown === "server" || shown === "disk") go("where", true)
+    else if (shown === "where") go("", true)
   }
   function titleFor(name) {
     return ({ settings: "Settings", kept: "Kept restore points", changes: "Your changes to Omarchy",

@@ -10,7 +10,7 @@ from omabackups.core.events import Events
 def add(sub) -> None:
     p = sub.add_parser("pick", help="choose what gets backed up (opens the picker)")
     p.add_argument("--then-backup", action="store_true",
-                   help="the first backup: saving starts it (D29)")
+                   help="saving starts a backup (for the first one)")
     p.set_defaults(run=run)
 
 

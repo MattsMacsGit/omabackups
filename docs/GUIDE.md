@@ -9,12 +9,14 @@ the whole system, and move your setup onto a fresh install.
 ## Contents
 
 1. [Install and remove](#install-and-remove)
-2. [Set up backups to a backup server](#set-up-backups-to-a-backup-server)
-3. [Set up backups to a backup disk](#set-up-backups-to-a-backup-disk)
-4. [Backing up](#backing-up)
-5. [Your changes to Omarchy](#your-changes-to-omarchy)
-6. [Start over](#start-over)
-7. [The omabackups command](#the-omabackups-command)
+2. [The panel](#the-panel)
+3. [Set up backups to a backup server](#set-up-backups-to-a-backup-server)
+4. [Set up backups to a backup disk](#set-up-backups-to-a-backup-disk)
+5. [Backing up](#backing-up)
+6. [Restore points](#restore-points)
+7. [Your changes to Omarchy](#your-changes-to-omarchy)
+8. [Start over](#start-over)
+9. [The omabackups command](#the-omabackups-command) ([its own page](COMMANDS.md))
 
 ## Install and remove
 
@@ -24,8 +26,8 @@ OmaBackups comes in two parts:
 - **The `omabackups` package**: the part that does the work. The first time
   you open the panel, it offers to install the package for you.
 
-To remove OmaBackups, use **Remove OmaBackups** in Settings. To remove only
-the package by hand:
+**Remove OmaBackups** in Settings comes with a later version. Until then,
+to remove the package by hand:
 
 ```
 sudo pacman -R omabackups
@@ -35,6 +37,45 @@ Your settings stay in `~/.config/omabackups/` and the log in
 `~/.local/state/omabackups/`, in case you install it again. Delete those two
 folders as well if you want nothing left behind. OmaBackups 1.x uses
 different names, so the two can sit side by side without touching each other.
+
+## The panel
+
+OmaBackups lives on your bar: its icon is a clock turning back. Click it to
+open the panel; a middle-click backs up now. The icon is dimmed until
+backups are set up, and turns red when something needs you.
+
+**Before backups are set up**, the panel walks you through it, one step per
+screen:
+
+1. **Set up backups** (or **Migrate from another system**, which comes with
+   a later version).
+2. **Where?** A backup server on the network, or a backup disk plugged in
+   here.
+3. **The details.** For a server, type its address and your user name
+   there. Then a terminal window opens for the passwords and the questions
+   SSH asks (see the next two sections for what each one is). The panel
+   moves on by itself when it's done.
+4. **Your first backup.** **Back up now** opens the picker first, so you
+   can choose what gets backed up (your own files are ticked, the trash and
+   caches skipped). Saving starts the backup. While you wait, the panel
+   offers to make a Rescue USB; **Later** leaves a reminder.
+
+**Every day**, the panel shows:
+
+- when your latest backup was, where it goes, and how much room is left;
+- a line for anything worth knowing, only while it's true: waiting for a
+  known network, can't reach your backup, the last backup failed, automatic
+  backups are off, a health check problem, no Rescue USB yet;
+- **Back up now**, or, while a backup runs, what it's doing and **Stop**;
+- your restore points, newest first (**More…** shows them all).
+
+The gear opens **Settings**: choose what gets backed up, automatic backups,
+away from home, the health check, kept restore points, your changes to
+Omarchy, and your backup (its size and room, its password, Start over).
+Each switch is a real switch; its gear shows only that switch's own options.
+
+**Keys:** **↑↓** move, **Enter** or **Space** press, **→** open a switch's
+options, **←** or **⌫** back, **Esc** close. The mouse works too.
 
 ## Set up backups to a backup server
 
@@ -131,9 +172,15 @@ backup picks up where it stopped.
 
 ### Automatic backups
 
-Once set up, OmaBackups backs up on its own every hour (or every day or week:
-see Settings below). If the computer was off or asleep when one was due, it
-runs soon after it wakes up.
+OmaBackups backs up on its own every hour (or every day or week: see the
+panel's Settings, or [the settings table](COMMANDS.md#settings)). If the
+computer was off or asleep when one was due, it runs soon after it wakes up.
+
+Automatic backups only ever follow choices you've backed up yourself. So
+after a fresh setup, and each time you save new choices in the picker, they
+wait until you press **Back up now** (the panel says "Automatic backups are
+off" until then). Your first manual backup switches them on. If you turn
+them off yourself, they stay off until your next manual backup.
 
 ### Away from home
 
@@ -259,6 +306,41 @@ still missing.
 One snapshot stays on your computer between backups. It's what the next
 backup compares against, and it's replaced each time.
 
+## Restore points
+
+Each backup makes a **restore point**: your computer as it was at that
+moment. Old ones are thinned out as they age, so you keep plenty of recent
+points and fewer old ones.
+
+```
+omabackups points
+```
+
+lists them, newest first.
+
+### Kept restore points
+
+A **kept** restore point is never thinned or deleted. In the panel: Settings ›
+Kept restore points, and switch on the ones to keep. Or:
+
+```
+omabackups keep 001-2026-11-07-1400
+omabackups release 001-2026-11-07-1400
+```
+
+### Your backup's password
+
+To change it: Settings › Your backup › **Change its password** (a terminal
+window opens), or:
+
+```
+omabackups password change
+```
+
+It asks for the current password, then the new one twice. Everyday backups
+aren't affected (this computer has its own key), but from then on the Rescue
+USB and Migrate need the new password.
+
 ## Your changes to Omarchy
 
 Every backup also notes how this computer differs from a fresh Omarchy, and
@@ -270,7 +352,8 @@ everything you had.
 omabackups changes
 ```
 
-shows the list as of your latest backup:
+shows the list as of your latest backup (in the panel: Settings › Your
+changes to Omarchy):
 
 - **Apps** you installed (from Arch, the AUR, Flatpak, or tools like mise),
   and web apps you added to the menu. Each one says where its settings are.
@@ -289,6 +372,8 @@ would be to get back without it.
 
 ## Start over
 
+In the panel: Settings › Your backup › **Start over**. Or:
+
 ```
 omabackups start-over
 ```
@@ -300,46 +385,7 @@ different backup location.
 
 ## The omabackups command
 
-Everything the panel does is also a command you can type in a terminal. To see
-the list:
-
-```
-omabackups --help
-```
-
-### Where am I up to?
-
-```
-omabackups status
-```
-
-This tells you where OmaBackups is up to on this computer. On a new install
-it says OmaBackups is not set up yet: open the panel and choose
-**Set up backups**, or **Migrate from another system**.
-
-### Settings
-
-```
-omabackups settings get
-omabackups settings set automatic.every daily
-```
-
-| Setting | What it does | Default |
-|---|---|---|
-| `automatic.on` | Automatic backups, on or off | on |
-| `automatic.every` | How often: `hourly`, `daily` or `weekly` | hourly |
-| `away.limit_mb` | Away from home, a backup bigger than this (in MB) asks first | 500 |
-| `health.on` | The nightly health check of your backup | on |
-| `health.at` | The hour it starts (0-23) | 0 (midnight) |
-| `health.minutes` | How long it runs each night: 30, 60, 120, 240 or 480 | 120 |
-
-### When something goes wrong
-
-Every problem OmaBackups reports says what happened, what to do, and then
-**Details to copy**: paste those into a bug report or a message asking for help.
-The full log is in `~/.local/state/omabackups/logs/omabackups.log`.
-
-### For scripts
-
-Add `--json` before the command (`omabackups --json status`) and every answer
-comes back as one line of JSON.
+Everything the panel does is also a command you can type in a terminal:
+`omabackups --help` lists them. [The command page](COMMANDS.md) covers
+`status`, every setting, what to do when something goes wrong, and `--json`
+for scripts.

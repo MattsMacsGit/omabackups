@@ -77,10 +77,10 @@ Column {
         radius: parent.radius
         color: page.service ? page.service.colour("blue") : Commons.Color.accent
         SequentialAnimation on x {
-          running: !!(page.service && page.service.running)
+          running: !!(page.service && page.service.running) && !Style.reduceMotion
           loops: Animation.Infinite
-          NumberAnimation { from: 0; to: sweep.parent.width - sweep.width; duration: 1200 }
-          NumberAnimation { from: sweep.parent.width - sweep.width; to: 0; duration: 1200 }
+          NumberAnimation { from: 0; to: sweep.parent.width - sweep.width; duration: Style.duration(1200) }
+          NumberAnimation { from: sweep.parent.width - sweep.width; to: 0; duration: Style.duration(1200) }
         }
       }
     }

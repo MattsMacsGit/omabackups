@@ -18,7 +18,7 @@ UNIT = "omabackups-backup@{}.service"
 def add(sub) -> None:
     sub.add_parser("backup", help="back up now").set_defaults(run=run_now)
     sub.add_parser("stop", help="stop the backup that's running").set_defaults(run=run_stop)
-    away = sub.add_parser("away", help="answer the away-from-home question (D17)")
+    away = sub.add_parser("away", help="answer the away-from-home question")
     answer = away.add_subparsers(dest="verb", metavar="answer", required=True)
     choice = answer.add_parser("answer", help="now: back up anyway; wait: until you're home")
     choice.add_argument("choice", choices=("now", "wait"))

@@ -29,6 +29,9 @@ def parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", metavar="<command>", required=True)
     for command in COMMANDS:
         command.add(sub)
+    # argparse lists a hidden subcommand as "==SUPPRESS==": leave the
+    # plumbing (link, root-job, the units' own runs) out of --help.
+    sub._choices_actions = [a for a in sub._choices_actions if a.help != argparse.SUPPRESS]
     return p
 
 
