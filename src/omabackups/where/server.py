@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 
 from omabackups.core import log
 from omabackups.core.errors import OmaError
@@ -20,21 +21,40 @@ class Gate:
     def __init__(self, address: str):
         self.address = address
 
-    def _run(self, command: str, data: bytes) -> subprocess.CompletedProcess:
+    def _argv(self, command: str) -> tuple[list[str], dict | None]:
         fake = os.environ.get("OMABACKUPS_TEST_GATE")
         if fake and os.environ.get("OMABACKUPS_SYSROOT"):
             # Tests: the real gatekeeper in test mode, without SSH in between.
             gate_dir, key_id = fake.split(":")
-            env = dict(os.environ, SSH_ORIGINAL_COMMAND=command)
-            return subprocess.run([sys.executable, gate_dir, "client", key_id],
-                                  input=data, capture_output=True, env=env, timeout=600)
-        return subprocess.run([*ssh.as_gatekeeper(self.address), command],
-                              input=data, capture_output=True, timeout=600)
+            return ([sys.executable, gate_dir, "client", key_id],
+                    dict(os.environ, SSH_ORIGINAL_COMMAND=command))
+        return [*ssh.as_gatekeeper(self.address), command], None
 
     def call(self, verb: str, *args: str, data: bytes = b"") -> dict:
         command = " ".join([verb, *args])
         log.get("server").debug("gate: %s", verb)
-        done = self._run(command, data)
+        argv, env = self._argv(command)
+        done = subprocess.run(argv, input=data, capture_output=True, env=env, timeout=600)
+        return self._answer(verb, done)
+
+    def call_streaming(self, verb: str, *args: str, feed) -> dict:
+        """Like call(), with the input written by feed(pipe) as it goes (big data)."""
+        argv, env = self._argv(" ".join([verb, *args]))
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=out, stderr=err, env=env)
+            try:
+                feed(proc.stdin)
+            except BrokenPipeError:
+                pass   # the gatekeeper stopped early: its answer says why
+            finally:
+                proc.stdin.close()
+            code = proc.wait()
+            out.seek(0)
+            err.seek(0)
+            done = subprocess.CompletedProcess(argv, code, out.read(), err.read())
+        return self._answer(verb, done)
+
+    def _answer(self, verb: str, done) -> dict:
         error = done.stderr.decode("utf-8", "replace").strip()
         if done.returncode == 255 and not error.startswith("omabackups-gate:"):
             raise OmaError(

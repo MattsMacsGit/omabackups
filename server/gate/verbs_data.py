@@ -112,7 +112,9 @@ _RANGE = struct.Struct(">QQ")
 
 
 def v_ranges(call):
-    """Input: one JSON line {"path", "size"}, then [offset][length][bytes]... (streamed)."""
+    """Input: one JSON line {"path", "size", "mode", "uid", "gid", "mtime_ns"},
+    then [offset][length][bytes]... (streamed). The file's details are set
+    too, so rsync never has to re-read a big file for its date alone."""
     if len(call.args) != 3:
         raise Refused("wrong number of arguments")
     root = _part(call, *call.args)
@@ -137,6 +139,11 @@ def v_ranges(call):
                 length -= len(chunk)
                 written += len(chunk)
         os.ftruncate(fd, size)
+        if "mode" in info:
+            if os.geteuid() == 0:   # (the test server isn't root)
+                os.fchown(fd, int(info["uid"]), int(info["gid"]))
+            os.fchmod(fd, int(info["mode"]) & 0o7777)
+            os.utime(fd, ns=(int(info["mtime_ns"]), int(info["mtime_ns"])))
     except EOFError:
         raise Refused("the changed ranges ended early") from None
     finally:

@@ -13,7 +13,7 @@ from registry import Refused
 # One cluster of short options, ending in rsync's protocol letters ("e.xxx").
 _SHORT = re.compile(r"^-[lHogDtpAXrRSzcvnxIW]*e\.[A-Za-z]*$")
 _LONG = {
-    "--delete", "--delete-during", "--delete-after", "--delete-delay",
+    "--delete", "--delete-during", "--delete-after", "--delete-delay", "--delete-excluded",
     "--numeric-ids", "--inplace", "--stats", "--ignore-errors", "--force",
     "--compress-choice=zstd", "--size-only", "--checksum-choice=xxh128",
 }

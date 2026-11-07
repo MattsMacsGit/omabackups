@@ -24,15 +24,24 @@ def common(control_dir: Path) -> list[str]:
     ]
 
 
-def as_gatekeeper(address: str) -> list[str]:
-    """The root jobs' SSH: this computer's key, to the gatekeeper account."""
+def gatekeeper_ssh() -> list[str]:
+    """The root jobs' SSH program and options (no target): this computer's key."""
     control = paths.system_run_dir()
     control.mkdir(parents=True, exist_ok=True)
     return ["ssh", "-T", "-o", "BatchMode=yes",
             "-o", "IdentitiesOnly=yes", "-i", str(paths.keys_dir() / "ssh_key"),
             "-o", f"UserKnownHostsFile={paths.known_hosts_file()}",
             "-o", "StrictHostKeyChecking=yes", "-o", "GlobalKnownHostsFile=/dev/null",
-            *common(control), f"{ACCOUNT}@{address}"]
+            *common(control)]
+
+
+def target(address: str) -> str:
+    return f"{ACCOUNT}@{address}"
+
+
+def as_gatekeeper(address: str) -> list[str]:
+    """The full SSH command to the gatekeeper (add the request after it)."""
+    return [*gatekeeper_ssh(), target(address)]
 
 
 def as_user(address: str, login: str, known_hosts: Path) -> list[str]:
