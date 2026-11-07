@@ -88,16 +88,16 @@ Other things running on it are left alone.
 
 - The server's address on your network (for example `192.168.1.20`).
 - Your login on the server (a user name and its password), with sudo.
-- Where on the server your backup goes. Setup lists the server's disks and
-  offers two choices:
-  - **A disk of its own**: a disk plugged into the server, erased and used
-    whole (setup shows what's on each disk first; only the disk the server
-    runs from is left out).
-  - **A folder on a disk the server already has**, for example
-    `/srv/backups/omabackups`, with a size you choose. Nothing is erased.
+- A disk on the server with room for your backup. Setup lists every disk
+  there, with its size, its free space and what's on it. You pick one, then:
+  - **Its free space**: nothing is erased. OmaBackups makes its own folder,
+    `omabackups-store`, at the top of the disk, next to what's already there,
+    and you pick how big your backup can be.
+  - **The whole disk**: it's erased and used only for backups. (The disk the
+    server runs from is only offered for its free space.)
 
   Either way, your backup is one encrypted file inside, and it works the
-  same.
+  same. There's no path to type.
 
 ### Setting it up
 
@@ -105,8 +105,10 @@ Other things running on it are left alone.
 omabackups setup server
 ```
 
+Or from the panel: **Set up backups** › **A backup server on the network**.
 It asks for the address and your user name there, where on the server your
-backup should go, and three passwords, each once:
+backup should go, and three passwords, each once. Pick with the arrow keys
+and Enter; Esc stops setup without changing anything. The passwords:
 
 1. **This computer's password** (a pop-up). This links your user to
    OmaBackups, so everyday backups never need a password again.
