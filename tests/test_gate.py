@@ -27,7 +27,7 @@ def owned(server):
 def test_version(server):
     server.init()
     kid = server.add_computer(1)
-    assert server.ok(kid, "version") == {"gate": 4, "contract": 1}
+    assert server.ok(kid, "version") == {"gate": 5, "contract": 1}
 
 
 def test_unknown_keys_and_verbs_are_refused(server):

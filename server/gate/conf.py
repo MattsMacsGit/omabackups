@@ -13,7 +13,7 @@ import os
 import re
 from pathlib import Path
 
-VERSION = 4          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses; 4: health)
+VERSION = 5          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses; 4: health; 5: scrub as its own service)
 CONTRACT = 1         # the version of its verbs and answers (BUILD 5.10)
 ACCOUNT = "omabackups-gate"
 

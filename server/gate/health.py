@@ -59,10 +59,18 @@ def scrub(verb: str, mount: str, bid: str) -> tuple[int, str]:
         state["status"] = "running" if verb in ("start", "resume") else "interrupted"
         (conf.RUN / f"fake-scrub-{bid}.json").write_text(json.dumps(state))
         return 0, ""
+    if verb == "cancel":
+        done = subprocess.run(["btrfs", "scrub", "cancel", mount], capture_output=True, text=True)
+        return done.returncode, done.stderr
+    # Each request runs as its own short service, and systemd stops whatever a
+    # service leaves behind when it ends: a scrub started from here directly
+    # was cancelled seconds later (stage 3 test). So it runs as a service of
+    # its own, in the foreground (-B) there; cancel stops it the usual way.
     with tempfile.TemporaryFile(mode="w+") as err:
-        extra = ["-c", "3"] if verb != "cancel" else []
-        done = subprocess.run(["btrfs", "scrub", verb, *extra, mount], stdin=subprocess.DEVNULL,
-                              stdout=subprocess.DEVNULL, stderr=err, text=True)
+        done = subprocess.run(
+            ["systemd-run", f"--unit=omabackups-gate-scrub-{bid[:12]}", "--collect", "--quiet",
+             "-p", "Nice=10", "btrfs", "scrub", verb, "-B", "-c", "3", mount],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err, text=True)
         err.seek(0)
         return done.returncode, err.read()
 
