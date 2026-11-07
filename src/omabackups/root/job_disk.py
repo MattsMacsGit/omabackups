@@ -53,8 +53,7 @@ def prepare(device: str) -> str:
     # disk, then udev makes its names): wait for it rather than look once.
     for _ in range(30):
         subprocess.run(["udevadm", "settle", "--timeout=5"], capture_output=True)
-        node = json.loads(_run("lsblk", "-J", "-o", "PATH,PARTUUID", device))["blockdevices"][0]
-        part = (node.get("children") or [{}])[0]
+        part = _first_partition(json.loads(_run("lsblk", "-J", "-o", "NAME,PATH,TYPE,PARTUUID", device)))
         if part.get("partuuid"):
             stable = Path("/dev/disk/by-partuuid") / part["partuuid"]
             if stable.exists():
@@ -64,6 +63,20 @@ def prepare(device: str) -> str:
     raise OmaError("The disk was erased, but its new partition didn't appear.",
                    "Unplug the disk, plug it back in, and run setup disk again.",
                    device, code="disk-failed")
+
+
+def _first_partition(tree: dict) -> dict:
+    """lsblk lists partitions inside their disk or next to it, depending on
+    the columns asked for: look everywhere."""
+    def walk(nodes):
+        for node in nodes:
+            if node.get("type") == "part":
+                return node
+            found = walk(node.get("children") or [])
+            if found:
+                return found
+        return None
+    return walk(tree.get("blockdevices", [])) or {}
 
 
 def _gate_admin(*args: str, data: str = "") -> None:
