@@ -47,8 +47,11 @@ def setup(verbose: bool = False) -> logging.Logger:
     except OSError:
         pass  # a missing log file must never stop a backup; stderr still works
 
-    to_stderr = _NeverStdout()
-    to_stderr.setLevel(logging.DEBUG if verbose else logging.WARNING)
-    to_stderr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-    logger.addHandler(to_stderr)
+    # The screen only gets the log when asked (--verbose): errors already
+    # reach the user once, through events, with what to do about them.
+    if verbose:
+        to_stderr = _NeverStdout()
+        to_stderr.setLevel(logging.DEBUG)
+        to_stderr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        logger.addHandler(to_stderr)
     return logger

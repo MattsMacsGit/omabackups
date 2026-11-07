@@ -2,15 +2,16 @@
 
 pkexec has just asked for this computer's password. This:
 - records which user OmaBackups belongs to (/etc/omabackups/user.json);
-- puts that user in the `omabackups` group, which the package's fixed polkit
-  rule lets start and stop OmaBackups' own units (5.2);
+- writes the polkit rule that lets only that user start and stop
+  OmaBackups' own root jobs (5.2). It names the user directly: a group
+  would only count after the user logs in again;
 - makes the root-only keys and prints only the public half.
 """
 
 import json
 import os
 import pwd
-import subprocess
+import re
 
 from omabackups.core import paths
 from omabackups.core.errors import OmaError
@@ -28,25 +29,34 @@ def caller() -> pwd.struct_passwd:
     return pwd.getpwuid(int(uid))
 
 
+RULE = """// OmaBackups (BUILD 5.2, D27): written by `omabackups link`.
+// Only USER, in an active local session, may start and stop OmaBackups' own
+// root jobs without a password. Nothing else.
+polkit.addRule(function (action, subject) {
+  if (action.id !== "org.freedesktop.systemd1.manage-units") return;
+  if (subject.user !== "USER" || !subject.local || !subject.active) return;
+  var verb = action.lookup("verb");
+  if (verb !== "start" && verb !== "stop") return;
+  var unit = action.lookup("unit");
+  if (/^omabackups-root@[a-z][a-z-]{0,40}\\.service$/.test(unit)) return polkit.Result.YES;
+});
+"""
+USER_NAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+
+
 def link(user: pwd.struct_passwd) -> dict:
-    if not os.environ.get("OMABACKUPS_SYSROOT"):   # tests can't change groups
-        _join_group(user)
+    if not USER_NAME.match(user.pw_name):
+        raise OmaError(f"OmaBackups can't work with the user name '{user.pw_name}'.",
+                       "Use a user whose name is lower-case letters, digits, - or _.",
+                       code="bad-user")
     pub = keys.ensure()
+    rule = paths.polkit_rule_file()
+    rule.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(rule, RULE.replace("USER", user.pw_name).encode(), 0o644)
     paths.system_config_dir().mkdir(parents=True, exist_ok=True)
     write_atomic(paths.linked_user_file(),
                  (json.dumps({"user": user.pw_name, "uid": user.pw_uid}) + "\n").encode(), 0o644)
     return {"user": user.pw_name, "public_key": pub}
-
-
-def _join_group(user: pwd.struct_passwd) -> None:
-    if subprocess.run(["getent", "group", paths.GROUP], capture_output=True).returncode != 0:
-        raise OmaError("The omabackups group is missing.",
-                       "Reinstall the omabackups package, then try again.", code="no-group")
-    done = subprocess.run(["gpasswd", "-a", user.pw_name, paths.GROUP], capture_output=True, text=True)
-    if done.returncode != 0:
-        raise OmaError(f"Couldn't add {user.pw_name} to the omabackups group.",
-                       "Try again. If it keeps failing, report it with the details.",
-                       done.stderr.strip(), code="link-failed")
 
 
 def run(args, events: Events) -> int:

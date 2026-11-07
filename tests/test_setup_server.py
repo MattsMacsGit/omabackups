@@ -117,3 +117,37 @@ def test_store_path_must_be_full(sandbox):
     for bad in ("relative/path", "/x\n/y"):
         with pytest.raises(OmaError):
             server.check_store(bad)
+
+
+def test_link_writes_a_polkit_rule_for_this_user_only(world):
+    import pwd
+    rule = paths.polkit_rule_file().read_text()
+    me = pwd.getpwuid(os.getuid()).pw_name
+    assert f'subject.user !== "{me}"' in rule
+    assert "omabackups-root@" in rule and "isInGroup" not in rule
+
+
+def test_a_request_reached_through_a_link_is_refused(world, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    requests = paths.requests_dir()
+    requests.mkdir(parents=True, exist_ok=True)
+    requests.rmdir()
+    requests.symlink_to(elsewhere)
+    (elsewhere / "create-backup.json").write_text("{}")
+    from omabackups.root import jobs
+    with pytest.raises(OmaError) as caught:
+        jobs.read_request("create-backup", os.getuid())
+    assert caught.value.code == "no-request"
+    assert (elsewhere / "create-backup.json").exists()   # never touched
+
+
+def test_a_shared_request_folder_is_refused(world):
+    requests = paths.requests_dir()
+    requests.mkdir(parents=True, exist_ok=True)
+    os.chmod(requests, 0o777)
+    (requests / "create-backup.json").write_text("{}")
+    from omabackups.root import jobs
+    with pytest.raises(OmaError) as caught:
+        jobs.read_request("create-backup", os.getuid())
+    assert caught.value.code == "bad-request"

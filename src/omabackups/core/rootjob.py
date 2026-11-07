@@ -16,9 +16,10 @@ from omabackups.core.state import write_atomic
 
 
 def run(job: str, request: dict) -> dict:
-    folder = paths.requests_dir()
-    if os.environ.get("OMABACKUPS_SYSROOT"):
-        folder.mkdir(parents=True, exist_ok=True)   # tests; in use, the package makes it
+    folder = paths.requests_dir()   # this user's own, private (D27)
+    folder.mkdir(parents=True, exist_ok=True)
+    os.chmod(folder, 0o700)
+    os.chmod(folder.parent, 0o700)
     result_file = paths.results_dir() / f"{job}.json"
     # The result must carry this back: an old result from an earlier run
     # (which this user can't delete) is never mistaken for this one.

@@ -25,25 +25,63 @@ def linked_uid() -> int:
                        "Set up backups first (it links this computer).", code="not-linked") from None
 
 
-def read_request(name: str, uid: int) -> dict:
-    path = paths.requests_dir() / f"{name}.json"
+def _not_theirs(where) -> OmaError:
+    return OmaError("A request for this job didn't come from the linked user.",
+                    "Nothing was done.", str(where), code="bad-request")
+
+
+def _open_request_folder(uid: int) -> int:
+    """Walk to the user's request folder one step at a time, never following
+    a link, and every step owned by the linked user. Returns a folder handle."""
+    base, parts = paths.user_requests_location(uid)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(base, flags)
     except OSError:
         raise OmaError("The request for this job is missing.", "Try again.",
-                       str(path), code="no-request") from None
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != uid or info.st_size > MAX_REQUEST:
-            raise OmaError("A request for this job didn't come from the linked user.",
-                           "Nothing was done.", str(path), code="bad-request")
-        with os.fdopen(fd, "rb") as f:
-            fd = -1
-            raw = f.read()
-    finally:
-        if fd >= 0:
+                       str(base), code="no-request") from None
+    for part in [None, *parts]:
+        if part is not None:
+            try:
+                new = os.open(part, flags, dir_fd=fd)
+            except OSError:
+                os.close(fd)
+                raise OmaError("The request for this job is missing.", "Try again.",
+                               f"{base}/{part}", code="no-request") from None
             os.close(fd)
-        path.unlink(missing_ok=True)   # read once, never left lying about
+            fd = new
+        info = os.fstat(fd)
+        if info.st_uid != uid or info.st_mode & 0o022:
+            os.close(fd)
+            raise _not_theirs(base if part is None else f"{base}/.../{part}")
+    return fd
+
+
+def read_request(name: str, uid: int) -> dict:
+    folder = _open_request_folder(uid)
+    leaf = f"{name}.json"
+    try:
+        try:
+            fd = os.open(leaf, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=folder)
+        except OSError:
+            raise OmaError("The request for this job is missing.", "Try again.",
+                           leaf, code="no-request") from None
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != uid or info.st_size > MAX_REQUEST:
+                raise _not_theirs(leaf)
+            with os.fdopen(fd, "rb") as f:
+                fd = -1
+                raw = f.read()
+        finally:
+            if fd >= 0:
+                os.close(fd)
+            try:   # read once, never left lying about
+                os.unlink(leaf, dir_fd=folder)
+            except OSError:
+                pass
+    finally:
+        os.close(folder)
     try:
         request = json.loads(raw)
     except ValueError:

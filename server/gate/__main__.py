@@ -26,6 +26,8 @@ from registry import Refused
 
 
 def log(message: str) -> None:
+    if conf.TEST:   # the tests must never write to the real system log
+        return
     syslog.syslog(syslog.LOG_INFO, message)
 
 

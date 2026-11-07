@@ -102,8 +102,22 @@ def known_hosts_file() -> Path:
 
 
 def requests_dir() -> Path:
-    """Where the linked user leaves inputs for root jobs (D27)."""
-    return system_run_dir() / "requests"
+    """Where this user leaves inputs for root jobs (D27): the user's own
+    private runtime folder, so no group membership is needed."""
+    return runtime_dir() / "requests"
+
+
+def user_requests_location(uid: int) -> tuple[Path, list[str]]:
+    """The linked user's request folder as root walks to it: a starting
+    folder owned by that user, then the parts below it (each checked)."""
+    if os.environ.get("OMABACKUPS_SYSROOT"):   # tests: the sandbox's own
+        return runtime_dir(), ["requests"]
+    return Path(f"/run/user/{uid}"), [APP, "requests"]
+
+
+def polkit_rule_file() -> Path:
+    """Written by `link` (D27): lets only the linked user start our root jobs."""
+    return _sys("/etc/polkit-1/rules.d/50-omabackups.rules")
 
 
 def results_dir() -> Path:
@@ -115,5 +129,4 @@ def gate_bundle() -> Path:
     return _sys("/usr/share/omabackups/gate.pyz")
 
 
-GROUP = "omabackups"
 SERVER_ALIAS = "omabackups-server"   # the name SSH files the server's host key under

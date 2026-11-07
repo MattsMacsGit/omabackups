@@ -1,5 +1,4 @@
 d /run/omabackups 0755 root root -
-d /run/omabackups/requests 1770 root omabackups -
 d /run/omabackups/results 0755 root root -
 d /var/lib/omabackups 0755 root root -
 d /var/lib/omabackups/keys 0700 root root -
