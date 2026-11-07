@@ -65,10 +65,11 @@ def run_update(args, events: Events) -> int:
         raise OmaError("This computer doesn't back up to a server yet.",
                        "Set one up first: omabackups setup server", code="not-set-up") from None
     events.message("Update OmaBackups on your backup server. Your backup and its restore points\n"
-                   "are kept. This asks for your login on the server and its sudo password.")
+                   "are kept. The server asks for your password twice: to log you in, then for sudo.")
     login = args.login or menu.ask("Your user name on the server", os.environ.get("USER", ""))
     session = server.Login(address, login)
-    events.message("\nLogging in to your backup server (its password, for your login there)...")
+    menu.title("Logging in to your backup server",
+               "SSH asks for your password on the server, to log you in.")
     try:
         installed = server.install(session, "-", server.public_key())
     finally:
@@ -99,7 +100,8 @@ def _size(place) -> int:
 
 def _where_on_server(args, events: Events, session) -> tuple[str, int, bool]:
     """6.1 C step 2 (D30): pick a disk, then the whole disk or its free space."""
-    menu.say("\nLogging in to your backup server (its password, for your login there)...")
+    menu.title("Logging in to your backup server",
+               "SSH asks for your password on the server, to log you in.")
     if args.folder:
         return server.check_store(args.folder), args.size or 100, False
     found = session.places()
@@ -142,8 +144,9 @@ def run_server(args, events: Events) -> int:
                        "To use a different backup location, Start over from Settings first.",
                        code="already-set-up")
     menu.title("Set up backups to a backup server",
-               "Three passwords, each asked once: this computer's, your login on the\n"
-               "server, and the server's sudo password. Then your backup's own password.")
+               "This computer's password (a pop-up), then your password on the server\n"
+               "twice: once to log you in, once for sudo to prepare the disk. Last, you\n"
+               "choose your backup's own password.")
     address = args.address or menu.ask("The server's address", placeholder="for example 192.168.1.20")
     login = args.login or menu.ask("Your user name on the server", os.environ.get("USER", ""))
     if not address or not login:

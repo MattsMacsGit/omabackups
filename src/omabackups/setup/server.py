@@ -20,7 +20,7 @@ from pathlib import Path
 
 from omabackups.core import flow, ids, paths, rootjob, state
 from omabackups.core.errors import OmaError
-from omabackups.setup import bundle
+from omabackups.setup import bundle, menu
 from omabackups.where import ssh
 
 
@@ -124,7 +124,9 @@ def install(login: Login, store: str, pub: str) -> dict:
         if sent.returncode != 0:
             raise _failed("Couldn't copy OmaBackups to your backup server.", sent)
 
-    say("\nSetting up OmaBackups on the server (the server's sudo password, for your login there)...\n")
+    menu.title("Setting up OmaBackups on the server",
+               "The server asks for your password again: sudo needs it to install\n"
+               "OmaBackups there and prepare the disk.")
     command = (f"sudo python3 {q(folder)}/gate.pyz install {q(store)} {q(ids.system_id())} "
                f"{q(label())} {bundle.sha256(gate)} {q(folder)}/key.pub > {q(folder)}/result.json")
     login.run(command, terminal=True)
