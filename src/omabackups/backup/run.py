@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from omabackups import __version__
-from omabackups.backup import changes, skips
+from omabackups.backup import changes, skips, thinning
 from omabackups.backup.send import Sender
 from omabackups.backup.source import Snapshots, parts
 from omabackups.core import ids, log, paths
@@ -114,6 +114,7 @@ def backup(progress=lambda step, part="": None, source=None) -> dict:
                  "omabackups": __version__, "follows": latest, "how": how,
                  "skips": {p: skips.for_part(p).patterns for p in how}, "created": int(time.time())}
         gate.call("snapshot", bid, line, name, data=json.dumps(point).encode())
+        thinned = thin(gate, bid, logger)
     except BaseException:
         # Keep the old "since" snapshots; drop the new ones. The record stays
         # "not finished", so the next backup checks every file.
@@ -129,10 +130,24 @@ def backup(progress=lambda step, part="": None, source=None) -> dict:
     old = {p: n for p, n in since.items() if made.get(p) and made[p] != n}
     since.update(made)
     save_record({"finished": True, "since": since, "skips": fingerprints, "last_point": name,
-                 "last_finished": int(time.time()), "how": how})
+                 "last_finished": int(time.time()), "how": how, "thinned": thinned})
     _drop(source, old)
     logger.info("backup %s done: %s", name, how)
     return {"point": name, "how": how}
+
+
+def thin(gate: Gate, bid: str, logger) -> list[str]:
+    """Smart thinning after each backup (D18). A problem here never fails the backup."""
+    gone = []
+    try:
+        info = gate.call("points", bid)
+        kept = set(info["kept"].get("kept", [])) | {info["kept"].get("return_point")}
+        for old in thinning.to_delete(info["points"], datetime.now(), kept):
+            gate.call("delete", bid, old)
+            gone.append(old)
+    except OmaError as exc:
+        logger.warning("thinning: %s | %s", exc.what, exc.details)
+    return gone
 
 
 def changes_latest(gate: Gate, bid: str, line: str) -> str | None:

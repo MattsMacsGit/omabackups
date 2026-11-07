@@ -117,3 +117,18 @@ def test_no_backup_location_is_explained(sandbox):
     with pytest.raises(OmaError) as caught:
         run.backup(source=None)
     assert caught.value.code == "not-set-up"
+
+
+def test_thinning_runs_after_a_backup(world, monkeypatch):
+    srv, kid, bid, src, box = world
+    points = box / "points"
+    points.mkdir(exist_ok=True)
+    old = ["001-2020-01-01-1000", "001-2020-01-01-1100", "001-2020-01-02-1000"]
+    for name in old:
+        (points / name).mkdir()
+        (points / name / "point.json").write_text("{}")
+    result = run.backup(source=src)
+    names = sorted(p.name for p in points.iterdir())
+    assert "001-2020-01-01-1000" not in names       # same week as 01-01-1100 and 01-02-1000
+    assert result["point"] in names
+    assert run.load_record()["thinned"]
