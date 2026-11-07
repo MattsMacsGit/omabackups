@@ -93,5 +93,6 @@ class Screen:
             key = self.scr.getch()
             if key in (ord("y"), ord("Y")):
                 return True
-            if key in (ord("n"), ord("N"), 27):
+            if key in (ord("n"), ord("N"), 27):      # Esc = no
                 return False
+            # (any other key: still waiting for y or n)

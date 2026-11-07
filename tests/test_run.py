@@ -341,3 +341,21 @@ def test_every_restore_point_carries_its_changes(world, sandbox):
 def test_no_changes_list_yet_is_explained(sandbox):
     done = sandbox.run("changes")
     assert done.returncode == 1 and "back up once" in done.stderr
+
+
+def test_an_unskipped_single_file_is_reused_not_sent(world, monkeypatch):
+    srv, kid, bid, src, box = world
+    (src.root / "home/u/big.iso").write_bytes(b"I" * 60_000)
+    names = iter(f"001-2099-01-0{i}-0000" for i in range(1, 9))
+    monkeypatch.setattr(run, "point_name", lambda line, latest: next(names))
+    run.backup(source=src)
+    skips_file = paths.system_config_dir() / "skips.json"
+    paths.system_config_dir().mkdir(parents=True, exist_ok=True)
+    skips_file.write_text(json.dumps({"home": ["/u/big.iso"]}))
+    run.backup(source=src)
+    assert not (box / "current/001/home/u/big.iso").exists()
+    skips_file.write_text(json.dumps({"home": []}))
+    answers = spy_reuse(monkeypatch)
+    run.backup(source=src)
+    assert any(a["files"] == 1 and a["bytes"] == 60_000 for a in answers)
+    same(latest(box), src)

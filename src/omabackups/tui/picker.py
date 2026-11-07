@@ -16,7 +16,7 @@ from omabackups.core.errors import OmaError
 from omabackups.tui import kit
 from omabackups.tui.pick_model import Model
 
-KEYS = "↑↓ move  Enter open  ⌫ back  Space tick  h hidden  s save & quit  q quit"
+KEYS = "↑↓ move  Enter open  ⌫/Esc back  Space tick  h hidden  s save  q quit"
 TITLE = "Choose what gets backed up"
 
 
@@ -126,7 +126,7 @@ class Picker:
                 self.move(10)
             elif key in (curses.KEY_ENTER, 10, 13, curses.KEY_RIGHT):
                 self.open()
-            elif key in (curses.KEY_BACKSPACE, 127, 8, curses.KEY_LEFT):
+            elif key in (curses.KEY_BACKSPACE, 127, 8, curses.KEY_LEFT, 27):   # Esc goes back too
                 self.back()
             elif key == ord(" "):
                 child = self.current()
@@ -137,10 +137,11 @@ class Picker:
                 self.ui.say("Showing hidden files too." if self.model.show_hidden
                             else "Hidden files aren't shown (they're still backed up).")
             elif key == ord("s"):
-                if self.save():
+                # Always asked first: easy to hit by accident.
+                if self.ui.ask("Save your changes and quit?") and self.save():
                     break
-            elif key in (ord("q"), 27):
-                if not self.model.dirty or not self.ui.ask("Save your changes?") or self.save():
+            elif key == ord("q"):
+                if self.ui.ask("Quit without saving your changes?" if self.model.dirty else "Quit?"):
                     break
             elif key == curses.KEY_MOUSE:
                 self.mouse()
@@ -168,6 +169,7 @@ def load_record() -> dict:
 
 def run(user: str) -> bool:
     import os
+    os.environ.setdefault("ESCDELAY", "25")   # Esc means "back" at once, not after a second
     from pathlib import Path
     roots = None
     if os.environ.get("OMABACKUPS_SYSROOT"):      # tests: the sandbox's home and system

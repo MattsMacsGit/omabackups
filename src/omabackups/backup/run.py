@@ -122,9 +122,9 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             else:
                 known = False
                 old_patterns = record.get("skip_patterns", {}).get(part.name)
-                if reusing and old_patterns is not None:
-                    reuse.ask(gate, bid, line, part.name,
-                              reuse.unskipped(str(new), old_patterns, skip), [])
+                if reusing and old_patterns is not None and old_patterns != skip.patterns:
+                    folders, files = reuse.unskipped(str(new), old_patterns, skip)
+                    reuse.ask(gate, bid, line, part.name, folders, files)
                 work.append((part, skip, new, None))
         limit = schedule.user_settings(linked_user())["away.limit_mb"]
         check.away_limit(away, anyway, needed if known else None, limit)

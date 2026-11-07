@@ -42,7 +42,8 @@ def drive(sandbox, keys: list[bytes]) -> tuple[int, str]:
 
 
 def test_the_picker_opens_moves_and_quits(sandbox):
-    code, screen = drive(sandbox, [b"j", b"q"])
+    code, screen = drive(sandbox, [b"j", b"\x1b", b"q", b"y"])     # Esc doesn't quit; q asks
+    assert "Quit?" in screen                     # still open after Esc: q asked
     assert code == 0
     assert "Choose what gets backed up" in screen
     assert "Projects" in screen and "Videos" in screen and "Quick skips" in screen
@@ -50,8 +51,8 @@ def test_the_picker_opens_moves_and_quits(sandbox):
 
 
 def test_changes_ask_before_quitting(sandbox):
-    code, screen = drive(sandbox, [b" ", b"q", b"n"])
-    assert code == 0 and "Save your changes?" in screen and "Nothing was changed." in screen
+    code, screen = drive(sandbox, [b" ", b"q", b"y"])
+    assert code == 0 and "Quit without saving your changes?" in screen and "Nothing was changed." in screen
 
 
 def test_the_picker_needs_a_terminal(sandbox):
@@ -67,7 +68,7 @@ def test_saving_reaches_the_list_backups_read(sandbox, monkeypatch):
     monkeypatch.setenv("PKEXEC_UID", str(os.getuid()))
     from omabackups.setup import server
     server.link()                                    # root jobs need a linked user
-    code, screen = drive(sandbox, [b" ", b"s"])      # skip the top row (the biggest), save
+    code, screen = drive(sandbox, [b" ", b"s", b"y"])   # skip the top row (the biggest), save
     assert code == 0 and "Saved. The next backup follows your choices" in screen
     saved = json.loads((paths.system_config_dir() / "skips.json").read_text())
     assert saved["format"] == 2 and ".cache" in saved["home"]       # defaults kept
@@ -84,5 +85,5 @@ def test_a_skipped_folder_can_be_opened(sandbox):
     (paths.system_config_dir() / "skips.json").write_text(json.dumps(
         {"format": 2, "home": [f"/{sandbox.home.name}/Downloads"], "system": [], "boot": []}))
     # Downloads is the smallest visible folder here: move to it, open it, quit.
-    code, screen = drive(sandbox, [b"j", b"j", b"\r", b"q"])
+    code, screen = drive(sandbox, [b"j", b"j", b"\r", b"q", b"y"])
     assert code == 0 and "inside.iso" in screen and "Tick Downloads to back it up" in screen
