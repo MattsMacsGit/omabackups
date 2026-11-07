@@ -64,6 +64,9 @@ class FakeHost:
     def make_subvolume(self, path: Path) -> None:
         path.mkdir()
 
+    def snapshot(self, source: Path, target: Path) -> None:
+        shutil.copytree(source, target, symlinks=True)
+
     def delete_subvolume(self, path: Path) -> None:
         shutil.rmtree(path)
 

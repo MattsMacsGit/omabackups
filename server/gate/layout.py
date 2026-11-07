@@ -62,6 +62,10 @@ def kept(inside: Path) -> dict:
     return _read(inside / "kept.json", {"kept": [], "return_point": None})
 
 
+def write_kept(inside: Path, kept: dict) -> None:
+    _write(inside / "kept.json", kept)
+
+
 def owner(inside: Path) -> dict:
     return _read(inside / "owner.json", {})
 

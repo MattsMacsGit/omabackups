@@ -139,6 +139,9 @@ class RealHost:
     def make_subvolume(self, path: Path) -> None:
         run("btrfs", "subvolume", "create", str(path))
 
+    def snapshot(self, source: Path, target: Path) -> None:
+        run("btrfs", "subvolume", "snapshot", "-r", str(source), str(target))
+
     def delete_subvolume(self, path: Path) -> None:
         run("btrfs", "property", "set", "-ts", str(path), "ro", "false")
         run("btrfs", "subvolume", "delete", str(path))

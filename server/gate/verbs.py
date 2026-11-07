@@ -25,10 +25,14 @@ OWNER = ("owner",)
 
 
 class Call:
-    def __init__(self, kid: str, args: list[str], read_input):
+    def __init__(self, kid: str, args: list[str], reader):
         self.kid = kid
         self.args = args
-        self.read_input = read_input  # read_input(limit) -> bytes, up to end of input
+        self.reader = reader   # wire.Reader: the caller's input
+
+    def read_input(self, limit: int) -> bytes:
+        """All the input, up to its end (at most limit + 1 bytes)."""
+        return self.reader.upto(limit)
 
     def secret(self) -> bytes:
         data = self.read_input(conf.MAX_SECRET + 1)

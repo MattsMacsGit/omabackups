@@ -20,9 +20,13 @@ import syslog
 
 import admin
 import conf
+import stream
 import verbs
+import verbs_data
 import wire
 from registry import Refused
+
+VERBS = {**verbs.VERBS, **verbs_data.VERBS}
 
 
 def log(message: str) -> None:
@@ -63,30 +67,23 @@ def serve(sock: socket.socket) -> int:
         kid, words = str(request.get("key", "")), shlex.split(str(request.get("cmd", "")))
     except (EOFError, ValueError) as exc:
         return answer(2, err=f"bad request ({exc})")
-    if not words or words[0] not in verbs.VERBS:
+    if not words or words[0] not in VERBS:
         return answer(2, err=f"unknown request: {words[0] if words else '(nothing)'}")
 
-    buffered = [early]
-
-    def read_input(limit: int) -> bytes:
-        data = b"".join(buffered)
-        buffered.clear()
-        while len(data) <= limit:
-            part = sock.recv(wire.CHUNK)
-            if not part:
-                break
-            data += part
-        return data[:limit + 1]
-
+    reader = wire.Reader(sock, early)
     verb = words[0]
     try:
-        result = verbs.VERBS[verb](verbs.Call(kid, words[1:], read_input))
+        result = VERBS[verb](verbs.Call(kid, words[1:], reader))
     except Refused as exc:
         log(f"refused {verb} for key {kid[:16]}: {exc}")
         return answer(1, err=str(exc))
     except Exception as exc:  # noqa: BLE001 - always answer, never hang the client
         log(f"error in {verb} for key {kid[:16]}: {exc!r}")
         return answer(1, err=f"{verb} failed on the server: {exc}")
+    if isinstance(result, stream.Stream):
+        code = stream.run(result, sock, reader.rest())
+        log(f"{verb} {' '.join(words[1:4])} ended with {code} for key {kid[:16]}")
+        return code
     if verb not in ("version", "status", "points", "space", "hold"):
         log(f"{verb} done for key {kid[:16]}")
     return answer(0, out=(json.dumps(result, sort_keys=True) + "\n").encode())

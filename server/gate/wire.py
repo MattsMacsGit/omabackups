@@ -96,3 +96,52 @@ def relay(sock: socket.socket, key_id: str, command: str, stdin=None, stdout=Non
             return struct.unpack(">i", data)[0]
     stderr.write(b"omabackups-gate: the connection ended early\n")
     return 255
+
+
+class Reader:
+    """The caller's input: bytes that came with the request, then the socket."""
+
+    def __init__(self, sock: socket.socket, early: bytes):
+        self.sock = sock
+        self.buf = early
+
+    def read(self, n: int) -> bytes:
+        """Up to n bytes; b"" once the caller has finished sending."""
+        if not self.buf:
+            return self.sock.recv(min(n, CHUNK))
+        out, self.buf = self.buf[:n], self.buf[n:]
+        return out
+
+    def exactly(self, n: int) -> bytes:
+        parts = []
+        while n:
+            part = self.read(n)
+            if not part:
+                raise EOFError("input ended early")
+            parts.append(part)
+            n -= len(part)
+        return b"".join(parts)
+
+    def line(self, limit: int) -> bytes:
+        out = b""
+        while not out.endswith(b"\n"):
+            part = self.read(1)
+            if not part or len(out) > limit:
+                break
+            out += part
+        return out
+
+    def upto(self, limit: int) -> bytes:
+        """Everything until the end, but never more than limit + 1 bytes."""
+        data = b""
+        while len(data) <= limit:
+            part = self.read(CHUNK)
+            if not part:
+                break
+            data += part
+        return data[:limit + 1]
+
+    def rest(self) -> bytes:
+        """Hand back what's buffered (for a program that takes over the socket)."""
+        out, self.buf = self.buf, b""
+        return out
