@@ -23,7 +23,7 @@ def world(sandbox, tmp_path, monkeypatch):
     """A linked computer with its backup set up on a fake server."""
     srv = FakeServer(tmp_path / "server")
     srv.init()
-    monkeypatch.setenv("PKEXEC_UID", "1000")
+    monkeypatch.setenv("PKEXEC_UID", str(os.getuid()))
     pub = setup_server.link()
     kid = json.loads(srv.gate("admin", "add-computer", "a" * 32, "c", input=pub.encode()).stdout)["key"]
     for name, value in {**srv.env, "OMABACKUPS_TEST_GATE": f"{GATE}:{kid}", "OMABACKUPS_TEST_KEY": kid,
