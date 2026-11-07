@@ -49,14 +49,21 @@ def prepare(device: str) -> str:
     _run("wipefs", "-a", "-q", device)
     _run("sfdisk", "--quiet", "--wipe", "always", "--wipe-partitions", "always", device,
          data="label: gpt\nsize=+, type=linux, name=OmaBackups\n")
-    subprocess.run(["udevadm", "settle"], capture_output=True)
-    part = json.loads(_run("lsblk", "-J", "-o", "PATH,PARTUUID", device))["blockdevices"][0]["children"][0]
-    stable = Path("/dev/disk/by-partuuid") / part["partuuid"]
-    for _ in range(20):
-        if stable.exists():
-            return str(stable)
+    # The new partition takes a moment to appear (the kernel re-reads the
+    # disk, then udev makes its names): wait for it rather than look once.
+    for _ in range(30):
+        subprocess.run(["udevadm", "settle", "--timeout=5"], capture_output=True)
+        node = json.loads(_run("lsblk", "-J", "-o", "PATH,PARTUUID", device))["blockdevices"][0]
+        part = (node.get("children") or [{}])[0]
+        if part.get("partuuid"):
+            stable = Path("/dev/disk/by-partuuid") / part["partuuid"]
+            if stable.exists():
+                return str(stable)
+        subprocess.run(["partx", "-u", device], capture_output=True)
         time.sleep(0.5)
-    return part["path"]
+    raise OmaError("The disk was erased, but its new partition didn't appear.",
+                   "Unplug the disk, plug it back in, and run setup disk again.",
+                   device, code="disk-failed")
 
 
 def _gate_admin(*args: str, data: str = "") -> None:

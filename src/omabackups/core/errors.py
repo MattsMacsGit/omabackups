@@ -30,9 +30,9 @@ class OmaError(Exception):
 def unexpected(exc: BaseException) -> OmaError:
     """Wrap a bug (an error we didn't plan for) so it still reads properly."""
     return OmaError(
-        "Something went wrong inside OmaBackups.",
-        "Nothing was changed by this step. If it happens again, please report "
-        "it with the details below.",
+        "Something went wrong inside OmaBackups, and this step stopped part-way.",
+        "Running it again is the first thing to try. If it happens again, please "
+        "report it with the details below.",
         "".join(traceback.format_exception(exc)).strip(),
         code="unexpected",
     )
