@@ -49,8 +49,18 @@ def main() -> int:
                      f"--rsync-path=fetch {bid} {point} {part.name}",
                      f"{ssh.target(server['address'])}:x/", f"{local}/"],
                     capture_output=True, text=True)
-                # The top folder's own date may differ (it's a snapshot); nothing else should.
-                diffs = [x for x in done.stdout.splitlines() if x and x not in (".d..t...... ./",)]
+                # The top folder's own date may differ (it's a snapshot), and so may
+                # the empty placeholder a snapshot shows for another subvolume
+                # inside it (btrfs gives those inode 2 and a new date every time).
+                def placeholder(line: str) -> bool:
+                    if not line.startswith(".d..t...... "):
+                        return False
+                    try:
+                        return os.lstat(local / line[12:].rstrip("/")).st_ino == 2
+                    except OSError:
+                        return False
+                diffs = [x for x in done.stdout.splitlines()
+                         if x and x != ".d..t...... ./" and not placeholder(x)]
                 if done.returncode not in (0, 24) or diffs:
                     failures += 1
                     sys.stderr.write(f"  FAIL {part.name}: {len(diffs)} differences "
