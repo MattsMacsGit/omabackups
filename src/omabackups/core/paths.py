@@ -97,6 +97,11 @@ def keys_dir() -> Path:
     return system_state_dir() / "keys"
 
 
+def public_key_file() -> Path:
+    """A readable copy of this computer's SSH public key (not secret)."""
+    return system_config_dir() / "computer.pub"
+
+
 def known_hosts_file() -> Path:
     return system_state_dir() / "known_hosts"
 

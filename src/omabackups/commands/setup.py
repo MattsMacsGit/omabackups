@@ -5,9 +5,11 @@ the command line (anyone on the computer could read them there).
 """
 
 import getpass
+import json
 import os
 
-from omabackups.core import flow
+
+from omabackups.core import flow, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.events import Events
 from omabackups.setup import server
@@ -29,6 +31,8 @@ def add(sub) -> None:
     s.add_argument("--login", help="your user name on the server")
     s.add_argument("--folder", help="the folder on the server that holds the backup store")
     s.add_argument("--size", type=int, help="your backup's size, in GB")
+    s.add_argument("--update", action="store_true",
+                   help="update OmaBackups on the server you already back up to")
     s.set_defaults(run=run_server)
 
 
@@ -62,9 +66,32 @@ def cipher_name(cipher: str) -> str:
     return cipher
 
 
+def run_update(args, events: Events) -> int:
+    """Update the gatekeeper on the server this computer already uses (keeps the backup)."""
+    try:
+        address = json.loads(paths.server_file().read_text())["address"]
+    except (OSError, ValueError, KeyError):
+        raise OmaError("This computer doesn't back up to a server yet.",
+                       "Set one up first: omabackups setup server", code="not-set-up") from None
+    events.message("Update OmaBackups on your backup server. Your backup and its restore points\n"
+                   "are kept. This asks for your login on the server and its sudo password.")
+    login = args.login or _ask("Your user name on the server", os.environ.get("USER", ""))
+    session = server.Login(address, login)
+    try:
+        installed = server.install(session, "-", server.public_key())
+    finally:
+        session.close()
+    events.result({"gate": installed.get("gate")},
+                  f"OmaBackups on your backup server is up to date (gatekeeper version {installed.get('gate')}).")
+    return 0
+
+
 def run_server(args, events: Events) -> int:
+    if args.update:
+        return run_update(args, events)
     if flow.where() is not flow.Step.NOT_SET_UP:
         raise OmaError("OmaBackups is already set up on this computer.",
+                       "To update OmaBackups on the server: omabackups setup server --update. "
                        "To use a different backup location, Start over from Settings first.",
                        code="already-set-up")
     events.message("Set up backups to a backup server.\n"

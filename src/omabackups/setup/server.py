@@ -42,6 +42,15 @@ def link() -> str:
                        done.stdout.strip() or f"exit {done.returncode}", code="link-failed") from None
 
 
+def public_key() -> str:
+    """This computer's SSH public key (readable by everyone, made by link)."""
+    try:
+        text = paths.public_key_file().read_text().split()
+        return f"{text[0]} {text[1]}"
+    except (OSError, IndexError):
+        return link()   # not there yet: link makes or finds it (as root)
+
+
 def label() -> str:
     host = re.sub(r"[^A-Za-z0-9._-]", "-", socket.gethostname())[:40] or "computer"
     return f"{host} ({ids.short(ids.system_id())})"

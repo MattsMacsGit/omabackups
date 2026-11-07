@@ -108,7 +108,7 @@ def test_the_gatekeeper_bundle_runs(sandbox, tmp_path):
     import sys
     gate = bundle.gate_file()
     done = subprocess.run([sys.executable, str(gate), "version"], capture_output=True, text=True)
-    assert json.loads(done.stdout) == {"gate": 1, "contract": 1}
+    assert json.loads(done.stdout) == {"gate": 2, "contract": 1}
     assert len(bundle.sha256(gate)) == 64
 
 
@@ -164,3 +164,12 @@ def test_the_cipher_is_named_right():
     from omabackups.commands.setup import cipher_name
     assert cipher_name("xchacha12,aes-adiantum-plain64").startswith("Adiantum")
     assert cipher_name("aes-xts-plain64") == "AES"
+
+
+def test_an_outdated_gatekeeper_says_how_to_update(monkeypatch):
+    from omabackups.where.server import Gate
+    monkeypatch.setattr(Gate, "call", lambda self, verb, *a, **k: {"gate": 1, "contract": 1})
+    with pytest.raises(OmaError) as caught:
+        Gate("srv").check_version()
+    assert caught.value.code == "gate-version"
+    assert "setup server --update" in caught.value.todo

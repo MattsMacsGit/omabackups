@@ -1,7 +1,7 @@
 """Install the gatekeeper on this server (run once as root by `omabackups
 setup server`, through the server login's sudo; D20: no curl, no sudoers).
 
-  gate.pyz install STORE SYSTEM LABEL SHA256 PUBKEY-FILE
+  gate.pyz install STORE SYSTEM LABEL SHA256 PUBKEY-FILE     (STORE "-": update, keep the store)
 
 (Run with a terminal attached, so sudo can ask for its password.)
 
@@ -173,7 +173,10 @@ def main(argv: list[str]) -> int:
         install_programs()
         make_account()
         place_gatekeeper(me)
-        admin.init(store)
+        if store != "-":          # "-": an update; keep the store as it is
+            admin.init(store)
+        elif not conf.SETTINGS.exists():
+            raise Refused("there's no backup store on this server to keep; set it up first")
         with registry.changing() as data:
             kid = registry.add_key(data, pub, "computer", label, system=system)
         os.chown(conf.AUTHORIZED_KEYS, 0, 0)

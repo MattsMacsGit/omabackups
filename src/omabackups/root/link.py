@@ -57,6 +57,7 @@ def link(user: pwd.struct_passwd) -> dict:
     if not os.environ.get("OMABACKUPS_SYSROOT"):   # tests have no systemd
         subprocess.run(["systemctl", "enable", "--now", "omabackups-backup.timer"], capture_output=True)
     paths.system_config_dir().mkdir(parents=True, exist_ok=True)
+    write_atomic(paths.public_key_file(), (pub + "\n").encode(), 0o644)
     write_atomic(paths.linked_user_file(),
                  (json.dumps({"user": user.pw_name, "uid": user.pw_uid}) + "\n").encode(), 0o644)
     return {"user": user.pw_name, "public_key": pub}

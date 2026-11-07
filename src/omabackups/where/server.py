@@ -15,6 +15,7 @@ from omabackups.core.errors import OmaError
 from omabackups.where import ssh
 
 GATE_CONTRACT = 1
+GATE_NEEDED = 2     # the oldest gatekeeper this omabackups works with
 
 
 class Gate:
@@ -75,8 +76,9 @@ class Gate:
 
     def check_version(self) -> dict:
         answer = self.call("version")
-        if answer.get("contract") != GATE_CONTRACT:
-            raise OmaError("OmaBackups on your backup server is a different version.",
-                           "Run setup server again to update it.",
+        if answer.get("contract") != GATE_CONTRACT or answer.get("gate", 0) < GATE_NEEDED:
+            raise OmaError("OmaBackups on your backup server needs updating.",
+                           "Run: omabackups setup server --update (it asks for your login on "
+                           "the server and its sudo password, once each). Your backup is kept.",
                            json.dumps(answer), code="gate-version")
         return answer
