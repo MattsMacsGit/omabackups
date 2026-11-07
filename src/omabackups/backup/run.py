@@ -94,6 +94,8 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
     resend = health.resend_needed(verdict, record)    # damaged files go again, all of them
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     keeper = HoldKeeper(gate, bid, hold, logger)        # still here, however long a part takes
+    if server.get("migrating"):
+        line = handover(gate, server, logger)
     sender = Sender(gate, bid, line, compress=away)     # D25: zstd only when away
     run = datetime.now().strftime("%Y%m%dT%H%M%S")
     made, since, how, fingerprints, work, opened = {}, dict(record.get("since", {})), {}, {}, [], {}
@@ -213,6 +215,23 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
             logger.warning("lock after backup: %s", exc.details)
     logger.info("backup %s done (%s): %s", name, "away" if away else "home", how)
     return {"point": name, "how": how, "away": away}
+
+
+def handover(gate, server: dict, logger) -> str:
+    """D22: a migrated computer's first backup takes the backup over. A new
+    line starts from the restore point Migrate came from (only changes are
+    stored); the old one is read-only now, and that point is the Return point.
+    Recorded only once the server said yes."""
+    point = server.get("from_point")
+    if not point:
+        raise OmaError("Migrate isn't finished on this computer yet.",
+                       "Finish it first (the panel shows where it's up to).", code="migrate-unfinished")
+    answer = gate.call("handover", server["backup"], point)
+    server = {**server, "line": answer["line"], "migrating": False,
+              "return_point": answer["return_point"], "handed_over": int(time.time())}
+    write_atomic(paths.server_file(), (json.dumps(server, indent=2) + "\n").encode(), 0o644)
+    logger.info("handover: this computer owns the backup now, line %s from %s", answer["line"], point)
+    return answer["line"]
 
 
 class HoldKeeper:

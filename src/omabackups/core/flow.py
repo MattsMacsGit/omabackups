@@ -32,6 +32,9 @@ def where() -> Step:
         if not migrate.get("files_restored"):
             return Step.RESTORE_FILES
 
+    if migrate is None and _joined():
+        return Step.MIGRATING            # joined a backup; Migrate not finished yet
+
     setup = state.read(SETUP)
     if setup is None:
         # After a finished Migrate, the first backup (and handover) is next.
@@ -39,6 +42,16 @@ def where() -> Step:
     if not setup.get("first_backup") and not _a_backup_finished():
         return Step.SETTING_UP
     return Step.EVERYDAY
+
+
+def _joined() -> bool:
+    """The root side's server file says this computer joined a backup to migrate."""
+    import json
+    from omabackups.core import paths
+    try:
+        return bool(json.loads(paths.server_file().read_text()).get("migrating"))
+    except (OSError, ValueError):
+        return False
 
 
 def _a_backup_finished() -> bool:

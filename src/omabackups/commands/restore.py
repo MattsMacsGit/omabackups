@@ -58,7 +58,12 @@ def run_restore(args, events: Events) -> int:
         rootjob.run("restore-files-stop", {})
         events.result({"stopped": True}, "Stopped. Restore my files carries on where it left off next time.")
         return 0
-    answer = rootjob.run("restore-files-start", {"point": args.point})
+    request = {"point": args.point}
+    from omabackups.core import flow, state
+    migrated = state.read(flow.MIGRATE) or {}
+    if migrated.get("point") == args.point:     # after Migrate: its old user name, its picks
+        request.update(from_user=migrated.get("from_user") or "", only=migrated.get("files") or None)
+    answer = rootjob.run("restore-files-start", request)
     events.result(answer, "Bringing your files back. A file that's newer here is never "
                           "overwritten. The panel shows how it's going.")
     return 0

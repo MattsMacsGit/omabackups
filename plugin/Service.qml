@@ -194,6 +194,12 @@ Item {
     terminal("omabackups setup server " + shellWord(address) + " --login " + shellWord(login))
   }
   function setupDisk() { terminal("omabackups setup disk") }
+  // Migrate (6.1 F) and Run Migrate again (D38), in a terminal window.
+  function migrate(address, login) {
+    terminal("omabackups migrate " + shellWord(address) + " --login " + shellWord(login))
+  }
+  function migrateContinue() { terminal("omabackups migrate") }
+  function restartNow() { Quickshell.execDetached(["systemctl", "reboot"]) }
   function installPackage() { terminal("omarchy-pkg-aur-add omabackups") }
 
   // One word for the shell, whatever was typed (never interpolated raw).

@@ -17,7 +17,7 @@ Column {
   readonly property var h: service && service.header ? service.header : ({})
   readonly property var targets: {
     if (step === "kept") {
-      var out = [thinningSwitch]
+      var out = [thinningSwitch, runAgain]
       for (var i = 0; i < keptRepeater.count; i++) out.push(keptRepeater.itemAt(i))
       return out
     }
@@ -44,6 +44,15 @@ Column {
         + "up every hour). When your backup is full, backups stop and say so: turn this back on, or "
         + "delete restore points you don't need."
     onToggled: page.service.setSetting("thinning.on", !checked)
+  }
+  NavRow {
+    id: runAgain
+    visible: page.step === "kept"
+    title: "Run Migrate again"
+    explainer: "Brings back the migration chooser, so you can pick any preferences you left behind: "
+               + "you can still recover them here."
+    hasCursorHere: page.cursorOn(this)
+    onActivated: page.service.migrateContinue()
   }
   PanelSectionHeader { visible: page.step === "kept"; text: "Select restore points to keep" }
   Prose {

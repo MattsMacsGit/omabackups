@@ -6,3 +6,5 @@ Documentation=https://github.com/MattsMacsGit/omabackups
 Type=oneshot
 ExecStart=/usr/bin/omabackups root-job %i
 PrivateTmp=yes
+# Migrate brings settings back inside a root job: it can take a while.
+TimeoutStartSec=infinity

@@ -14,7 +14,7 @@ the whole system, and move your setup onto a fresh install.
 4. [Set up backups to a backup disk](#set-up-backups-to-a-backup-disk)
 5. [Backing up](#backing-up)
 6. [Restore points](#restore-points) (and [getting things back](RESTORING.md))
-7. [Your changes to Omarchy](#your-changes-to-omarchy)
+7. [Your changes to Omarchy](#your-changes-to-omarchy) (and [Migrate](MIGRATE.md))
 8. [Start over](#start-over)
 9. [The omabackups command](#the-omabackups-command) ([its own page](COMMANDS.md))
 

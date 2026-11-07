@@ -17,6 +17,9 @@ _LONG = {
     "--numeric-ids", "--inplace", "--stats", "--ignore-errors", "--force",
     "--compress-choice=zstd", "--size-only", "--checksum-choice=xxh128",
 }
+# A list of files sent over rsync's own connection (Migrate brings back only
+# the ticked settings): only meaningful inside the root the gatekeeper set.
+_SENDER_ONLY = {"--files-from=-", "--from0"}
 PARTIAL_DIR = ".rsync-partial"
 
 
@@ -35,7 +38,7 @@ def check(args: list[str], sender: bool) -> list[str]:
     i = 0
     while i < len(body):
         arg = body[i]
-        if _SHORT.match(arg) or arg in _LONG:
+        if _SHORT.match(arg) or arg in _LONG or (sender and arg in _SENDER_ONLY):
             out.append(arg)
         elif arg == "--partial-dir" and i + 1 < len(body) and body[i + 1] == PARTIAL_DIR:
             out += [arg, PARTIAL_DIR]

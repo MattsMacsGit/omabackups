@@ -21,11 +21,14 @@ Panel {
 
   property string page: ""               // "" = the page for where the flow is
   property int cursorIndex: 0
+  property bool migrateMode: false         // the Where and server screens, for Migrate
   property bool cursorActive: false
 
   readonly property string defaultPage: !svc.loaded ? "loading"
                                        : !svc.installed ? "missing"
                                        : svc.flow === "not-set-up" ? "first"
+                                       : svc.flow === "migrating" ? "migrating"
+                                       : svc.flow === "restore-files" ? "finish"
                                        : svc.flow === "setting-up" ? "firstBackup"
                                        : "everyday"
   readonly property string shown: page !== "" ? page : defaultPage
@@ -35,7 +38,8 @@ Panel {
   readonly property Item pageItem: ["missing", "first", "where", "server", "disk", "firstBackup"].indexOf(shown) >= 0
                                    ? pages.start || null : shown === "settings" ? pages.settings || null
                                    : ["kept", "yourBackup"].indexOf(shown) >= 0 ? pages.details || null
-                                   : shown === "everyday" ? pages.everyday || null : null
+                                   : shown === "everyday" ? pages.everyday || null
+                                   : ["migrating", "finish"].indexOf(shown) >= 0 ? pages.migrate || null : null
   // The header's own button (gear or back) comes first, where it sits on screen.
   readonly property bool heroButtonShown: shown === "everyday" || page !== ""
   readonly property var targets: (heroButtonShown ? [heroTarget] : []).concat(
@@ -79,9 +83,11 @@ Panel {
     else if (shown === "where") go("", true)
   }
   function titleFor(name) {
+    if (migrateMode && ["where", "server", "disk"].indexOf(name) >= 0) return "Migrate"
     return ({ settings: "Settings", kept: "Restore points",
               yourBackup: "Your backup", where: "Set up backups", server: "Set up backups",
-              disk: "Set up backups", firstBackup: "Set up backups" })[name] || "OmaBackups"
+              disk: "Set up backups", firstBackup: "Set up backups", migrating: "Migrate",
+              finish: "Finish Migrate" })[name] || "OmaBackups"
   }
 
   // A finished setup in the terminal moves the panel on by itself.
@@ -128,7 +134,7 @@ Panel {
       id: keys
       readonly property Item flick: flick
       readonly property var pages: ({ start: startPage, everyday: everydayPage,
-                                      settings: settingsPage, details: detailsPage })
+                                      settings: settingsPage, details: detailsPage, migrate: migratePage })
       anchors.fill: parent
       implicitHeight: column.implicitHeight
       onMoveRequested: function(dx, dy) {
@@ -209,6 +215,8 @@ Panel {
                      service: svc; panel: root }
           SettingsPage { id: settingsPage; visible: root.pageItem === settingsPage; width: parent.width
                          service: svc; panel: root }
+          MigratePage { id: migratePage; visible: root.pageItem === migratePage; width: parent.width
+                        service: svc; panel: root; step: root.shown }
           Details { id: detailsPage; visible: root.pageItem === detailsPage; width: parent.width
                     service: svc; panel: root; step: root.shown }
         }

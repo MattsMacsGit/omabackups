@@ -14,6 +14,7 @@ and every path stays inside the part: no "..", no following links out.
 """
 
 import json
+import re
 import os
 import shutil
 import stat
@@ -30,6 +31,7 @@ from registry import Refused
 from stream import Stream
 
 PARTS = ("system", "home", "boot")
+USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 OWNER = ("owner",)
 MAX_OPS = 16 << 20
 
@@ -89,12 +91,14 @@ def v_fetch(call):
         raise Refused("wrong number of arguments")
     bid, point, part = call.args[:3]
     registry.the_backup(registry.load(), bid, call.kid, conf.ROLES)
-    if part not in PARTS or not conf.POINT.match(point):
+    part, _, user = part.partition("/")        # home/USER: one user's folder (Migrate)
+    if part not in PARTS or not conf.POINT.match(point) or (user and (
+            part != "home" or not USER.match(user))):
         raise Refused("that is not a restore point and part")
     if not host().is_mounted(bid):
         raise Refused("this backup is locked (unlock it first)")
-    root = mountpoint(bid) / "points" / point / part
-    if not root.is_dir():
+    root = mountpoint(bid) / "points" / point / part / user
+    if not root.is_dir() or root.is_symlink():
         raise Refused("no such restore point")
     options = rsync_args.check(call.args[3:], sender=True)
     return Stream(["rsync", *options, ".", str(root) + "/"], cwd=str(root))

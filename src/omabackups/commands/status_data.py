@@ -8,6 +8,7 @@ real problem's title, yellow for a warning, blue for something waiting.
 
 import json
 import re
+import time
 from datetime import datetime
 
 from omabackups import __version__
@@ -101,6 +102,25 @@ def _browsing() -> dict | None:
     return browse.still_open(browse.current())
 
 
+def _migrate() -> dict | None:
+    """Migrate's own state (6.1 F); once Restore my files has finished for its
+    restore point, that step is done (written here, on the user's side)."""
+    mine = state.read(flow.MIGRATE)
+    if not mine:
+        return None
+    restored = _read(paths.system_run_dir() / "restore.json")
+    if not mine.get("files_restored") and restored.get("done") and restored.get("point") == mine.get("point"):
+        mine = {**mine, "files_restored": True}
+        state.write(flow.MIGRATE, mine)
+    if mine.get("restart"):
+        try:
+            booted = time.time() - float(open("/proc/uptime").read().split()[0])
+        except (OSError, ValueError):
+            booted = time.time()
+        mine = {**mine, "restart_needed": booted < mine.get("at", 0)}
+    return mine
+
+
 def build() -> dict:
     step = flow.where()
     system = ids.system_id()
@@ -112,6 +132,8 @@ def build() -> dict:
     except Exception:  # noqa: BLE001 - a bad settings file shows as defaults here; settings says why
         settings = config.defaults()
     mine = state.read("panel") or {}
+    migrate = _migrate()
+    step = flow.where()                 # again: finishing Migrate can move it on
     pts = points(record)
     return {
         "flow": step.value, "system": {"id": system, "short": ids.short(system)},
@@ -122,5 +144,6 @@ def build() -> dict:
         "lines": lines(step, settings, record, now, mine),
         "rescue_usb": mine.get("rescue_usb"), "rescue_later": bool(mine.get("rescue_later")),
         "browsing": _browsing(),      # D37
+        "migrate": migrate,
         "restoring": _read(paths.system_run_dir() / "restore.json") or None,
     }

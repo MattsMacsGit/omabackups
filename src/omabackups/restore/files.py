@@ -8,6 +8,7 @@ State: /run/omabackups/restore.json (point, percent, running, done, error).
 """
 
 import json
+import os
 import pwd
 import re
 import signal
@@ -25,6 +26,14 @@ from omabackups.where import location
 
 UNIT = "omabackups-restore"
 PERCENT = re.compile(rb"\s(\d{1,3})%\s")
+
+
+USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+
+
+def plan_file() -> Path:
+    """What Migrate asked for (the old user name, just the picked folders)."""
+    return paths.system_run_dir() / "restore-plan.json"
 
 
 def state_file() -> Path:
@@ -46,7 +55,15 @@ def start_job(request: dict) -> dict:
     point = str(request.get("point", ""))
     if not run.thinning.NAME.match(point):
         raise OmaError("That isn't a restore point.", code="bad-request")
+    from_user = str(request.get("from_user") or "")
+    if from_user and not USER.match(from_user):
+        raise OmaError("That user name can't be used.", code="bad-request")
+    only = request.get("only")
+    if only is not None:
+        only = [str(p).removeprefix("~/") for p in only if isinstance(p, str)]
+        only = [p for p in only if p and ".." not in p.split("/") and not p.startswith("/")]
     stop_job({})
+    write_atomic(plan_file(), json.dumps({"point": point, "from_user": from_user, "only": only}).encode(), 0o600)
     subprocess.run(["systemd-run", f"--unit={UNIT}", "--collect", "--quiet",
                     "--property=KillMode=mixed", sys.executable, "-m", "omabackups",
                     "restore-run", point, run.linked_user()], check=False, capture_output=True)
@@ -58,17 +75,26 @@ def stop_job(request: dict) -> dict:
     return {"stopped": True}
 
 
-def command(gate, bid: str, point: str, user: str, home: Path) -> list[str]:
-    """rsync from the restore point's copy of this user's home into it.
-    --update: a file that's newer here is never overwritten."""
-    return ["rsync", "-aHAX", "--update", "--info=progress2", "--no-inc-recursive",
-            "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} home",
-            f"--filter=+ /{user}/", "--filter=- /*",
-            f"{gate.rsync_target()}:home/", f"{home.parent}/"]
+def command(gate, bid: str, point: str, user: str, home: Path, from_user: str = "",
+            only: list[str] | None = None) -> list[str]:
+    """rsync from the restore point's copy of a home folder into this user's.
+    --update: a file that's newer here is never overwritten. `from_user`: the
+    name it had there (1.x lesson: never assume it's the same on a new install);
+    `only`: just these (relative paths), as Migrate's "Your files" picks them."""
+    owner = []
+    if os.geteuid() == 0:                 # as root: the files become this user's
+        entry = pwd.getpwnam(user)
+        owner = [f"--chown={entry.pw_uid}:{entry.pw_gid}", "--numeric-ids"]
+    return ["rsync", "-aHAX", "--update", "--info=progress2", "--no-inc-recursive", *owner,
+            *(["--files-from=-", "--from0"] if only is not None else []),
+            "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} home/{from_user or user}",
+            f"{gate.rsync_target()}:home/", f"{home}/"]
 
 
-def restore(point: str, user: str, home: Path | None = None, stopping=lambda: False) -> dict:
-    """Bring `user`'s home back from `point`. Returns the final state."""
+def restore(point: str, user: str, home: Path | None = None, stopping=lambda: False,
+            from_user: str = "", only: list[str] | None = None) -> dict:
+    """Bring `user`'s home back from `point` (from `from_user`'s folder there,
+    or just the paths in `only`). Returns the final state."""
     logger = log.get("restore")
     home = home or Path(pwd.getpwnam(user).pw_dir)
     state = {"point": point, "user": user, "percent": 0, "running": True, "since": int(time.time())}
@@ -80,8 +106,12 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     keeper = run.HoldKeeper(gate, bid, hold, logger)
     try:
-        proc = subprocess.Popen(command(gate, bid, point, user, home), stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, env=gate.rsync_env())
+        proc = subprocess.Popen(command(gate, bid, point, user, home, from_user, only),
+                                stdin=subprocess.PIPE if only is not None else subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=gate.rsync_env())
+        if only is not None:
+            proc.stdin.write(b"\0".join(p.encode() for p in only) + b"\0")
+            proc.stdin.close()
         buffer = b""
         while chunk := proc.stdout.read1(4096):
             buffer = (buffer + chunk)[-400:]
@@ -119,7 +149,14 @@ def serve(point: str, user: str) -> int:
     stop = {"now": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
     try:
-        state = restore(point, user, stopping=lambda: stop["now"])
+        asked = json.loads(plan_file().read_text())
+    except (OSError, ValueError):
+        asked = {}
+    if asked.get("point") != point:
+        asked = {}
+    try:
+        state = restore(point, user, stopping=lambda: stop["now"],
+                        from_user=asked.get("from_user") or "", only=asked.get("only"))
     except OmaError as exc:
         _say({"point": point, "user": user, "running": False, "error": exc.as_dict(),
               "since": int(time.time())})
