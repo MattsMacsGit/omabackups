@@ -48,15 +48,22 @@ def size_of(plan: Plan, snapshot: str) -> int:
     return total
 
 
-def folder_size(path: str) -> int:
-    total = 0
+def folder_changes(path: str, before: dict) -> tuple[int, dict]:
+    """For a part copied as it is (/boot): about how much rsync will send,
+    from the list of its files (size, date) kept after the last backup."""
+    total, now = 0, {}
     for root, _dirs, files in os.walk(path):
         for name in files:
+            full = os.path.join(root, name)
             try:
-                total += os.lstat(os.path.join(root, name)).st_size
+                info = os.lstat(full)
             except OSError:
-                pass
-    return total
+                continue
+            rel = os.path.relpath(full, path)
+            now[rel] = [info.st_size, info.st_mtime_ns]
+            if before.get(rel) != now[rel]:
+                total += info.st_size
+    return total, now
 
 
 def away_limit(away: bool, anyway: bool, size: int | None, limit_mb: int) -> None:

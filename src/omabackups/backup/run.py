@@ -94,13 +94,15 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
     try:
         # 1. Check first: snapshots and change lists for every part, and the size.
         progress("check")
-        needed, known, left_out = 0, True, []
+        needed, known, left_out, manifests = 0, True, [], {}
         for part in (source.parts() if source else parts()):
             skip = skips.for_part(part.name)
             fingerprints[part.name] = skip.fingerprint()
             if not part.btrfs:
                 work.append((part, skip, None, None))
-                needed += check.folder_size(part.mount)
+                size, manifests[part.name] = check.folder_changes(
+                    part.mount, record.get("manifests", {}).get(part.name, {}))
+                needed += size
                 continue
             snaps = stack.enter_context(source.snapshots(part) if source else Snapshots(part.device))
             opened[part.name] = snaps
@@ -153,7 +155,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         since.update(made)
         save_record({"finished": True, "since": since, "skips": fingerprints, "last_point": name,
                      "last_finished": int(time.time()), "how": how, "thinned": thinned,
-                     "away": away, "not_included": left_out,
+                     "away": away, "not_included": left_out, "manifests": manifests,
                      "resent_for_pass": verdict.get("pass_started") if resend
                      else record.get("resent_for_pass")})
         for part_name, snap_name in old.items():

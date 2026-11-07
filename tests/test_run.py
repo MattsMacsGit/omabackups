@@ -244,3 +244,12 @@ def test_damage_found_means_one_full_checksum_backup(world, monkeypatch):
     assert second["how"]["home"] == "full check, every file's contents"
     third = run.backup(source=src)
     assert third["how"]["home"].startswith("changes (")      # answered once, then quick again
+
+
+def test_boot_counts_only_what_changed(world):
+    srv, kid, bid, src, box = world
+    from omabackups.backup import check
+    size, manifest = check.folder_changes(str(src.root / "boot"), {})
+    assert size == len("kernel")
+    again, _ = check.folder_changes(str(src.root / "boot"), manifest)
+    assert again == 0

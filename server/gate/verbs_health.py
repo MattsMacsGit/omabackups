@@ -40,7 +40,10 @@ def v_health(call):
 
 
 def _shown(record: dict) -> dict:
-    return {"state": health.verdict(record), "running": bool(record.get("running")),
+    state = health.verdict(record)
+    if state == "healthy" and not record.get("full_pass_at") and not record.get("done_bytes"):
+        state = "unknown"     # nothing has been read yet: never call that healthy
+    return {"state": state, "running": bool(record.get("running")),
             "done_bytes": record.get("done_bytes", 0), "checked_at": record.get("checked_at"),
             "full_pass_at": record.get("full_pass_at"), "pass_started": record.get("pass_started"),
             "damaged": len(record.get("files") or []), "files": (record.get("files") or [])[:20],
