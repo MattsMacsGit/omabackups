@@ -92,3 +92,20 @@ def test_changes_that_are_gone_again_are_left_out(tmp_path):
                        "new", str(tmp_path), SKIPS)
     assert out.files == []
     assert not os.path.exists(tmp_path / "vanished")
+
+
+def test_many_new_files_are_quick():
+    """Stage 8 rehearsal: 23,000 restored files sat on 'Checking what changed'
+    for minutes; every temporary-name rename searched every change so far."""
+    import time
+    rows = ["mkdir           ./new/o200-1-0", "rename          ./new/o200-1-0   dest=./new/Projects"]
+    for n in range(25000):
+        rows += [f"mkfile          ./new/o{300 + n}-1-0",
+                 f"rename          ./new/o{300 + n}-1-0   dest=./new/Projects/f{n}.txt",
+                 f"utimes          ./new/Projects/f{n}.txt"]
+    rows.append("rename          ./new/Projects   dest=./new/Work")      # a real folder move, after
+    started = time.time()
+    changed, ops, extents, new = changes.parse(dump(*rows), "new")
+    assert time.time() - started < 5
+    assert "Work/f24999.txt" in changed and "Projects/f0.txt" not in changed
+    assert "Work/f0.txt" in new and len(new) == 25001

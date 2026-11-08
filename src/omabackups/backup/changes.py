@@ -61,6 +61,19 @@ def parse(text: str, name: str):
         return out
 
     changed: set[str] = set()
+    # Every folder that has something under it in the sets below. A rename of
+    # anything else (each new file arrives under a temporary name and is then
+    # renamed) moves one entry, not a search of everything: with 23,000 new
+    # files that search took minutes (stage 8 rehearsal).
+    parents: set[str] = set()
+
+    def note(p: str) -> None:
+        while "/" in p:
+            p = p.rsplit("/", 1)[0]
+            if p in parents:
+                break                  # its own parents are in already
+            parents.add(p)
+
     ops: list[list[str]] = []
     extents: dict[str, list] = {}
     new: set[str] = set()              # made since the last backup: whole file
@@ -82,11 +95,25 @@ def parse(text: str, name: str):
             continue
         if cmd == "rename":
             dest = rel(DEST.search(rest).group(1))
-            inside = {c for c in changed if c == path or c.startswith(path + "/")}
-            changed -= inside
-            changed |= {dest + c[len(path):] for c in inside}
-            extents = moved(extents, path, dest)
-            new = set(moved(dict.fromkeys(new), path, dest))
+            if path in parents:            # a folder with things in it: move them all
+                inside = {c for c in changed if c == path or c.startswith(path + "/")}
+                changed -= inside
+                changed |= {dest + c[len(path):] for c in inside}
+                extents = moved(extents, path, dest)
+                new = set(moved(dict.fromkeys(new), path, dest))
+                for c in list(changed) + list(new) + list(extents):
+                    if c == dest or c.startswith(dest + "/"):
+                        note(c)
+            else:                          # one thing: move just it
+                if path in changed:
+                    changed.discard(path)
+                    changed.add(dest)
+                if path in extents:
+                    extents[dest] = extents.pop(path)
+                if path in new:
+                    new.discard(path)
+                    new.add(dest)
+                note(dest)
             src_t = temp_root(path)
             if src_t is None or src_t in on_server:
                 ops.append(["rename", path, dest])
@@ -96,6 +123,7 @@ def parse(text: str, name: str):
                     on_server.add(dt)
             if TEMP.match(os.path.basename(path)):
                 changed.add(dest)
+                note(dest)
         elif cmd in ("unlink", "rmdir"):
             changed.discard(path)
             extents.pop(path, None)
@@ -104,6 +132,7 @@ def parse(text: str, name: str):
                 ops.append(["delete", path])
         else:
             changed.add(path)
+            note(path)
             if cmd in ("mkfile", "mkdir", "mknod", "mkfifo", "mksock", "symlink", "link"):
                 new.add(path)
             elif cmd == "update_extent" and (e := EXTENT.search(rest)):
