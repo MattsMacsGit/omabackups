@@ -21,6 +21,8 @@ def add(sub) -> None:
     p = sub.add_parser("migrate", help="Migrate from another system (or Run Migrate again)")
     p.add_argument("address", nargs="?", help="the backup server's address")
     p.add_argument("--login", help="your user name on the server")
+    p.add_argument("--preview", action="store_true",
+                   help="show the screens with this computer's own list; nothing changes")
     p.set_defaults(run=run)
 
 
@@ -91,7 +93,50 @@ def _apply(point: str, changes: dict, chosen: dict, say) -> dict:
     return {"job": job, "problems": problems, "files_now": files_now, "skipped": job["skipped"]}
 
 
+def preview(events: Events) -> int:
+    """The Migrate screens, read only, with this computer's own list (the one
+    its latest backup made): to see what it looks like and what it would do."""
+    import json
+    from omabackups.migrate import plan
+    from omabackups.setup import menu
+    from omabackups.tui import migrate_pick
+    try:
+        changes = json.loads((paths.system_state_dir() / "changes.json").read_text())
+    except (OSError, ValueError):
+        raise OmaError("There's no list of your changes on this computer yet.",
+                       "Back up once (Back up now), then try the preview again.", code="no-changes") from None
+    made = time.strftime("%a %-d %b %Y, %-I:%M %p", time.localtime(changes.get("made") or time.time()))
+    chosen = migrate_pick.run(changes, made, preview=True)
+    if chosen is None:
+        events.result({"preview": True}, "Preview closed. Nothing was changed.")
+        return 0
+    job = plan.jobs(changes, set(chosen["picked"]))
+    items = {i["id"]: i for i in changes.get("items", [])}
+    picked = [items[i] for i in chosen["picked"] if i in items]
+    menu.title("What Migrate would do (preview: nothing was changed)", plan.summary(job))
+    groups = (("Install these apps", [i["name"] for i in picked if i["group"] == "apps"]),
+              ("Bring back these settings", [i["name"] for i in picked if i["group"] in ("settings", "desktop", "backgrounds")]),
+              ("Put back these System tweaks", [i["name"] for i in picked if i["group"] == "tweaks"]),
+              ("Your files" + (", now" if chosen["files_now"] else ", later (Restore my files)"),
+               [i["name"] for i in picked if i["group"] == "files"]))
+    for label, values in groups:
+        if values:
+            menu.say(f"  {label}:")
+            for v in values:
+                menu.say(f"    {v}")
+    for v in job["skipped"]:
+        menu.say(f"  Needs a look: {v}")
+    events.result({"preview": True, "picked": chosen["picked"]}, "Preview only: nothing was changed.")
+    try:
+        menu.ask("Press Enter to close this window")
+    except OmaError:
+        pass
+    return 0
+
+
 def run(args, events: Events) -> int:
+    if args.preview and os.isatty(0) and os.isatty(1):
+        return preview(events)
     if not (os.isatty(0) and os.isatty(1)):
         raise OmaError("Migrate needs a terminal window.",
                        "Start it from the panel (it opens one), or run omabackups migrate in a terminal.",
