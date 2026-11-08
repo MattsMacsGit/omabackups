@@ -87,7 +87,8 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         network.learn_away_addresses(gate, server)
     record = load_record()
     try:
-        verdict = health.refresh(gate, bid)
+        # Not before a migrated computer's takeover: it can only read until then.
+        verdict = {} if server.get("migrating") else health.refresh(gate, bid)
     except OmaError as exc:
         logger.warning("health verdict: %s", exc.details)
         verdict = {}
@@ -195,6 +196,9 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                      "kept": KEPT.get("kept", record.get("kept", [])),
                      "return_point": KEPT.get("return_point", record.get("return_point")),
                      "space": {k: space.get(k) for k in ("box", "used", "free")},
+                     # Every restore point in the backup, every line: after a Migrate the
+                     # old computer's (and the Return point) stay listed (stage 8 lesson).
+                     "all_points": left if left is not None else record.get("all_points", []),
                      "resent_for_pass": verdict.get("pass_started") if resend
                      else record.get("resent_for_pass")})
         for part_name, snap_name in old.items():
@@ -227,6 +231,14 @@ def handover(gate, server: dict, logger) -> str:
         raise OmaError("Migrate isn't finished on this computer yet.",
                        "Finish it first (the panel shows where it's up to).", code="migrate-unfinished")
     answer = gate.call("handover", server["backup"], point)
+    # A new user name (testrig01 -> testrig02): the new line's copy of the home
+    # folder takes this user's name, so only real changes are sent (stage 8:
+    # 1.2 GB went again without this).
+    old, new = server.get("from_user", ""), linked_user()
+    if old and new and old != new:
+        gate.call("apply", server["backup"], answer["line"], "home",
+                  data=json.dumps([["rename", old, new]]).encode())
+        logger.info("handover: the home folder %s is %s now", old, new)
     server = {**server, "line": answer["line"], "migrating": False,
               "return_point": answer["return_point"], "handed_over": int(time.time())}
     write_atomic(paths.server_file(), (json.dumps(server, indent=2) + "\n").encode(), 0o644)

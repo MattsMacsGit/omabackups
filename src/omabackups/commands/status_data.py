@@ -35,12 +35,13 @@ def point_time(name: str) -> int | None:
 
 
 def points(record: dict) -> list[dict]:
-    """The restore points, newest first, with which are kept (this computer's line)."""
+    """The restore points, newest first, with which are kept: this computer's
+    and, after a Migrate, the old computer's line with the Return point."""
     kept = set(record.get("kept") or [])
-    names = sorted(record.get("point_skips") or ([record["last_point"]] if record.get("last_point") else []),
-                   reverse=True)
-    return [{"name": n, "when": point_time(n), "kept": n in kept,
-             "return_point": n == record.get("return_point")} for n in names]
+    names = set(record.get("point_skips") or ([record["last_point"]] if record.get("last_point") else []))
+    names |= set(record.get("all_points") or [])        # every line: the old computer's too
+    return [{"name": n, "when": point_time(n), "kept": n in kept, "line": n[:3],
+             "return_point": n == record.get("return_point")} for n in sorted(names, reverse=True)]
 
 
 def header(server: dict, record: dict, pts: list) -> dict | None:

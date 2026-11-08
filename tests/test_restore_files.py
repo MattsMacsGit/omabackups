@@ -41,3 +41,32 @@ def test_only_this_users_home_comes_back(world):
     shutil.rmtree(other)
     files.restore(point, "u", home=src.root / "home" / "u")
     assert not other.exists()
+
+
+def test_picked_folders_come_back_whole_under_a_new_user_name(world, tmp_path):
+    """Stage 8's failed check: a new user name, folders picked in Migrate.
+    Every file inside must arrive (not just empty folders), then it's done."""
+    srv, kid, bid, src, box = world
+    old = src.root / "home" / "u"
+    for rel in ("Documents/letters/one.txt", "Documents/two.txt", "Pictures/cat.jpg", "Work/plan.md"):
+        (old / rel).parent.mkdir(parents=True, exist_ok=True)
+        (old / rel).write_text(rel)
+    point = run.backup(source=src)["point"]
+    new_home = tmp_path / "newhome"                     # testrig02, say
+    new_home.mkdir()
+    state = files.restore(point, "newu", home=new_home, from_user="u", only=["Documents", "Pictures"])
+    assert state.get("done"), (state.get("error") or {}).get("details")
+    assert (new_home / "Documents/letters/one.txt").read_text() == "Documents/letters/one.txt"
+    assert (new_home / "Pictures/cat.jpg").exists()
+    assert not (new_home / "Work").exists()             # not picked
+
+
+def test_a_restore_that_left_files_behind_is_never_done(world, tmp_path, monkeypatch):
+    srv, kid, bid, src, box = world
+    (src.root / "home/u/Documents").mkdir(parents=True, exist_ok=True)
+    (src.root / "home/u/Documents/a.txt").write_text("a")
+    point = run.backup(source=src)["point"]
+    monkeypatch.setattr(files, "still_missing", lambda *a, **k: 3)
+    state = files.restore(point, "u", home=tmp_path / "h", only=["Documents"])
+    assert not state.get("done") and state["error"]["code"] == "restore-incomplete"
+    assert "3 of your files" in state["error"]["what"]

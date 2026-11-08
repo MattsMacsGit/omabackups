@@ -80,10 +80,20 @@ def test_migrate_then_the_first_backup_takes_over(world, sandbox, monkeypatch, t
         p = new_src.root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(data)
+    import os
+    monkeypatch.setattr(run, "linked_user", lambda: "newu")        # a new user name here
+    (new_src.root / "home/u").rename(new_src.root / "home/newu")
+    shutil.copy2(src.root / "home/u/notes.txt", new_src.root / "home/newu/notes.txt")  # as restored: same date
     first = run.backup(source=new_src)["point"]
+    assert (box / "points" / first / "home/newu/notes.txt").exists()
+    assert not (box / "points" / first / "home/u").exists()
+    assert run.load_record()["sent"]["home"].get("files_sent", 0) == 0   # renamed, not sent again
     assert first.startswith("002-")
     saved = json.loads(paths.server_file().read_text())
     assert saved["line"] == "002" and saved["migrating"] is False and saved["return_point"] == point
     lines = {e["line"]: e for e in json.loads((box / "lines.json").read_text())["lines"]}
     assert lines["001"]["read_only"] and lines["002"]["from"] == point
     assert run.backup(source=new_src)["point"].startswith("002-")                 # and it carries on
+    from omabackups.commands import status_data
+    listed = {p["name"]: p for p in status_data.points(run.load_record())}
+    assert point in listed and listed[point]["return_point"]      # the old line stays reachable

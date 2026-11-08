@@ -20,7 +20,8 @@ Column {
     if (step === "where") return [toServer, toDisk]
     if (step === "server") return [address, login, goServer]
     if (step === "disk") return [goDisk]
-    if (step === "firstBackup") return service && service.running ? [later] : [firstBackup]
+    if (step === "firstBackup") return service && service.running ? [later]
+                                       : [firstBackup, migrateAgain].filter(function(t) { return t.visible })
     return []
   }
   function cursorOn(item) { return panel && panel.cursorTarget === item }
@@ -162,6 +163,17 @@ Column {
             + "First you choose what gets backed up."
           : "Your first backup copies everything, so it takes a while. First you choose what gets "
             + "backed up: your own files are ticked, and the trash and caches are skipped."
+  }
+  NavRow {
+    // D40: until the takeover (this first backup), anything left behind can still come over.
+    id: migrateAgain
+    visible: page.step === "firstBackup" && !(page.service && page.service.running)
+             && !!(page.service && page.service.status.migrate)
+    title: "Run Migrate again"
+    explainer: "Brings back the migration chooser, so you can pick any preferences you left behind "
+               + "before this computer takes the backup over."
+    hasCursorHere: page.cursorOn(this)
+    onActivated: page.service.migrateContinue()
   }
   ActionButton {
     id: firstBackup

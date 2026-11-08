@@ -79,6 +79,8 @@ def join(request: dict) -> dict:
               "gate": version["gate"], "set_up": int(time.time())}
     write_atomic(paths.server_file(), (json.dumps(server, indent=2) + "\n").encode(), 0o644)
     run.pause_automatic("Migrate")
+    run.save_record({**run.load_record(), "all_points": inside["points"],
+                     "kept": inside["kept"].get("kept", []), "return_point": inside["kept"].get("return_point")})
     return {"backup": bid, "points": inside["points"], "lines": inside["lines"],
             "owner": inside["owner"], "kept": inside["kept"]}
 
@@ -144,13 +146,17 @@ def settings(request: dict) -> dict:
         raise OmaError("That isn't a restore point.", code="bad-request")
     user = run.linked_user()
     from_user = str(request.get("from_user") or user)
+    from omabackups.restore.files import USER
+    if not USER.match(from_user):
+        raise OmaError("That user name can't be used.", code="bad-request")
     home_items = _clean([str(x).removeprefix("~/") for x in request.get("home", [])], absolute=False)
     system_items = _clean(request.get("system", []), absolute=True)
     logger = log.get("migrate")
     gate, bid = _open()
     server = location.load()
     if server.get("migrating"):          # the handover starts from here (first backup)
-        write_atomic(paths.server_file(), (json.dumps({**server, "from_point": point}, indent=2)
+        write_atomic(paths.server_file(), (json.dumps({**server, "from_point": point,
+                                                       "from_user": from_user}, indent=2)
                                            + "\n").encode(), 0o644)
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     keeper = run.HoldKeeper(gate, bid, hold, logger)

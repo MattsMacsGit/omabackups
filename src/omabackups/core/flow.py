@@ -37,8 +37,11 @@ def where() -> Step:
 
     setup = state.read(SETUP)
     if setup is None:
-        # After a finished Migrate, the first backup (and handover) is next.
-        return Step.SETTING_UP if migrate is not None else Step.NOT_SET_UP
+        # After a finished Migrate, the first backup (and handover) is next;
+        # once it has run, this computer owns the backup: everyday.
+        if migrate is None:
+            return Step.NOT_SET_UP
+        return Step.EVERYDAY if _a_backup_finished() else Step.SETTING_UP
     if not setup.get("first_backup") and not _a_backup_finished():
         return Step.SETTING_UP
     return Step.EVERYDAY

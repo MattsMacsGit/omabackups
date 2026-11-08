@@ -69,3 +69,15 @@ def test_unexpected_errors_carry_the_traceback():
     except ZeroDivisionError as exc:
         error = unexpected(exc)
     assert error.code == "unexpected" and "ZeroDivisionError" in error.details
+
+
+def test_a_migrated_computer_is_everyday_after_its_first_backup(sandbox):
+    """Stage 8's check: status said 'the first backup hasn't run yet' after it had."""
+    import json
+    from omabackups.core import flow, paths, state
+    state.write(flow.MIGRATE, {"done": True, "files_restored": True})
+    assert flow.where() is flow.Step.SETTING_UP
+    record = paths.system_state_dir() / "backup.json"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps({"last_point": "002-2026-11-08-1416"}))
+    assert flow.where() is flow.Step.EVERYDAY

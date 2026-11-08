@@ -86,9 +86,23 @@ def command(gate, bid: str, point: str, user: str, home: Path, from_user: str = 
         entry = pwd.getpwnam(user)
         owner = [f"--chown={entry.pw_uid}:{entry.pw_gid}", "--numeric-ids"]
     return ["rsync", "-aHAX", "--update", "--info=progress2", "--no-inc-recursive", *owner,
-            *(["--files-from=-", "--from0"] if only is not None else []),
+            # --files-from switches off going into folders: -r puts it back
+            # (stage 8 lesson: it made empty folders and said "done").
+            *(["--files-from=-", "--from0", "-r"] if only is not None else []),
             "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} home/{from_user or user}",
             f"{gate.rsync_target()}:home/", f"{home}/"]
+
+
+def still_missing(gate, bid: str, point: str, user: str, home: Path, from_user: str,
+                  only: list[str] | None) -> int:
+    """Check the result, not the exit code: rsync once more, as a dry run, and
+    count the files it would still bring back (0 when everything's here)."""
+    check = [a for a in command(gate, bid, point, user, home, from_user, only)
+             if not a.startswith("--info=")]
+    check[1:1] = ["-n", "--out-format=%i %n"]
+    done = subprocess.run(check, input=(b"\0".join(p.encode() for p in only) + b"\0") if only is not None else None,
+                          capture_output=True, env=gate.rsync_env())
+    return sum(1 for row in done.stdout.decode("utf-8", "replace").splitlines() if row.startswith(">f"))
 
 
 def restore(point: str, user: str, home: Path | None = None, stopping=lambda: False,
@@ -131,7 +145,15 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
                                error.strip()[-2000:] or f"rsync exit {code}", code="restore-failed")
             state.update(running=False, error=failure.as_dict())
         else:
-            state.update(running=False, done=True, percent=100)
+            missing = still_missing(gate, bid, point, user, home, from_user, only)
+            if missing:
+                failure = OmaError(f"{missing} of your files didn't come back.",
+                                   "Run Restore my files again: it brings back what's still missing.",
+                                   f"a check after the copy found {missing} files still to bring back",
+                                   code="restore-incomplete")
+                state.update(running=False, error=failure.as_dict())
+            else:
+                state.update(running=False, done=True, percent=100)
         _say(state)
         logger.info("restore my files from %s: %s", point,
                     "done" if state.get("done") else "stopped" if state.get("stopped") else "failed")
