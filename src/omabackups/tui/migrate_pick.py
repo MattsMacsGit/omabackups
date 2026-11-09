@@ -8,7 +8,8 @@ starts it by accident (D41).
 Pages: Settings & logins first (what matters most), then Apps, Keybindings,
 bar & theme, System tweaks, Backgrounds, Your files (its first row: now or
 later). Suggestions start ticked; the lines under the list explain the
-highlighted one.
+highlighted one. Run Migrate again: what an earlier run brought over shows
+green, "Already in", with no box, and can't be ticked (D44).
 """
 
 import curses
@@ -21,6 +22,7 @@ from omabackups.tui import kit
 ORDER = ("settings", "apps", "desktop", "tweaks", "backgrounds", "files")
 TITLES = {"settings": "Settings & logins"}
 SUGGEST = {"keep": "Keep", "you": "Up to you", "leave": "Leave"}
+ALREADY = "✓ Already in"
 NOW_ROW = {"id": "@now", "name": "Bring them back now, in the same run (start it and walk away)"}
 KEYS = (("↑↓", "move"), ("Space", "tick"), ("←→ or 1-9", "pages"), ("a", "all/none"),
         ("Enter", "next page"), ("s", "start"), ("q", "quit"))
@@ -35,10 +37,12 @@ def ordered(changes: dict) -> list[dict]:
 
 
 class Chooser:
-    def __init__(self, scr, changes: dict, when: str, picked: set[str] | None = None, preview: bool = False):
+    def __init__(self, scr, changes: dict, when: str, picked: set[str] | None = None, preview: bool = False,
+                 already: set[str] | None = None):
         self.ui = kit.Screen(scr)
         self.pages = ordered(changes)
-        self.picked = set(plan.suggested(changes) if picked is None else picked)
+        self.already = set(already or ())
+        self.picked = set(plan.suggested(changes) if picked is None else picked) - self.already
         self.files_now, self.preview = True, preview
         self.when, self.page, self.cursor, self.top = when, 0, {}, 0
         self.seen = {0}
@@ -62,7 +66,7 @@ class Chooser:
     def draw_tabs(self) -> None:
         ui, x = self.ui, 1
         for n, p in enumerate(self.pages):
-            mine = [i for i in p["items"]]
+            mine = [i for i in p["items"] if i["id"] not in self.already]
             label = f" {n + 1} {p['title']} ({sum(i['id'] in self.picked for i in mine)}/{len(mine)}) "
             attr = curses.A_REVERSE | curses.A_BOLD if n == self.page else 0
             x = ui.put(2, x, label, attr)
@@ -98,13 +102,16 @@ class Chooser:
         pos = min(self.cursor.get(self.page, 0), max(0, len(rows) - 1))
         self.top = min(self.top, pos) if pos < self.top else max(self.top, pos - height + 1)
         for i, row in enumerate(rows[self.top:self.top + height]):
-            special = row["id"] == "@now"
-            ui.row(top_y + i, self.top + i == pos, "✓" if self.ticked(row) else " ", row["name"],
-                   "" if special or not row.get("bytes") else human(row["bytes"]),
-                   "" if special else SUGGEST.get(row.get("suggest"), ""),
-                   "green" if self.ticked(row) else "grey", False, switch=True, menu=special)
+            special, done = row["id"] == "@now", row["id"] in self.already
+            ui.row(top_y + i, self.top + i == pos, "✓" if self.ticked(row) or done else " ", row["name"],
+                   "" if special or done or not row.get("bytes") else human(row["bytes"]),
+                   ALREADY if done else "" if special else SUGGEST.get(row.get("suggest"), ""),
+                   "green" if self.ticked(row) or done else "grey", False, switch=not done, menu=special,
+                   note_colour="green" if done else "grey")
         current = self.current()
-        if current and current["id"] == "@now":
+        if current and current["id"] in self.already:
+            explain = "Already in: an earlier Migrate brought this over. It isn't brought over twice."
+        elif current and current["id"] == "@now":
             explain = ("Ticked: your folders come back in the same run, after the apps and settings. "
                        "Not ticked: the system first, then Restore my files while you work.")
         else:
@@ -137,11 +144,13 @@ class Chooser:
         row = self.current()
         if row and row["id"] == "@now":
             self.files_now = not self.files_now
+        elif row and row["id"] in self.already:
+            self.ui.say("Already in: an earlier Migrate brought this over.")
         elif row:
             self.picked ^= {row["id"]}
 
     def all_or_none(self) -> None:
-        ids = {i["id"] for i in self.pages[self.page]["items"]}
+        ids = {i["id"] for i in self.pages[self.page]["items"]} - self.already
         self.picked = self.picked - ids if ids <= self.picked else self.picked | ids
 
     def enter(self) -> None:
@@ -191,8 +200,9 @@ class Chooser:
                     return None
 
 
-def run(changes: dict, when: str, picked: set[str] | None = None, preview: bool = False) -> dict | None:
+def run(changes: dict, when: str, picked: set[str] | None = None, preview: bool = False,
+        already: set[str] | None = None) -> dict | None:
     os.environ.setdefault("ESCDELAY", "25")
     if not plan.pages(changes):
         return {"picked": [], "files_now": False}
-    return curses.wrapper(lambda scr: Chooser(scr, changes, when, picked, preview).run())
+    return curses.wrapper(lambda scr: Chooser(scr, changes, when, picked, preview, already).run())

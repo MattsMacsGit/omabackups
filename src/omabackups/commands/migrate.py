@@ -216,13 +216,18 @@ def run(args, events: Events) -> int:
     if not changes:
         raise OmaError("That restore point has no list of your changes to Omarchy.",
                        "Pick a newer restore point: every backup makes one.", code="no-changes")
-    chosen = migrate_pick.run(changes, when(point))
+    from omabackups.migrate import brought
+    already = brought.already(point) | brought.restored(state.read(flow.MIGRATE))    # D44
+    chosen = migrate_pick.run(changes, when(point), already=already)
     if chosen is None:
         events.result({"migrated": False}, "Nothing was brought over.")
         return 0
     menu.title("Migrating", "Apps first, then settings. Some apps ask for this computer's password.")
+    chosen["picked"] = [i for i in chosen["picked"] if i not in already]
     result = _apply(point, changes, chosen, lambda text: menu.say(f"  {text}"))
     job = result["job"]
+    brought.record(point, brought.came_over(job, chosen["picked"], changes.get("items", []),
+                                            result["files_now"]))
     files_left = bool(job["files"]) and not result["files_now"]
     if not again:
         state.write(flow.MIGRATE, {"done": True, "files_restored": not files_left, "point": point,

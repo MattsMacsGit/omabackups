@@ -111,6 +111,57 @@ def fix(home: Path, items: list[str], old_home: str, later: list[str] | None = N
     return changed
 
 
+def _dashed(home: str) -> str:
+    """A path as an app writes it into a name: /home/old -> -home-old."""
+    return home.rstrip("/").replace("/", "-")
+
+
+def _move_into(src: Path, dest: Path) -> None:
+    """Folder into an existing folder: what isn't there yet moves in; nothing
+    there is overwritten. What's left stays in src."""
+    for child in list(src.iterdir()):
+        there = dest / child.name
+        if not os.path.lexists(there):
+            os.rename(child, there)
+        elif child.is_dir() and not child.is_symlink() and there.is_dir() and not there.is_symlink():
+            _move_into(child, there)
+    try:
+        src.rmdir()
+    except OSError:
+        pass          # something stayed (a file with the same name): kept, never lost
+
+
+def names(home: Path, items: list[str], old_home: str) -> list[str]:
+    """D44: files and folders named after the old home folder (an app that
+    files things by path: -home-old-Projects-x) get this home's name; into
+    the one already there if there is one. Returns the new names."""
+    if not old_home or old_home.rstrip("/") == str(home).rstrip("/"):
+        return []
+    old, new = _dashed(old_home), _dashed(str(home))
+    match = lambda n: n == old or n.startswith(old + "-")  # noqa: E731
+    done = []
+    for item in items:
+        top = home / item
+        if not top.is_dir() or top.is_symlink():
+            continue
+        for folder, dirs, files in os.walk(top, topdown=False):
+            for name in [*dirs, *files]:
+                if not match(name):
+                    continue
+                src, dest = Path(folder) / name, Path(folder) / (new + name[len(old):])
+                try:
+                    if not os.path.lexists(dest):
+                        os.rename(src, dest)
+                    elif src.is_dir() and not src.is_symlink() and dest.is_dir():
+                        _move_into(src, dest)
+                    else:
+                        continue
+                except OSError:
+                    continue
+                done.append(str(dest.relative_to(home)))
+    return done
+
+
 def later_file() -> Path:
     from omabackups.core import paths
     return paths.system_state_dir() / "rename-later.json"

@@ -168,7 +168,7 @@ def packages(home: Path, known: dict, finder: Finder) -> tuple[list[dict], dict]
         elif library:
             suggest, why, w = "leave", "a building block: anything that needs it installs it again", 5
         elif paths:
-            suggest, why, w = ("keep" if gui else "you"), "your settings come back with it", 35 if gui else 18
+            suggest, why, w = "keep", "your settings come back with it", 35 if gui else 18   # D44
         else:
             suggest, why, w = "you", "nothing to bring back with it", 20 if gui else 10
         source = "the AUR" if any(m in foreign for m in members) else "Arch's packages"

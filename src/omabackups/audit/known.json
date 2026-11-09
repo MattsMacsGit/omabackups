@@ -629,10 +629,10 @@
     "~/.inputrc"
    ],
    "weight": 40,
-   "suggest": "you",
+   "suggest": "keep",
    "merge": true,
    "what": "Your shell settings and command history.",
-   "why": ""
+   "why": "your command history and shell setup are only here (D44)"
   },
   {
    "id": "printers",

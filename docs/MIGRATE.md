@@ -21,7 +21,10 @@ from another system**. Then:
 2. **Pick the restore point** to start from. The newest is usually the one.
 3. **Choose what comes over.** One page per group: Apps, Settings, System
    tweaks, Keybindings, bar & theme, Backgrounds, Your files. What's
-   suggested is already ticked; the line under the list says what the
+   suggested is already ticked, and that includes everything that holds your
+   own settings or history: your terminal setup and command history, and the
+   settings of each app you changed, terminal apps too. Untick what you'd
+   rather start fresh. The line under the list says what the
    highlighted thing is, why you might want it, and how easy it is to get
    back without it. **Space** ticks, **←→** or **Enter** turn the pages, and
    **S** starts, once you've looked at every page (Enter never starts it).
@@ -109,6 +112,17 @@ it over:
 Left something behind? Settings › Restore points › **Run Migrate again**
 brings the chooser back, any time, even long after the handover. Pick the
 restore point it's in (the Return point holds the old computer's last state).
+
+Whatever an earlier Migrate from that old computer already brought over
+shows in green as **Already in**, with no tick box: it's never brought over
+twice, so your keybindings and bar don't get doubled. The same goes for
+folders already brought back. Only the rest can be ticked. To get a part
+back as it was in the backup anyway, open the restore point (Browse) and
+copy it out.
+
+If your user name is different on the new computer, settings that name your
+old home folder are pointed at the new one, and so are folders an app named
+after it (for example, an app that keeps its history per project folder).
 
 From a terminal: `omabackups migrate`.
 

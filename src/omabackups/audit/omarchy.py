@@ -180,10 +180,10 @@ def desktop(home: Path, claimed: set = frozenset()) -> list[dict]:
             continue      # listed already (e.g. "Chromium profile" is ~/.config/chromium)
         if _differs(entry, mine):
             out.append(item(f"settings:omarchy-config/{entry.name}", "settings",
-                            f"Settings: {entry.name}", "config", [entry.name], [t(mine)], "you", 25,
+                            f"Settings: {entry.name}", "config", [entry.name], [t(mine)], "keep", 25,
                             f"Changed since Omarchy set up {entry.name}: by you, or by the app itself "
                             "saving its own state.",
-                            "bring it over if you changed it yourself",
+                            "your own settings for it (D44: kept unless you untick it)",
                             "a fresh Omarchy has the standard settings"))
     return out
 

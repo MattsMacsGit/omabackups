@@ -109,8 +109,9 @@ def merged(get, home: Path, root: Path, stage: Path, from_user: str, items: list
         if text is None or not text.strip():
             _write(home / (i["path"] + ".from-old-system"), mine, owner)
             continue
-        if here.is_file():
-            _write(home / (i["path"] + ".omabackups-before"), here.read_text(errors="replace"), owner)
+        before = home / (i["path"] + ".omabackups-before")
+        if here.is_file() and not before.exists():      # D44: the first merge's, kept
+            _write(before, here.read_text(errors="replace"), owner)
         _write(here, text, owner)
         done.append(i["path"])
         if unplaced:
@@ -210,6 +211,8 @@ def run(get, home: Path, root: Path, from_user: str, user: str, home_items: list
         problems = fetched.problems + desk_problems + problems + units(unit_list)
         later: list[str] = []
         renamed = rename.fix(home, home_items + desk, f"/home/{from_user}", later) if from_user != user else []
+        if from_user != user:       # D44: names too (an app's folders named after the old home)
+            renamed += rename.names(home, home_items, f"/home/{from_user}")
         rename.save_later(home, f"/home/{from_user}", later)
         problems += missing(home, root, home_items, system_items)
         return {"services": report, "theme": fetched.theme, "renamed": renamed, "later": later, "merged": desk,

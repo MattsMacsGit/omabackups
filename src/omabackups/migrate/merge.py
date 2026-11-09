@@ -49,6 +49,8 @@ def lua(old_stock: str | None, old_mine: str, new: str) -> tuple[str, list[str]]
         ours = mine[j1:j2]
         if tag == "delete" or all(BLANK.match(x) and not x.strip().startswith("--") for x in ours) and tag == "insert":
             continue          # a stock line you removed, or only blank lines: nothing to bring
+        if _already(out, ours):
+            continue          # D44: already in this file (Migrate run again): never twice
         if tag == "insert":
             anchor = base[i1 - 1] if i1 > 0 else None
             if anchor is not None and anchor.strip() and anchor in out and i1 < len(base):
@@ -80,6 +82,14 @@ def lua(old_stock: str | None, old_mine: str, new: str) -> tuple[str, list[str]]
     if any(x.strip() for x in tail):
         out += ["", "-- Brought over from your old system by OmaBackups Migrate."] + tail
     return "\n".join(out) + "\n", [x for x in unplaced if x.strip()]
+
+
+def _already(lines: list[str], block: list[str]) -> bool:
+    """The block is in the file already, and it says something (a line with a
+    letter or digit that isn't a comment), so a lone "}" never counts."""
+    core = [x for x in block if x.strip()]
+    meaningful = any(re.search(r"\w", x) and not x.strip().startswith("--") for x in core)
+    return bool(core) and meaningful and _find([x for x in lines if x.strip()], core) is not None
 
 
 def _find(lines: list[str], block: list[str]) -> int | None:
