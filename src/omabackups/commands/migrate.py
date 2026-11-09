@@ -4,13 +4,15 @@ window the panel opens; also Run Migrate again (D38), any time after.
 1. Connect to your backup (a server: its address, your login there, the
    server's sudo for OmaBackups' own part, then your backup's password).
 2. Pick the restore point.  3. Choose what comes over.
-4. Migrate: apps, then settings and System tweaks, then your files if now.
-The report says what came over and what needs a look.
+4. Migrate: apps, then settings and System tweaks (1.x's order, D41), then
+your files if now. The report says what came over and what needs a look.
+5. Omarchy restarts to apply it all (D41): you land on your own desktop.
 """
 
 import os
 import sys
 import time
+from pathlib import Path
 
 from omabackups.core import flow, paths, rootjob, state
 from omabackups.core.errors import OmaError
@@ -77,20 +79,53 @@ def _pick_point(points: list[str]) -> str:
     return newest[menu.choose("Restore points", labels)]
 
 
+def _close_first(job: dict) -> None:
+    """Apps that rewrite their settings when they quit are closed first (1.x)."""
+    from omabackups.migrate import running
+    from omabackups.setup import menu
+    apps = running.holders(job["home"])
+    user = os.environ.get("USER", "")
+    while open_now := running.still_open(apps, user):
+        menu.title(f"Close {', '.join(open_now)} first",
+                   "It rewrites its settings when it closes, so it would undo what Migrate\n"
+                   "brings back. Close it (all its windows), then press Enter.")
+        menu.ask("Press Enter once it's closed")
+
+
 def _apply(point: str, changes: dict, chosen: dict, say) -> dict:
     from omabackups.migrate import apps, plan
     job = plan.jobs(changes, set(chosen["picked"]))
     from_user = changes.get("user") or ""
+    _close_first(job)
     problems = apps.install(job, say)
     say("Bringing back your settings and System tweaks...")
     done = rootjob.run("migrate-settings", {"point": point, "from_user": from_user, "home": job["home"],
                                             "system": job["system"], "units": job["units"]})
     problems += [{"name": "", **p} for p in done.get("problems", [])]
+    problems += _relink_tools(say)
+    for svc in done.get("services", []):
+        if svc.get("was_on") and not svc.get("running"):
+            problems.append({"name": svc["service"], "what": "is back but isn't running."})
     files_now = bool(job["files"]) and chosen["files_now"]
     if files_now:
         say("Bringing back your files (the panel shows how far)...")
         rootjob.run("restore-files-start", {"point": point, "from_user": from_user, "only": job["files"]})
-    return {"job": job, "problems": problems, "files_now": files_now, "skipped": job["skipped"]}
+    return {"job": job, "problems": problems, "files_now": files_now, "skipped": job["skipped"],
+            "services": done.get("services", []), "renamed": done.get("renamed", [])}
+
+
+def _relink_tools(say) -> list[dict]:
+    """GitHub's login helper for git names gh's path, which changes with each
+    gh version and user name: set it again (1.x test, 5 Nov)."""
+    import shutil
+    import subprocess
+    if not shutil.which("gh") or not (Path.home() / ".config/gh/hosts.yml").exists():
+        return []
+    done = subprocess.run(["gh", "auth", "setup-git"], capture_output=True, text=True)
+    if done.returncode != 0:
+        return [{"name": "GitHub", "what": "git's GitHub login couldn't be set up: run gh auth setup-git after the restart."}]
+    say("GitHub login linked for git.")
+    return []
 
 
 def preview(events: Events) -> int:
@@ -172,21 +207,39 @@ def run(args, events: Events) -> int:
                                    "from_user": changes.get("user") or "", "files": job["files"],
                                    "restart": job["restart"], "at": int(time.time())})
     lines = [f"Brought over: {_said(job)}."]
+    for svc in result["services"]:
+        if svc.get("running"):
+            lines.append(f"  {svc['service']}: back on, running.")
+    if result["renamed"]:
+        lines.append(f"  Your old user name was changed to this one in {len(result['renamed'])} settings files.")
     for p in result["problems"] + [{"name": s, "what": ""} for s in result["skipped"]]:
         lines.append(f"  Needs a look: {p['name']} {p['what']}".rstrip())
-    if job["restart"]:
-        lines.append("Restart this computer to finish: some System tweaks need it.")
     if files_left:
         lines.append("Your files: Restore my files on the panel brings them back while you work.")
-    lines.append("Next: Back up now on the panel. This computer then takes the backup over."
-                 if not again else "Done.")
-    events.result({"migrated": True, "point": point, "problems": result["problems"]}, "\n".join(lines))
-    if sys.stdin.isatty():
-        try:
-            menu.ask("Press Enter to close this window")
-        except OmaError:
-            pass
+    lines.append("After the restart: Back up now on the panel. This computer then takes the backup over."
+                 if not again else "")
+    events.result({"migrated": True, "point": point, "problems": result["problems"]},
+                  "\n".join(x for x in lines if x))
+    _finish(result["files_now"])
     return 0
+
+
+def _finish(files_now: bool) -> None:
+    """Wait for the files if they're coming now, then restart (D41)."""
+    from omabackups.migrate import finish
+    say = lambda text: menu_say(text)  # noqa: E731
+    if files_now:
+        state = finish.wait_for_files(say)
+        if state.get("error"):
+            say("Your files stopped coming back: " + state["error"].get("what", "") +
+                " Restore my files on the panel carries on after the restart.")
+    import subprocess
+    finish.restart(say, lambda: subprocess.run(["systemctl", "reboot"]))
+
+
+def menu_say(text: str) -> None:
+    from omabackups.setup import menu
+    menu.say(text)
 
 
 def _said(job: dict) -> str:

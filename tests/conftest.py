@@ -34,13 +34,33 @@ def sandbox(tmp_path, monkeypatch):
     monkeypatch.setenv("OMABACKUPS_SYSROOT", str(sysroot))
     # Child processes (root jobs, link) run this source tree, not an installed copy.
     monkeypatch.setenv("PYTHONPATH", str(SRC))
-    return Sandbox(home, sysroot)
+    # Fake systemctl, nmcli, pgrep and Omarchy's commands: tests never touch
+    # this computer's real services, processes or desktop (tests/fake_bin.py).
+    fake, fake_bin = tmp_path / "fake", tmp_path / "fake-bin"
+    fake.mkdir()
+    fake_bin.mkdir()
+    for name in FAKES:
+        tool = fake_bin / name
+        tool.write_text(f"#!{sys.executable}\nimport sys\nsys.path.insert(0, {str(Path(__file__).parent)!r})\n"
+                        f"import fake_bin\nsys.exit(fake_bin.main({name!r}))\n")
+        tool.chmod(0o755)
+    monkeypatch.setenv("OMABACKUPS_FAKE", str(fake))
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
+    return Sandbox(home, sysroot, fake)
+
+
+FAKES = ("systemctl", "nmcli", "pgrep", "omarchy-theme-set", "omarchy-theme-bg-set", "gh")
 
 
 class Sandbox:
-    def __init__(self, home: Path, sysroot: Path):
+    def __init__(self, home: Path, sysroot: Path, fake: Path):
         self.home = home
         self.sysroot = sysroot
+        self.fake = fake          # the fake commands' state (tests/fake_bin.py)
+
+    def calls(self) -> list[str]:
+        p = self.fake / "calls"
+        return p.read_text().splitlines() if p.exists() else []
 
     def run(self, *args: str) -> subprocess.CompletedProcess:
         """Run the real omabackups command, in a fresh process, in the sandbox."""

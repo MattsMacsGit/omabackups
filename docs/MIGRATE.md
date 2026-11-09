@@ -23,22 +23,34 @@ from another system**. Then:
    tweaks, Keybindings, bar & theme, Backgrounds, Your files. What's
    suggested is already ticked; the line under the list says what the
    highlighted thing is, why you might want it, and how easy it is to get
-   back without it. **Space** ticks, **←→** turn the pages, **s** starts.
+   back without it. **Space** ticks, **←→** or **Enter** turn the pages, and
+   **S** starts, once you've looked at every page (Enter never starts it).
    On Your files, choose whether your folders come back now, in the same run
    (start it and walk away), or later.
-4. **Migrate.** Apps install first, through Omarchy's own installers (some
-   ask for this computer's password), then your settings and System tweaks
-   come back, then your files if you chose now. A report at the end says
-   what came over and anything that needs a look.
+4. **Migrate.** If an app whose settings are coming back is open (a
+   browser, VS Code, Signal...), it asks you to close it first: those apps
+   rewrite their settings when they close, which would undo what came back.
+   Then apps install, through Omarchy's own installers (some ask for this
+   computer's password); then your settings and System tweaks come back.
+   Services you had switched on, like Tailscale or Bluetooth, are put back
+   with their settings and switched on again; the network is never cut while
+   that happens. Then your files, if you chose now. A report says what came
+   over and anything that needs a look.
+5. **Omarchy restarts.** "Omarchy will now restart to apply your settings":
+   press Enter, or it restarts by itself after 15 seconds. Your logins (the
+   keyring), services and desktop only go live after a restart. If your files
+   are coming back now, it waits for them first. You start up on your own
+   desktop, ready to go.
 
 Your user name on the new computer doesn't have to match the old one: your
-settings land in your home folder, whatever it's called.
+settings land in your home folder, whatever it's called, and settings that
+named your old home folder (`/home/<old name>`) are changed to the new one.
+The report says how many. git's GitHub login is linked again too.
 
 ## Finishing
 
 The panel then shows what's left, only while it's true:
 
-- **Restart to finish**, if a System tweak needs it.
 - **Restore my files to finish**, if you chose later: your folders come back
   while you work, never overwriting a file that's newer here.
 - **Back up now**: the first backup on the new computer.

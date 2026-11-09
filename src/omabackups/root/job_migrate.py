@@ -6,9 +6,9 @@ migrate-join      connect to a backup on a server with its password: this
 migrate-points    the restore points there
 migrate-info      a restore point's list of changes (changes.json)
 migrate-settings  bring the ticked settings and System tweaks back from a
-                  restore point: home ones into this user's folder (whatever
-                  the old user was called), system ones into place; then the
-                  tweaks' units are switched on
+                  restore point, in 1.x's order (migrate/apply.py): fetch
+                  all, let go of the backup, services swapped in and switched
+                  on as they were, your units on, the old user name fixed
 """
 
 import base64
@@ -23,6 +23,7 @@ from omabackups.backup import run
 from omabackups.core import log, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
+from omabackups.migrate import apply
 from omabackups.root import keys
 from omabackups.root.job_server import ADDRESS, HOST_KEY
 from omabackups.where import location
@@ -132,6 +133,7 @@ def _fetch(gate, bid: str, point: str, part: str, items: list[str], dest: Path, 
     """rsync just these paths (relative to the part) into dest; the error text if any."""
     if not items:
         return ""
+    dest.mkdir(parents=True, exist_ok=True)
     command = ["rsync", "-aHAX", "-r", "--files-from=-", "--from0", *chown.split(),
                "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} {part}",
                f"{gate.rsync_target()}:{part}/", f"{dest}/"]
@@ -141,6 +143,7 @@ def _fetch(gate, bid: str, point: str, part: str, items: list[str], dest: Path, 
 
 
 def settings(request: dict) -> dict:
+    """Settings and System tweaks back, in 1.x's order (migrate/apply.py)."""
     point = str(request.get("point", ""))
     if not POINT.match(point):
         raise OmaError("That isn't a restore point.", code="bad-request")
@@ -158,45 +161,31 @@ def settings(request: dict) -> dict:
         write_atomic(paths.server_file(), (json.dumps({**server, "from_point": point,
                                                        "from_user": from_user}, indent=2)
                                            + "\n").encode(), 0o644)
+    if os.environ.get("OMABACKUPS_SYSROOT"):      # tests: the sandbox's home and system
+        home, root, owner = Path.home(), Path(os.environ["OMABACKUPS_SYSROOT"]), ""
+    else:
+        entry = pwd.getpwnam(user)
+        home, root = Path(entry.pw_dir), Path("/")
+        owner = f"--chown={entry.pw_uid}:{entry.pw_gid} --numeric-ids"
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     keeper = run.HoldKeeper(gate, bid, hold, logger)
-    problems = []
+    released = []
+
+    def let_go() -> None:
+        if not released:
+            released.append(True)
+            keeper.stop()
+            gate.call("lock", bid, hold)
+
+    def get(part: str, items: list[str], dest: Path, owned: bool) -> str:
+        return _fetch(gate, bid, point, part, items, dest, owner if owned else "")
+
     try:
-        if os.environ.get("OMABACKUPS_SYSROOT"):      # tests: the sandbox's home and system
-            home, root, chown = Path.home(), Path(os.environ["OMABACKUPS_SYSROOT"]), ""
-        else:
-            entry = pwd.getpwnam(user)
-            home, root = Path(entry.pw_dir), Path("/")
-            chown = f"--chown={entry.pw_uid}:{entry.pw_gid} --numeric-ids"
-        error = _fetch(gate, bid, point, f"home/{from_user}", home_items, home, chown)
-        if error:
-            problems.append({"what": "Some settings in your home folder didn't come back.", "details": error})
-        error = _fetch(gate, bid, point, "system", system_items, root, "")
-        if error:
-            problems.append({"what": "Some System tweaks didn't come back.", "details": error})
+        done = apply.run(get, home, root, from_user, user, home_items, system_items,
+                         request.get("units", []), bool(request.get("theme")), let_go)
     finally:
-        keeper.stop()
-        gate.call("lock", bid, hold)
-    problems += _units(request.get("units", []))
-    logger.info("migrate settings from %s: %d home, %d system, %d problems",
-                point, len(home_items), len(system_items), len(problems))
-    return {"home": len(home_items), "system": len(system_items), "problems": problems}
-
-
-def _units(units: list) -> list[dict]:
-    """The tweaks' own units, switched on (as they were on the old computer)."""
-    problems = []
-    if not units or os.environ.get("OMABACKUPS_SYSROOT"):
-        return problems
-    subprocess.run(["systemctl", "daemon-reload"], capture_output=True)
-    for unit in units if isinstance(units, list) else []:
-        name = str(unit.get("name", "")) if isinstance(unit, dict) else ""
-        if not name or "/" in name or not name.endswith((".service", ".timer", ".path", ".socket")):
-            continue
-        # A user unit: switched on for every user, as it was in /etc/systemd/user.
-        command = ["systemctl", "--global", "enable", name] if unit.get("user") else \
-            ["systemctl", "enable", "--now", name]
-        done = subprocess.run(command, capture_output=True, text=True)
-        if done.returncode != 0:
-            problems.append({"what": f"{name} couldn't be switched on.", "details": done.stderr.strip()})
-    return problems
+        let_go()
+    logger.info("migrate settings from %s: %d home, %d system, services %s, %d renamed, %d problems",
+                point, len(home_items), len(system_items), done["services"], len(done["renamed"]),
+                len(done["problems"]))
+    return done

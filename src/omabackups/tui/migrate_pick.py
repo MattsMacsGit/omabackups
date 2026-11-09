@@ -1,7 +1,9 @@
 """Choose what comes over (6.1 F step 3, D14, 7.2), drawn the way 1.x's
 Migrate picker was (lesson, stage 8): numbered tabs across the top, each
 marked once looked at; a line saying what's still to look at; the keys
-spelled out; and starting only once every page has been seen.
+spelled out; and starting only once every page has been seen. Enter only
+moves to the next page; S starts (as Save in the file chooser), so nobody
+starts it by accident (D41).
 
 Pages: Settings & logins first (what matters most), then Apps, Keybindings,
 bar & theme, System tweaks, Backgrounds, Your files (its first row: now or
@@ -21,7 +23,7 @@ TITLES = {"settings": "Settings & logins"}
 SUGGEST = {"keep": "Keep", "you": "Up to you", "leave": "Leave"}
 NOW_ROW = {"id": "@now", "name": "Bring them back now, in the same run (start it and walk away)"}
 KEYS = (("↑↓", "move"), ("Space", "tick"), ("←→ or 1-9", "pages"), ("a", "all/none"),
-        ("Enter", "next page / start"), ("q", "quit"))
+        ("Enter", "next page"), ("s", "start"), ("q", "quit"))
 
 
 def ordered(changes: dict) -> list[dict]:
@@ -112,7 +114,7 @@ class Chooser:
         job = plan.jobs({"items": [i for p in self.pages for i in p["items"]]}, self.picked)
         todo = self.unseen()
         status = f"Bringing over {plan.summary(job)}"
-        note = ("Still to look at: " + ", ".join(todo)) if todo else "Every page looked at: Enter starts"
+        note = ("Still to look at: " + ", ".join(todo)) if todo else "Every page looked at: press S to start"
         ui.bottom(explain, status, True, "", note)
         if not todo and not ui.message:
             ui.put(h - 3, 2, note, ui.col(kit.GREEN, curses.A_BOLD))
@@ -142,11 +144,17 @@ class Chooser:
         ids = {i["id"] for i in self.pages[self.page]["items"]}
         self.picked = self.picked - ids if ids <= self.picked else self.picked | ids
 
-    def enter(self) -> dict | None:
+    def enter(self) -> None:
+        """Enter: the next page still to look at, or simply the next page."""
         todo = [n for n in range(len(self.pages)) if n not in self.seen]
-        if todo:                       # 1.x: every page is looked at before starting
-            nxt = next((n for n in todo if n > self.page), todo[0])
-            self.go(nxt)
+        self.go(next((n for n in todo if n > self.page), todo[0]) if todo else self.page + 1)
+
+    def start(self) -> dict | None:
+        """S: start, once every page has been looked at (1.x)."""
+        todo = [n for n in range(len(self.pages)) if n not in self.seen]
+        if todo:
+            self.go(next((n for n in todo if n > self.page), todo[0]))
+            self.ui.say("Look at every page first: this is the next one. Then press S.")
             return None
         question = "Show what Migrate would do?" if self.preview else "Bring all this over now?"
         if self.ui.ask(question):
@@ -172,8 +180,10 @@ class Chooser:
                 self.toggle()
             elif key == ord("a"):
                 self.all_or_none()
-            elif key in (curses.KEY_ENTER, 10, 13, ord("s")):
-                chosen = self.enter()
+            elif key in (curses.KEY_ENTER, 10, 13):
+                self.enter()
+            elif key in (ord("s"), ord("S")):
+                chosen = self.start()
                 if chosen is not None:
                     return chosen
             elif key in (ord("q"), 27):
