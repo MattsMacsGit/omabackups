@@ -12,12 +12,13 @@ repo="$(dirname "$here")"
 # A fresh Omarchy install (from the offline ISO) has never downloaded the
 # package lists for core/extra, so pacman can't find dependencies like sshfs
 # ("database file for 'extra' does not exist" / "target not found: sshfs").
-# Sync them first. Use -Syu, not -Sy: on Arch, syncing without upgrading
-# then installing gives a partial upgrade.
+# Update the system first, through `omarchy update`: Omarchy's pacman hook
+# refuses a direct `pacman -Syu` ("Woah partner..."), and plain -Sy then
+# installing would be a partial upgrade.
 for db in core extra; do
   if [ ! -s "/var/lib/pacman/sync/$db.db" ]; then
-    echo "Pacman's package lists are missing (fresh install): updating the system first..."
-    sudo pacman -Syu --noconfirm
+    echo "Pacman's package lists are missing (fresh install): running omarchy update first..."
+    omarchy-update -y
     break
   fi
 done
@@ -29,7 +30,14 @@ echo "Installing the panel plugin..."
 plugin="$HOME/.config/omarchy/plugins/omabackups"
 mkdir -p "$plugin"
 rsync -a --delete --exclude '*.pyc' "$repo/manifest.json" "$repo/LICENSE" "$repo/README.md" "$repo/plugin" "$plugin/"
-omarchy-plugin-enable omabackups --section right >/dev/null 2>&1 || true
+# The running shell only knows plugins it has scanned: without the rescan,
+# enable fails with "plugin 'omabackups' is not known" and the widget never
+# appears on the bar. Don't hide enable's errors.
+omarchy-shell shell rescanPlugins >/dev/null
+if ! omarchy-plugin-enable omabackups --section right; then
+  echo "Couldn't put OmaBackups on the bar. Try: omarchy-plugin-enable omabackups --section right" >&2
+  exit 1
+fi
 omarchy-restart-shell >/dev/null 2>&1 || true
 
 echo
