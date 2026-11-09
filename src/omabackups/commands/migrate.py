@@ -162,6 +162,8 @@ def preview(events: Events) -> int:
     except (OSError, ValueError):
         raise OmaError("There's no list of your changes on this computer yet.",
                        "Back up once (Back up now), then try the preview again.", code="no-changes") from None
+    from omabackups.migrate import suggest
+    changes = suggest.today(changes)
     made = time.strftime("%a %-d %b %Y, %-I:%M %p", time.localtime(changes.get("made") or time.time()))
     chosen = migrate_pick.run(changes, made, preview=True)
     if chosen is None:
@@ -216,6 +218,8 @@ def run(args, events: Events) -> int:
     if not changes:
         raise OmaError("That restore point has no list of your changes to Omarchy.",
                        "Pick a newer restore point: every backup makes one.", code="no-changes")
+    from omabackups.migrate import suggest
+    changes = suggest.today(changes)      # D44: this version's ticks, however old the point
     from omabackups.migrate import brought
     already = brought.already(point) | brought.restored(state.read(flow.MIGRATE))    # D44
     chosen = migrate_pick.run(changes, when(point), already=already)

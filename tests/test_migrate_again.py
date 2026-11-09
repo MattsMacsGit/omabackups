@@ -162,3 +162,17 @@ def test_your_terminal_setup_starts_ticked():
     known = json.loads((SRC / "omabackups/audit/known.json").read_text())
     shell = next(s for s in known["settings"] if s["id"] == "shell")
     assert shell["suggest"] == "keep"
+
+
+def test_an_older_restore_points_rows_get_this_versions_ticks():
+    from omabackups.migrate import suggest
+    old = {"items": [
+        {"id": "setting:shell", "suggest": "you", "paths": ["~/.bashrc"]},
+        {"id": "settings:omarchy-config/btop", "suggest": "you", "paths": ["~/.config/btop"]},
+        {"id": "app:herdr", "suggest": "you", "paths": ["~/.config/herdr"], "source": {"refs": ["herdr"]}},
+        {"id": "app:steam", "suggest": "you", "paths": ["~/.steam"], "source": {"refs": ["steam"]}},
+        {"id": "app:nothing", "suggest": "you", "paths": [], "source": {"refs": ["nothing"]}},
+        {"id": "setting:printers", "suggest": "you", "paths": ["/etc/cups/printers.conf"]}]}
+    got = {i["id"]: i["suggest"] for i in suggest.today(old)["items"]}
+    assert got == {"setting:shell": "keep", "settings:omarchy-config/btop": "keep", "app:herdr": "keep",
+                   "app:steam": "you", "app:nothing": "you", "setting:printers": "you"}
