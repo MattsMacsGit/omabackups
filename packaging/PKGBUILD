@@ -1,6 +1,6 @@
 # The omabackups package (D20).
 # This build reads the files from the repo it sits in (for testing):
-#   cd packaging && makepkg -sif   (-f: always build fresh; the version only changes at release)
+#   packaging/install-edge.sh   (builds without sudo, then one pacman -U)
 # The AUR version (at release) downloads a tagged, checked release instead.
 
 pkgname=omabackups
@@ -12,6 +12,7 @@ url="https://github.com/MattsMacsGit/omabackups"
 license=(MIT)
 depends=(python rsync openssh cryptsetup btrfs-progs polkit gum sshfs)
 optdepends=('tailscale: back up when away from home')
+options=(!debug)   # nothing to debug-strip in an any package; keeps --packagelist to one file
 
 package() {
   local repo="$startdir/.."

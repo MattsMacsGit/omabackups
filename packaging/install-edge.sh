@@ -23,8 +23,15 @@ for db in core extra; do
   fi
 done
 
-echo "Building and installing the omabackups package..."
-(cd "$here" && makepkg -sif --noconfirm)
+# Build without sudo (-d: building needs only python, always there), then one
+# pacman -U installs the package and fetches its dependencies with it: one
+# password. makepkg -si asked once for the dependencies and again for the
+# package, each through its own sudo.
+echo "Building the omabackups package..."
+(cd "$here" && makepkg -fd --noconfirm)
+pkg="$(cd "$here" && makepkg --packagelist)"
+echo "Installing it (asks for this computer's password)..."
+sudo pacman -U --noconfirm "$pkg"
 
 echo "Installing the panel plugin..."
 plugin="$HOME/.config/omarchy/plugins/omabackups"
