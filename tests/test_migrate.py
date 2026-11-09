@@ -97,3 +97,25 @@ def test_migrate_then_the_first_backup_takes_over(world, sandbox, monkeypatch, t
     from omabackups.commands import status_data
     listed = {p["name"]: p for p in status_data.points(run.load_record())}
     assert point in listed and listed[point]["return_point"]      # the old line stays reachable
+
+
+def test_run_migrate_again_sees_whats_here_already(world, sandbox, monkeypatch):
+    """D44: a dry run against the restore point, nothing copied: what came
+    over is here; a part not brought, or changed since, isn't."""
+    from omabackups.migrate import here
+    point = old_computer_backs_up(world)
+    become_a_new_computer(world, sandbox, monkeypatch)
+    rootjob.run("migrate-join", {"address": "test", "host_keys": HOST_KEYS, "password": "password1"})
+    changes = rootjob.run("migrate-info", {"point": point})["changes"]
+    job = plan.jobs(changes, plan.suggested(changes))
+    rootjob.run("migrate-settings", {"point": point, "from_user": "u", "home": job["home"],
+                                     "system": job["system"], "units": []})
+    home, system = here.asked(changes)
+    seen = rootjob.run("migrate-here", {"point": point, "from_user": "u", "home": home, "system": system})
+    assert seen == {"home": [".config/app"], "system": ["etc/thing.conf"]}
+    assert not (sandbox.home / ".config/big").exists()                   # a dry run: nothing copied
+    assert here.found(changes, set(seen["home"]), set(seen["system"]), (set(), set())) == \
+        {"setting:app", "tweak:thing"}
+    (sandbox.home / ".config/app/conf").write_text("changed since, by you")
+    again = rootjob.run("migrate-here", {"point": point, "from_user": "u", "home": home, "system": system})
+    assert again["home"] == []

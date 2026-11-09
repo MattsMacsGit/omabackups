@@ -79,6 +79,23 @@ def _pick_point(points: list[str]) -> str:
     return newest[menu.choose("Restore points", labels)]
 
 
+def _here(point: str, changes: dict) -> set[str]:
+    """D44: what's on this computer already (a dry run: nothing is copied).
+    If the check fails, Migrate carries on without it."""
+    from omabackups.core import log
+    from omabackups.migrate import here
+    from omabackups.setup import menu
+    menu.say("  Looking at what's on this computer already...")
+    home, system = here.asked(changes)
+    try:
+        seen = rootjob.run("migrate-here", {"point": point, "from_user": changes.get("user") or "",
+                                            "home": home, "system": system})
+    except OmaError as exc:
+        log.get("migrate").warning("checking what's here failed: %s", exc)
+        return set()
+    return here.found(changes, set(seen.get("home", [])), set(seen.get("system", [])))
+
+
 def _close_first(job: dict) -> None:
     """Apps that rewrite their settings when they quit are closed first (1.x)."""
     from omabackups.migrate import running
@@ -221,7 +238,8 @@ def run(args, events: Events) -> int:
     from omabackups.migrate import suggest
     changes = suggest.today(changes)      # D44: this version's ticks, however old the point
     from omabackups.migrate import brought
-    already = brought.already(point) | brought.restored(state.read(flow.MIGRATE))    # D44
+    already = brought.already(point) | brought.restored(state.read(flow.MIGRATE)) | \
+        _here(point, changes)                                                    # D44
     chosen = migrate_pick.run(changes, when(point), already=already)
     if chosen is None:
         events.result({"migrated": False}, "Nothing was brought over.")

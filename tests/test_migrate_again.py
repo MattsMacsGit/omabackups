@@ -176,3 +176,29 @@ def test_an_older_restore_points_rows_get_this_versions_ticks():
     got = {i["id"]: i["suggest"] for i in suggest.today(old)["items"]}
     assert got == {"setting:shell": "keep", "settings:omarchy-config/btop": "keep", "app:herdr": "keep",
                    "app:steam": "you", "app:nothing": "you", "setting:printers": "you"}
+
+
+def test_nearly_all_files_here_counts_as_in():
+    from omabackups.migrate import here
+    same = "".join(f".f          .config/chromium/f{n}\n" for n in range(19))
+    one_changed = same + ">f..t...... .config/chromium/Local State\n"           # 19 of 20 here
+    fresh = ">f.st...... .bashrc\n.f          .bash_profile\n"                    # 1 of 2: not in
+    listing = one_changed + fresh + "cd+++++++++ .config/new/\n>f+++++++++ .config/new/x\n"
+    got = here.tally(listing, [".config/chromium", ".bashrc", ".bash_profile", ".config/new", ".config/gone"])
+    assert got == {".config/chromium", ".bash_profile"}
+
+
+def test_an_app_is_in_when_installed_and_its_settings_are_here():
+    from omabackups.migrate import here
+    changes = {"items": [
+        {"id": "app:herdr", "group": "apps", "source": {"kind": "package", "refs": ["herdr"]},
+         "paths": ["~/.config/herdr"]},
+        {"id": "app:btop", "group": "apps", "source": {"kind": "package", "refs": ["btop"]}, "paths": []},
+        {"id": "app:gone", "group": "apps", "source": {"kind": "package", "refs": ["gone"]}, "paths": []},
+        {"id": "setting:shell", "group": "settings", "source": {"kind": "folder"},
+         "paths": ["~/.bashrc", "~/.bash_history"]},
+        {"id": "files:Music", "group": "files", "paths": ["~/Music"]}]}
+    installed = ({"herdr", "btop"}, set())
+    assert here.found(changes, {".bashrc"}, set(), installed) == {"app:btop"}
+    assert here.found(changes, {".bashrc", ".bash_history", ".config/herdr", "Music"}, set(), installed) == \
+        {"app:btop", "app:herdr", "setting:shell"}

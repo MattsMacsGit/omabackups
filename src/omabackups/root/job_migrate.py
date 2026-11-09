@@ -5,6 +5,8 @@ migrate-join      connect to a backup on a server with its password: this
                   then is the server recorded (as "migrating", no line yet)
 migrate-points    the restore points there
 migrate-info      a restore point's list of changes (changes.json)
+migrate-here      which of its settings and tweaks are on this computer
+                  already (D44: a dry run, nothing copied)
 migrate-settings  bring the ticked settings and System tweaks back from a
                   restore point, in 1.x's order (migrate/apply.py): fetch
                   all, let go of the backup, services swapped in and switched
@@ -140,6 +142,45 @@ def _fetch(gate, bid: str, point: str, part: str, items: list[str], dest: Path, 
     done = subprocess.run(command, input=b"\0".join(i.encode() for i in items) + b"\0",
                           capture_output=True, env=gate.rsync_env())
     return "" if done.returncode in (0, 24) else done.stderr.decode("utf-8", "replace")[-2000:]
+
+
+def _listing(gate, bid: str, point: str, part: str, items: list[str], dest: Path) -> str:
+    """rsync's dry run of these paths against dest: every file, changed or not."""
+    from omabackups.migrate.here import DRY_RUN
+    if not items:
+        return ""
+    command = [*DRY_RUN, "--files-from=-", "--from0", "-e", gate.rsh(),
+               f"--rsync-path=fetch {bid} {point} {part}", f"{gate.rsync_target()}:{part}/", f"{dest}/"]
+    done = subprocess.run(command, input=b"\0".join(i.encode() for i in items) + b"\0",
+                          capture_output=True, env=gate.rsync_env())
+    if done.returncode not in (0, 23, 24):     # 23: some asked for aren't in that point
+        log.get("migrate").warning("checking what's here (%s) failed: %s", part,
+                                   done.stderr.decode("utf-8", "replace")[-500:])
+    return done.stdout.decode("utf-8", "replace")
+
+
+def here(request: dict) -> dict:
+    """D44: of a restore point's settings and tweaks, which are here already."""
+    from omabackups.migrate.here import tally
+    from omabackups.restore.files import USER
+    point = str(request.get("point", ""))
+    from_user = str(request.get("from_user") or "")
+    if not POINT.match(point) or not USER.match(from_user):
+        raise OmaError("That isn't a restore point.", code="bad-request")
+    home_items = _clean(request.get("home", []), absolute=False)
+    system_items = _clean(["/" + str(x).lstrip("/") for x in request.get("system", [])], absolute=True)
+    if os.environ.get("OMABACKUPS_SYSROOT"):
+        home, root = Path.home(), Path(os.environ["OMABACKUPS_SYSROOT"])
+    else:
+        home, root = Path(pwd.getpwnam(run.linked_user()).pw_dir), Path("/")
+    gate, bid = _open()
+    hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
+    try:
+        mine = _listing(gate, bid, point, f"home/{from_user}", home_items, home)
+        system = _listing(gate, bid, point, "system", system_items, root)
+    finally:
+        gate.call("lock", bid, hold)
+    return {"home": sorted(tally(mine, home_items)), "system": sorted(tally(system, system_items))}
 
 
 def _merges(asked) -> list[dict]:

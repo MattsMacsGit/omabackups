@@ -105,6 +105,7 @@ def _jobs() -> dict:
     from omabackups.root import job_disk, job_migrate, job_points, job_server, job_skips
     return {"migrate-join": job_migrate.join, "migrate-points": job_migrate.points,
             "migrate-info": job_migrate.info, "migrate-settings": job_migrate.settings,
+            "migrate-here": job_migrate.here,
             "browse-open": browse.open_job, "browse-close": browse.close_job,
             "restore-files-start": files.start_job, "restore-files-stop": files.stop_job,
             "create-backup": job_server.create_backup, "create-disk": job_disk.create_disk,
