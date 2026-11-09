@@ -113,6 +113,10 @@ def _migrate() -> dict | None:
     if not mine.get("files_restored") and restored.get("done") and restored.get("point") == mine.get("point"):
         mine = {**mine, "files_restored": True}
         state.write(flow.MIGRATE, mine)
+    if not mine.get("files_restored") and mine.get("files"):
+        from pathlib import Path
+        from omabackups.restore.files import already_here
+        mine = {**mine, "files_here": already_here(Path.home(), mine["files"])}
     if mine.get("restart"):
         try:
             booted = time.time() - float(open("/proc/uptime").read().split()[0])

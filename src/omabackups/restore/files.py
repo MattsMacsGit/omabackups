@@ -40,6 +40,20 @@ def state_file() -> Path:
     return paths.system_run_dir() / "restore.json"
 
 
+def already_here(home: Path, folders: list[str]) -> list[str]:
+    """Folders coming back that already have something in them here (a working
+    clone in ~/src, say): old files would be added beside it (1.x test, 5 Nov)."""
+    out = []
+    for f in folders:
+        p = home / f
+        try:
+            if p.is_dir() and not p.is_symlink() and any(p.iterdir()):
+                out.append(f)
+        except OSError:
+            pass
+    return out
+
+
 def current() -> dict:
     try:
         return json.loads(state_file().read_text())
@@ -154,6 +168,10 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
                 state.update(running=False, error=failure.as_dict())
             else:
                 state.update(running=False, done=True, percent=100)
+                from omabackups.migrate import rename      # sync apps' folders (Migrate, 8b)
+                if again := rename.later(user):
+                    state["note"] = (f"{' and '.join(again)} now uses your folders here: "
+                                     "start it again from the app menu.")
         _say(state)
         logger.info("restore my files from %s: %s", point,
                     "done" if state.get("done") else "stopped" if state.get("stopped") else "failed")

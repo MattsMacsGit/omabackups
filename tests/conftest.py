@@ -49,7 +49,7 @@ def sandbox(tmp_path, monkeypatch):
     return Sandbox(home, sysroot, fake)
 
 
-FAKES = ("systemctl", "nmcli", "pgrep", "omarchy-theme-set", "omarchy-theme-bg-set", "gh")
+FAKES = ("systemctl", "nmcli", "pgrep", "pkill", "hyprctl", "omarchy-theme-set", "omarchy-theme-bg-set", "gh")
 
 
 class Sandbox:

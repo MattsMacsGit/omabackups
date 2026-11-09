@@ -42,17 +42,53 @@ from another system**. Then:
    are coming back now, it waits for them first. You start up on your own
    desktop, ready to go.
 
+## Keybindings, bar & theme
+
+These are merged, never copied: a new Omarchy release comes with its own
+versions of these files, and copying the old ones over would throw away
+what's new (or break it). Each part is its own tick on that page:
+
+- **Key bindings** and the other Hyprland files (keyboard and mouse, window
+  rules, look and feel, apps started at login): this Omarchy's file stays,
+  and your own lines are added to it. "Your own" means what you changed from
+  the file *your* Omarchy release came with, whichever release that was. A
+  setting that's a list (like keyboard options) keeps this release's values
+  and adds yours. A change that no longer fits is listed in the report to
+  add by hand, never forced in. If Hyprland doesn't accept the result, the
+  file is put back as it was and your version kept beside it
+  (`*.from-old-system`).
+- **Bar layout**: your bar and its widgets; new parts of this release (like
+  the dock) stay. **Each bar plugin** is its own tick: one you leave out is
+  left off the bar too, and Run Migrate again brings it later.
+- **Theme**: the theme you used is set again through Omarchy, with its
+  background. Your own themes have their own ticks.
+- **Screen setup** is "up to you": a new computer may have another screen.
+- **Hooks** (scripts Omarchy runs on every update, or when the theme
+  changes) are listed one by one: check them first.
+
+You can also start with a clean Omarchy, try its defaults, and bring over
+what you miss later with Run Migrate again.
+
 Your user name on the new computer doesn't have to match the old one: your
 settings land in your home folder, whatever it's called, and settings that
 named your old home folder (`/home/<old name>`) are changed to the new one.
 The report says how many. git's GitHub login is linked again too.
+Apps that sync folders (Nextcloud, Syncthing...) are the exception: they keep
+their old folder paths until **Restore my files** has brought your folders
+back, so they never start again from scratch on empty folders. Then they're
+pointed at the folders here; if one was running it's closed for that, and the
+panel says to start it again.
 
 ## Finishing
 
 The panel then shows what's left, only while it's true:
 
 - **Restore my files to finish**, if you chose later: your folders come back
-  while you work, never overwriting a file that's newer here.
+  while you work, never overwriting a file that's newer here. If a folder
+  already has things in it here (a working copy of a project, say), the panel
+  names it first: old files would be added beside what's there, so move a
+  working copy aside before bringing it back. Migrate asks the same before
+  bringing your files back in the same run.
 - **Back up now**: the first backup on the new computer.
 
 ## The handover

@@ -21,7 +21,7 @@ INSTALLER = re.compile(r"^(base|base-devel|sudo|mkinitcpio|grub|efibootmgr|syste
                        r".+-ucode|linux(-lts|-zen|-hardened|-omarchy|-t2)?(-headers)?|linux-firmware.*)$")
 
 HYPR = {
-    "bindings.lua": ("Keybindings", "Your keyboard shortcuts.", 92),
+    "bindings.lua": ("Key bindings", "Your own shortcuts, added to this Omarchy's.", 92),
     "monitors.lua": ("Screen setup", "Your screens: resolution, scaling, position.", 75),
     "input.lua": ("Keyboard, mouse & touchpad", "Layout, repeat speed, scrolling, touchpad.", 80),
     "looknfeel.lua": ("Look and feel", "Gaps, borders, rounding and animations.", 78),
@@ -111,8 +111,10 @@ def desktop(home: Path, claimed: set = frozenset()) -> list[dict]:
 
     for name, (title, what, weight) in HYPR.items():
         if _differs(stock / "hypr" / name, cfg / "hypr" / name):
+            screen = name == "monitors.lua"       # a new computer may have another screen (D43)
             out.append(item(f"desktop:hypr/{name}", "desktop", title, "config", [f"hypr/{name}"],
-                            [t(cfg / "hypr" / name)], "keep", weight, what, KEEP_DESKTOP, BACK_DESKTOP))
+                            [t(cfg / "hypr" / name)], "you" if screen else "keep", weight, what,
+                            "a new screen may need its own" if screen else KEEP_DESKTOP, BACK_DESKTOP))
     for extra in sorted((cfg / "hypr").glob("*")) if (cfg / "hypr").is_dir() else []:
         if extra.name not in HYPR and not (stock / "hypr" / extra.name).exists():
             out.append(item(f"desktop:hypr/{extra.name}", "desktop", f"Hyprland: {extra.name}", "config",
@@ -121,9 +123,10 @@ def desktop(home: Path, claimed: set = frozenset()) -> list[dict]:
 
     om = cfg / "omarchy"
     if _differs(stock / "omarchy" / "shell.json", om / "shell.json"):
-        out.append(item("desktop:shell", "desktop", "The bar and shell", "config", ["omarchy/shell.json"],
+        out.append(item("desktop:shell", "desktop", "Bar layout", "config", ["omarchy/shell.json"],
                         [t(om / "shell.json")], "keep", 88,
-                        "Your bar: its layout and widgets, and when the screen locks.",
+                        "Your bar and its widgets, and when the screen locks. New parts of this "
+                        "Omarchy (like the dock) stay; each plugin is its own tick.",
                         KEEP_DESKTOP, BACK_DESKTOP))
     for kind, title, weight in (("extensions", "Menu", 55), ("themed", "Theme template", 50)):
         for f in _differs(stock / "omarchy" / kind, om / kind):
@@ -135,8 +138,10 @@ def desktop(home: Path, claimed: set = frozenset()) -> list[dict]:
         if not f.endswith(".sample"):
             hook = Path(f).parent.name.removesuffix(".d")
             out.append(item(f"desktop:hook/{hook}/{Path(f).name}", "desktop",
-                            f"Automation: {Path(f).name} ({hook})", "config", [f"hooks/{hook}"], [t(f)],
-                            "keep", 58, f"A script Omarchy runs for you on {hook.replace('-', ' ')}.",
+                            f"{'Update hook' if hook == 'post-update' else 'Hook'}: {Path(f).name}"
+                            + ("" if hook == "post-update" else f" ({hook.replace('-', ' ')})"),
+                            "config", [f"hooks/{hook}"], [t(f)],
+                            "you", 58, f"A script Omarchy runs on every {hook.replace('-', ' ')}: check it first.",
                             "you set this up yourself", "a fresh Omarchy doesn't have it"))
     for p in sorted((om / "plugins").iterdir()) if (om / "plugins").is_dir() else []:
         linked = p.is_symlink() and not os.path.realpath(p).startswith(str(home))
@@ -149,11 +154,18 @@ def desktop(home: Path, claimed: set = frozenset()) -> list[dict]:
         out.append(item(f"desktop:theme/{p.name}", "desktop", f"Your theme: {p.name}", "folder", [p.name],
                         [t(p)], "keep", 70, "A theme you made or changed.", KEEP_DESKTOP,
                         "it isn't anywhere else"))
-    current = home / ".local/state/omarchy/current/theme.name"
-    if current.exists():
-        name = current.read_text().strip()
-        out.append(item("desktop:theme-current", "desktop", f"Theme in use: {name}", "config", [name],
-                        [t(current)], "keep", 86, "The theme your desktop uses now.", KEEP_DESKTOP,
+    # The theme in use: in ~/.local/state since June 2026, ~/.config before (D42).
+    current = next((p for p in (home / ".local/state/omarchy/current/theme.name",
+                                home / ".config/omarchy/current/theme.name") if p.exists()), None)
+    old_link = home / ".config/omarchy/current/theme"
+    if current is None and old_link.is_symlink():
+        current = old_link            # older still: a link to the theme's folder
+    if current is not None:
+        name = current.read_text().strip() if current.is_file() and not current.is_symlink() else \
+            Path(os.readlink(current)).name
+        out.append(item("desktop:theme-current", "desktop", f"Theme: {name}", "config", [name],
+                        [t(current)], "keep", 86, "The theme you used, with its background, set again "
+                        "through Omarchy.", KEEP_DESKTOP,
                         "a fresh Omarchy starts with its standard theme"))
     for p in sorted((om / "backgrounds").iterdir()) if (om / "backgrounds").is_dir() else []:
         out.append(item(f"backgrounds:{p.name}", "backgrounds", f"Backgrounds for {p.name}", "folder",

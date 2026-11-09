@@ -8,6 +8,11 @@ only the name changed.
 
 Small text files only (no NUL byte, 1 MB at most), and links. Owner and
 permissions are kept. Caches are skipped.
+
+Apps that sync folders (Nextcloud...) are left for later: pointed at folders
+that aren't back yet, they'd start again from scratch. Their settings are
+fixed once Restore my files has brought the folders back (later(), 1.x test
+5 Nov). The app is stopped first: it rewrites its settings when it quits.
 """
 
 import os
@@ -15,6 +20,18 @@ import re
 from pathlib import Path
 
 LIMIT = 1_000_000
+# Sync apps: their settings folder -> (name, process).
+SYNC_APPS = {".config/Nextcloud": ("Nextcloud", "nextcloud"),
+             ".config/ownCloud": ("ownCloud", "owncloud"),
+             ".config/syncthing": ("Syncthing", "syncthing"),
+             ".local/state/syncthing": ("Syncthing", "syncthing")}
+
+
+def sync_app(rel: str) -> tuple[str, str] | None:
+    for folder, app in SYNC_APPS.items():
+        if rel == folder or rel.startswith(folder + "/"):
+            return app
+    return None
 SKIP_DIRS = {"Cache", "Code Cache", "GPUCache", "Service Worker", "IndexedDB", "blob_storage",
              "Crashpad", "ShaderCache", "GrShaderCache", "DawnCache", "DawnGraphiteCache", ".git",
              "node_modules", "__pycache__"}
@@ -70,15 +87,21 @@ def _file(p: Path, find: re.Pattern, new: bytes) -> bool:
     return True
 
 
-def fix(home: Path, items: list[str], old_home: str) -> list[str]:
+def fix(home: Path, items: list[str], old_home: str, later: list[str] | None = None) -> list[str]:
     """Rewrite the old home folder (/home/OLD) to this one in the items
-    (relative to home) that came over. Returns the files changed."""
+    (relative to home) that came over. Returns the files changed. Sync apps'
+    files are added to `later` instead (when given)."""
     if not old_home or old_home.rstrip("/") == str(home).rstrip("/"):
         return []
     find, repl = pattern(old_home.rstrip("/")), str(home).rstrip("/").encode()
     changed = []
     for item in items:
         for p in _files(home / item):
+            rel = str(p.relative_to(home))
+            if later is not None and sync_app(rel):
+                if p.is_file() and not p.is_symlink() and find.search(p.read_bytes()[:LIMIT]):
+                    later.append(rel)
+                continue
             try:
                 done = _link(p, find, repl) if p.is_symlink() else p.is_file() and _file(p, find, repl)
             except OSError:
@@ -86,3 +109,42 @@ def fix(home: Path, items: list[str], old_home: str) -> list[str]:
             if done:
                 changed.append(str(p.relative_to(home)))
     return changed
+
+
+def later_file() -> Path:
+    from omabackups.core import paths
+    return paths.system_state_dir() / "rename-later.json"
+
+
+def save_later(home: Path, old_home: str, files: list[str]) -> None:
+    import json
+    from omabackups.core.state import write_atomic
+    if files:
+        write_atomic(later_file(), json.dumps({"home": str(home), "old_home": old_home,
+                                               "files": files}).encode(), 0o600)
+
+
+def later(user: str) -> list[str]:
+    """After Restore my files: stop the sync apps, fix their settings. Returns
+    the apps to start again (they were running)."""
+    import json
+    import subprocess
+    import time
+    try:
+        saved = json.loads(later_file().read_text())
+    except (OSError, ValueError):
+        return []
+    home = Path(saved["home"])
+    apps = {sync_app(f) for f in saved["files"]} - {None}
+    restart = []
+    for name, process in sorted(apps):
+        if subprocess.run(["pgrep", "-u", user, "-x", process], capture_output=True).returncode == 0:
+            subprocess.run(["pkill", "-u", user, "-x", process], capture_output=True)
+            for _ in range(20):
+                if subprocess.run(["pgrep", "-u", user, "-x", process], capture_output=True).returncode != 0:
+                    break
+                time.sleep(0.5)
+            restart.append(name)
+    fix(home, saved["files"], saved["old_home"])
+    later_file().unlink(missing_ok=True)
+    return restart

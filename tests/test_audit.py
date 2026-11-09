@@ -48,7 +48,7 @@ def test_the_desktop_differences_are_found(fake_omarchy):
     btop = next(i for i in found if i["id"] == "settings:omarchy-config/btop")
     assert btop["suggest"] == "you"                    # could be the app saving its own state
     binds = next(i for i in found if i["id"] == "desktop:hypr/bindings.lua")
-    assert binds["name"] == "Keybindings" and binds["suggest"] == "keep" and binds["paths"][0].startswith("~/")
+    assert binds["name"] == "Key bindings" and binds["suggest"] == "keep" and binds["paths"][0].startswith("~/")
 
 
 def test_already_listed_settings_arent_repeated(fake_omarchy):

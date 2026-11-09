@@ -100,7 +100,10 @@ def _apply(point: str, changes: dict, chosen: dict, say) -> dict:
     problems = apps.install(job, say)
     say("Bringing back your settings and System tweaks...")
     done = rootjob.run("migrate-settings", {"point": point, "from_user": from_user, "home": job["home"],
-                                            "system": job["system"], "units": job["units"]})
+                                            "system": job["system"], "units": job["units"],
+                                            "merge": job["merge"], "theme": job["theme"]})
+    from omabackups.migrate import desktop
+    problems += desktop.apply(done, from_user, say)
     problems += [{"name": "", **p} for p in done.get("problems", [])]
     problems += _relink_tools(say)
     for svc in done.get("services", []):
@@ -108,10 +111,29 @@ def _apply(point: str, changes: dict, chosen: dict, say) -> dict:
             problems.append({"name": svc["service"], "what": "is back but isn't running."})
     files_now = bool(job["files"]) and chosen["files_now"]
     if files_now:
+        job["files"] = _not_mixed(job["files"])
+        files_now = bool(job["files"])
+    if files_now:
         say("Bringing back your files (the panel shows how far)...")
         rootjob.run("restore-files-start", {"point": point, "from_user": from_user, "only": job["files"]})
     return {"job": job, "problems": problems, "files_now": files_now, "skipped": job["skipped"],
             "services": done.get("services", []), "renamed": done.get("renamed", [])}
+
+
+def _not_mixed(folders: list[str]) -> list[str]:
+    """Folders that already have things in them here: bring them back beside
+    what's there, or leave them for Restore my files later (D43, 8e)."""
+    from omabackups.restore.files import already_here
+    from omabackups.setup import menu
+    here = already_here(Path.home(), folders)
+    if not here:
+        return folders
+    menu.title(f"Already here: {', '.join(here)}",
+               "Bringing these back adds the old files beside what's in them now (a file that's\n"
+               "newer here is never overwritten). A working copy of a project would get old files\n"
+               "mixed into it.")
+    pick = menu.choose("These folders", ["Leave them for now (Restore my files later)", "Bring them back anyway"])
+    return folders if pick == 1 else [f for f in folders if f not in here]
 
 
 def _relink_tools(say) -> list[dict]:
@@ -205,7 +227,7 @@ def run(args, events: Events) -> int:
     if not again:
         state.write(flow.MIGRATE, {"done": True, "files_restored": not files_left, "point": point,
                                    "from_user": changes.get("user") or "", "files": job["files"],
-                                   "restart": job["restart"], "at": int(time.time())})
+                                   "restart": True, "at": int(time.time())})   # D41: always
     lines = [f"Brought over: {_said(job)}."]
     for svc in result["services"]:
         if svc.get("running"):

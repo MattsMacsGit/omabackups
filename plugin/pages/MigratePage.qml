@@ -48,7 +48,7 @@ Column {
     visible: page.step === "finish" && !!page.m.restart_needed
     width: parent.width
     dim: true
-    text: "Some of the System tweaks that came over start working after a restart."
+    text: "Your logins, services and desktop come back as they were after a restart."
   }
   ActionButton {
     id: restartButton
@@ -73,6 +73,14 @@ Column {
           + "Your files are still in the restore point from " + page.whenOf(page.m.point)
           + ". They come back while you work; a file that's newer here is never overwritten."
   }
+  Prose {
+    visible: page.step === "finish" && !page.m.files_restored && !page.restoringNow
+             && !!(page.m.files_here && page.m.files_here.length)
+    width: parent.width
+    color: page.service ? page.service.colour("yellow") : Commons.Color.foreground
+    text: "Already here: " + (page.m.files_here || []).join(", ")
+          + ". Old files are added beside what's in them; move a working copy aside first."
+  }
   ActionButton {
     id: restoreButton
     visible: page.step === "finish" && !page.m.files_restored && !page.restoringNow
@@ -88,6 +96,13 @@ Column {
     text: "Stop (carry on later)"
     hasCursorHere: page.cursorOn(this)
     onClicked: page.service.restoreStop()
+  }
+
+  Prose {
+    visible: page.step === "finish" && !!(page.r && page.r.note)
+    width: parent.width
+    color: page.service ? page.service.colour("yellow") : Commons.Color.foreground
+    text: page.r && page.r.note ? page.r.note : ""
   }
 
   PanelSeparator { visible: page.step === "finish" }

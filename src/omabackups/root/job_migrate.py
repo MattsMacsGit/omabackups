@@ -142,6 +142,17 @@ def _fetch(gate, bid: str, point: str, part: str, items: list[str], dest: Path, 
     return "" if done.returncode in (0, 24) else done.stderr.decode("utf-8", "replace")[-2000:]
 
 
+def _merges(asked) -> list[dict]:
+    """Keybindings, bar & theme files to merge: only the shapes plan.MERGE makes."""
+    from omabackups.migrate import plan
+    out = []
+    for m in asked if isinstance(asked, list) else []:
+        made = plan.merge_kind("~/" + str(m.get("path", ""))) if isinstance(m, dict) else None
+        if made and ".." not in made["path"].split("/"):
+            out.append(made)
+    return out
+
+
 def settings(request: dict) -> dict:
     """Settings and System tweaks back, in 1.x's order (migrate/apply.py)."""
     point = str(request.get("point", ""))
@@ -182,7 +193,8 @@ def settings(request: dict) -> dict:
 
     try:
         done = apply.run(get, home, root, from_user, user, home_items, system_items,
-                         request.get("units", []), bool(request.get("theme")), let_go)
+                         request.get("units", []), bool(request.get("theme")), let_go,
+                         _merges(request.get("merge", [])))
     finally:
         let_go()
     logger.info("migrate settings from %s: %d home, %d system, services %s, %d renamed, %d problems",

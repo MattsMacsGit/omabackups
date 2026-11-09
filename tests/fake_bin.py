@@ -6,7 +6,8 @@ State lives in the folder named by OMABACKUPS_FAKE (one file per kind):
   units      units this computer has (systemctl cat)
   active     units running now (is-active; start/stop change it)
   enabled    units switched on (enable adds)
-  running    process names running as the user (pgrep)
+  running    process names running as the user (pgrep; pkill removes)
+  configerrors  what hyprctl configerrors prints
 """
 
 import os
@@ -53,6 +54,12 @@ def main(name: str) -> int:
         return systemctl(sys.argv[1:])
     if name == "pgrep":
         return 0 if sys.argv[-1] in lines("running") else 1
+    if name == "hyprctl" and sys.argv[1:2] == ["configerrors"]:
+        p = STATE / "configerrors"
+        sys.stdout.write(p.read_text() if p.exists() else "")
+        return 0
+    if name == "pkill":
+        put("running", lines("running") - {sys.argv[-1]})
     return 0
 
 

@@ -19,10 +19,11 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from omabackups.migrate import rename, services
+from omabackups.migrate import merge, rename, services
 
-THEME_NAME = ".local/state/omarchy/current/theme.name"
-BACKGROUND = ".local/state/omarchy/current/background"
+# Where Omarchy keeps the theme in use: since June 2026 in ~/.local/state,
+# before that in ~/.config (D42: any release). Read from whichever is there.
+THEME_PLACES = (".local/state/omarchy/current", ".config/omarchy/current")
 
 
 def systemctl(*args: str) -> subprocess.CompletedProcess:
@@ -57,12 +58,85 @@ def fetch(get, home: Path, root: Path, stage: Path, from_user: str, home_items: 
     # Which services the old system had on: its /etc/systemd/system (1.x).
     if out.held and not get("system", ["etc/systemd/system"], stage / "@old", False):
         out.on = services.enabled(stage / "@old/etc/systemd/system")
-    if theme and not get(f"home/{from_user}", [THEME_NAME, BACKGROUND], stage / "@theme", False):
-        name = stage / "@theme" / THEME_NAME
-        link = stage / "@theme" / BACKGROUND
-        out.theme = {"name": name.read_text().strip() if name.is_file() else "",
-                     "background": os.readlink(link) if link.is_symlink() else ""}
+    if theme:
+        out.theme = _theme(get, from_user, stage / "@theme")
     return out
+
+
+def _theme(get, from_user: str, where: Path) -> dict:
+    """The old theme's name and background, from either layout."""
+    get(f"home/{from_user}", [f"{p}/{n}" for p in THEME_PLACES for n in ("theme.name", "theme", "background")],
+        where, False)            # some aren't there: that's expected
+    for place in THEME_PLACES:
+        name_file, theme, link = where / place / "theme.name", where / place / "theme", where / place / "background"
+        name = name_file.read_text().strip() if name_file.is_file() else \
+            os.path.basename(os.readlink(theme).rstrip("/")) if theme.is_symlink() else ""
+        if name:
+            return {"name": name, "background": os.readlink(link) if link.is_symlink() else ""}
+    return {}
+
+
+def merged(get, home: Path, root: Path, stage: Path, from_user: str, items: list[dict]) -> tuple[list, list]:
+    """Keybindings, bar & theme (D43): each file merged onto this release's.
+    Returns (files merged, problems)."""
+    done, problems = [], []
+    if not items:
+        return done, problems
+    get(f"home/{from_user}", [i["path"] for i in items], stage / "@merge/home", False)
+    get("system", [i["stock"] for i in items], stage / "@merge/system", False)
+    plugins = _plugins(home)
+    keep = lambda wid: str(wid).startswith("omarchy.") or wid in plugins  # noqa: E731
+    owner = home.stat()
+    for i in items:
+        old = stage / "@merge/home" / i["path"]
+        if not old.is_file():
+            continue
+        stock_file = stage / "@merge/system" / i["stock"]
+        stock = stock_file.read_text(errors="replace") if stock_file.is_file() else None
+        here = home / i["path"]
+        new_file = here if here.is_file() else root / i["stock"]
+        new = new_file.read_text(errors="replace") if new_file.is_file() else ""
+        mine = old.read_text(errors="replace")
+        try:
+            if i["kind"] == "json":
+                text, unplaced = merge.shell(stock, mine, new or mine, keep), []
+            else:
+                text, unplaced = merge.lua(stock, mine, new)
+        except ValueError as exc:
+            problems.append({"what": f"~/{i['path']} couldn't be merged; yours is kept as "
+                                     f"~/{i['path']}.from-old-system to look at.", "details": str(exc)})
+            text, unplaced = None, []
+        if text is None or not text.strip():
+            _write(home / (i["path"] + ".from-old-system"), mine, owner)
+            continue
+        if here.is_file():
+            _write(home / (i["path"] + ".omabackups-before"), here.read_text(errors="replace"), owner)
+        _write(here, text, owner)
+        done.append(i["path"])
+        if unplaced:
+            problems.append({"what": f"Some of your changes to ~/{i['path']} don't fit this Omarchy; "
+                                     "they're listed here to add by hand if you still want them.",
+                             "details": "\n".join(unplaced)})
+    return done, problems
+
+
+def _plugins(home: Path) -> set:
+    import json
+    ids = set()
+    for manifest in (home / ".config/omarchy/plugins").glob("*/manifest.json"):
+        try:
+            ids.add(json.loads(manifest.read_text()).get("id"))
+        except (OSError, ValueError):
+            pass
+    return ids
+
+
+def _write(path: Path, text: str, owner) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".omabackups-tmp")
+    tmp.write_text(text)
+    os.chown(tmp, owner.st_uid, owner.st_gid)
+    os.replace(tmp, path)
 
 
 def swap(fetched: Fetched, root: Path) -> tuple[list[dict], list[dict]]:
@@ -121,7 +195,7 @@ def missing(home: Path, root: Path, home_items: list[str], system_items: list[st
 
 
 def run(get, home: Path, root: Path, from_user: str, user: str, home_items: list[str],
-        system_items: list[str], unit_list: list, theme: bool, let_go) -> dict:
+        system_items: list[str], unit_list: list, theme: bool, let_go, merges: list | None = None) -> dict:
     """The whole of it. let_go(): step 2, called once everything is fetched."""
     base = root / "var/tmp"
     base.mkdir(parents=True, exist_ok=True)
@@ -129,13 +203,17 @@ def run(get, home: Path, root: Path, from_user: str, user: str, home_items: list
     try:
         try:
             fetched = fetch(get, home, root, stage, from_user, home_items, system_items, theme)
+            desk, desk_problems = merged(get, home, root, stage, from_user, merges or [])
         finally:
             let_go()
         report, problems = swap(fetched, root)
-        problems = fetched.problems + problems + units(unit_list)
-        renamed = rename.fix(home, home_items, f"/home/{from_user}") if from_user != user else []
+        problems = fetched.problems + desk_problems + problems + units(unit_list)
+        later: list[str] = []
+        renamed = rename.fix(home, home_items + desk, f"/home/{from_user}", later) if from_user != user else []
+        rename.save_later(home, f"/home/{from_user}", later)
         problems += missing(home, root, home_items, system_items)
-        return {"services": report, "theme": fetched.theme, "renamed": renamed, "problems": problems,
+        return {"services": report, "theme": fetched.theme, "renamed": renamed, "later": later, "merged": desk,
+                "problems": problems,
                 "home": len(home_items), "system": len(system_items)}
     finally:
         shutil.rmtree(stage, ignore_errors=True)

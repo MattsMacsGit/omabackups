@@ -12,6 +12,19 @@ TOOL = re.compile(r"^(uv tool install|npm install -g|pipx install|cargo install|
                   r"[A-Za-z0-9@._/:+=-]+$")
 PACKAGE = re.compile(r"^[a-z0-9@._+-]+$")
 FLATPAK = re.compile(r"^[A-Za-z0-9._-]+$")
+# Omarchy's own config: merged onto this release, never copied (D43). The
+# stock copy each is compared with, inside the restore point's system part.
+MERGE = ((re.compile(r"^~/\.config/hypr/[^/]+\.lua$"), "lua", "usr/share/omarchy/config/hypr/"),
+         (re.compile(r"^~/\.config/omarchy/shell\.json$"), "json", "usr/share/omarchy/config/omarchy/"))
+# The theme in use: applied by name through Omarchy, not copied (D41, D42).
+THEME = re.compile(r"^~/\.(local/state|config)/omarchy/current(/theme\.name|/theme)?$")
+
+
+def merge_kind(path: str) -> dict | None:
+    for pattern, kind, stock in MERGE:
+        if pattern.match(path):
+            return {"path": path.removeprefix("~/"), "kind": kind, "stock": stock + path.rsplit("/", 1)[1]}
+    return None
 
 
 def pages(changes: dict) -> list[dict]:
@@ -31,7 +44,7 @@ def suggested(changes: dict) -> set[str]:
 
 def jobs(changes: dict, picked: set[str]) -> dict:
     out = {"packages": [], "flatpaks": [], "tools": [], "home": [], "system": [], "units": [],
-           "files": [], "restart": False, "skipped": []}
+           "files": [], "merge": [], "theme": False, "restart": False, "skipped": []}
     for item in changes.get("items", []):
         if item["id"] not in picked:
             continue
@@ -50,6 +63,10 @@ def jobs(changes: dict, picked: set[str]) -> dict:
         for path in item.get("paths", []):
             if item.get("group") == "files":
                 out["files"].append(path.removeprefix("~/"))
+            elif THEME.match(path):
+                out["theme"] = True
+            elif merge_kind(path):
+                out["merge"].append(merge_kind(path))
             elif path.startswith("~/"):
                 out["home"].append(path)
             elif path.startswith("/"):
@@ -61,7 +78,8 @@ def jobs(changes: dict, picked: set[str]) -> dict:
 
 def summary(job: dict) -> str:
     apps = len(job["packages"]) + len(job["flatpaks"]) + len(job["tools"])
-    bits = [f"{apps} app{'s' if apps != 1 else ''}", f"{len(job['home']) + len(job['system'])} settings"]
+    n = len(job["home"]) + len(job["system"]) + len(job.get("merge", [])) + bool(job.get("theme"))
+    bits = [f"{apps} app{'s' if apps != 1 else ''}", f"{n} settings"]
     if job["files"]:
         bits.append(f"{len(job['files'])} folder{'s' if len(job['files']) != 1 else ''} of your files")
     return ", ".join(bits)

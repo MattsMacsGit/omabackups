@@ -163,3 +163,45 @@ def test_the_restart_comes_after_the_countdown_even_with_no_answer():
     finish.restart(said.append, lambda: rebooted.append(True), seconds=1)
     assert rebooted == [True]
     assert any("Omarchy will now restart" in s for s in said)
+
+
+def test_sync_apps_are_fixed_only_after_the_files_are_back(sandbox, tmp_path):
+    folder = next(iter(rename.SYNC_APPS))                         # the first sync app's settings
+    name, process = rename.SYNC_APPS[folder]
+    point = restore_point(tmp_path)
+    cfg = point / "home/old" / folder / "app.cfg"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("0\\Folders\\1\\localPath=/home/old/Documents/\n")
+    fake_state(sandbox)
+    done = run(sandbox, point, home=[".config/app", folder])
+    here = sandbox.home / folder / "app.cfg"
+    assert "/home/old/Documents" in here.read_text()                 # not yet: the folders aren't back
+    assert done["later"] == [f"{folder}/app.cfg"]
+    (sandbox.fake / "running").write_text(process + "\n")
+    assert rename.later("new") == [name]                               # after Restore my files
+    assert here.read_text() == f"0\\Folders\\1\\localPath={sandbox.home}/Documents/\n"
+    assert process not in (sandbox.fake / "running").read_text()       # stopped before the fix
+    assert rename.later("new") == []                                  # once only
+
+
+def test_keybindings_are_merged_against_the_old_releases_stock_file(sandbox, tmp_path):
+    from test_migrate_merge import MINE, NEW_STOCK, OLD_STOCK
+    point = restore_point(tmp_path)
+    for rel, text in {"system/usr/share/omarchy/config/hypr/bindings.lua": OLD_STOCK,
+                      "home/old/.config/hypr/bindings.lua": MINE.replace("grok.com", "grok.com/home/old/x")}.items():
+        (point / rel).parent.mkdir(parents=True, exist_ok=True)
+        (point / rel).write_text(text)
+    here = sandbox.home / ".config/hypr/bindings.lua"
+    here.parent.mkdir(parents=True)
+    here.write_text(NEW_STOCK)
+    fake_state(sandbox)
+    released = []
+    done = apply.run(getter(point), sandbox.home, sandbox.sysroot, "old", "new", [], [], [], False,
+                     lambda: released.append(True),
+                     [{"path": ".config/hypr/bindings.lua", "kind": "lua",
+                       "stock": "usr/share/omarchy/config/hypr/bindings.lua"}])
+    text = here.read_text()
+    assert done["merged"] == [".config/hypr/bindings.lua"]
+    assert text.startswith(NEW_STOCK.rstrip("\n")) and '"Grok"' in text
+    assert f"grok.com{sandbox.home}/x" in text                      # the old user name fixed in it too
+    assert (sandbox.home / ".config/hypr/bindings.lua.omabackups-before").read_text() == NEW_STOCK

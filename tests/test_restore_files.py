@@ -70,3 +70,10 @@ def test_a_restore_that_left_files_behind_is_never_done(world, tmp_path, monkeyp
     state = files.restore(point, "u", home=tmp_path / "h", only=["Documents"])
     assert not state.get("done") and state["error"]["code"] == "restore-incomplete"
     assert "3 of your files" in state["error"]["what"]
+
+
+def test_folders_already_here_are_named_before_old_files_are_mixed_in(tmp_path):
+    from omabackups.restore.files import already_here
+    (tmp_path / "src/clone").mkdir(parents=True)
+    (tmp_path / "Documents").mkdir()                 # empty, as a fresh install makes it
+    assert already_here(tmp_path, ["src", "Documents", "Music"]) == ["src"]
