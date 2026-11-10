@@ -11,6 +11,8 @@ CursorSurface {
   property var service: null
   property bool hasCursorHere: false
   property alias buttons: buttonRow.data
+  // The line's own buttons, for the keyboard (they replace the line as targets).
+  readonly property var buttonItems: buttonRow.children
   signal activated()
   hasCursor: hasCursorHere
   width: parent ? parent.width : 300
@@ -31,7 +33,7 @@ CursorSurface {
     spacing: Style.space(4)
     Prose { width: parent.width; text: line.item.title || ""; color: line.titleColour; font.bold: true }
     Prose { width: parent.width; visible: text !== ""; text: line.item.text || ""; dim: true; color: line.textColour }
-    Row { id: buttonRow; spacing: Style.space(8) }
+    Flow { id: buttonRow; width: parent.width; spacing: Style.space(8) }
   }
   MouseArea { anchors.fill: parent; z: -1; onClicked: line.activated() }
 }

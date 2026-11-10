@@ -20,7 +20,12 @@ Column {
     var out = []
     if (browseBar.visible) out.push(doneButton)
     if (restoreBox.visible && restoreStop.visible) out.push(restoreStop)
-    for (var i = 0; i < lineRepeater.count; i++) out.push(lineRepeater.itemAt(i))
+    for (var i = 0; i < lineRepeater.count; i++) {
+      var line = lineRepeater.itemAt(i)
+      var own = line ? Array.prototype.filter.call(line.buttonItems, function(b) { return b.visible }) : []
+      if (own.length) own.forEach(function(b) { out.push(b) })
+      else out.push(line)
+    }
     out.push(service && service.running ? stopButton : backupButton)
     for (var j = 0; j < pointRepeater.count; j++) out.push(pointRepeater.itemAt(j))
     if (service && service.points.length > 5) out.push(moreButton)
@@ -99,16 +104,21 @@ Column {
         if (modelData.action === "rescue") page.panel.go("settings")
         else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupNow()
       }
-      ActionButton {
-        visible: modelData.kind === "waiting-network"
-        text: "Back up now"
-        onClicked: page.service.awayAnswer(true)
-      }
-      ActionButton {
-        visible: modelData.kind === "waiting-network"
-        text: "Wait until I'm on a known network"
-        onClicked: page.service.awayAnswer(false)
-      }
+      // In the line's own button row, under its text (they sat on top of it, garbled).
+      buttons: [
+        ActionButton {
+          visible: modelData.kind === "waiting-network"
+          text: "Back up now"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.awayAnswer(true)
+        },
+        ActionButton {
+          visible: modelData.kind === "waiting-network"
+          text: "Wait until I'm on a known network"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.awayAnswer(false)
+        }
+      ]
     }
   }
 

@@ -47,6 +47,15 @@ Panel {
   // The cursor starts on the page's first item, not on the header's button.
   readonly property int firstIndex: heroButtonShown && targets.length > 1 ? 1 : 0
   readonly property var cursorTarget: cursorActive && targets.length ? targets[Math.min(cursorIndex, targets.length - 1)] : null
+  // The cursor stays on the same item when the list changes (a line appears,
+  // the Browsing bar opens above it). By position alone it slid onto a
+  // restore point, and the next Enter opened one nobody asked for.
+  property var heldTarget: null
+  onCursorIndexChanged: heldTarget = targets.length ? targets[Math.min(cursorIndex, targets.length - 1)] : null
+  onTargetsChanged: {
+    var at = heldTarget ? targets.indexOf(heldTarget) : -1
+    if (at >= 0 && at !== cursorIndex) cursorIndex = at
+  }
 
   // Back puts the cursor on the row you left from.
   property var placeOn: ({})
