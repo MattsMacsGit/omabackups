@@ -24,6 +24,11 @@ while (($#)); do
 done
 
 [[ $EUID -eq 0 ]] || { echo "Run it with sudo: archiso builds as root." >&2; exit 1; }
+if [[ -n $settings ]]; then
+  for f in rescue.json server.json ssh_key known_hosts; do
+    [[ -f $settings/$f ]] || { echo "No stick settings in $settings (make them: omabackups rescue-usb settings $settings)." >&2; exit 1; }
+  done
+fi
 releng=/usr/share/archiso/configs/releng
 [[ -d $releng ]] || { echo "archiso isn't installed (sudo pacman -S archiso)." >&2; exit 1; }
 for f in /usr/share/omarchy/logo.txt /usr/share/omarchy/install/provisioning/progress-icon.sh; do
