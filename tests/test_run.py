@@ -140,6 +140,10 @@ def away_setup(monkeypatch, limit_mb=500):
     server["away"] = ["backup-server.away.test"]
     paths.server_file().write_text(json.dumps(server))
     monkeypatch.setenv("OMABACKUPS_TEST_REACHABLE", "backup-server.away.test")   # home address doesn't answer
+    # The test gatekeeper runs on this computer: what it says about "its" addresses
+    # is this computer's own. These tests are about the limit, not learning (D48).
+    from omabackups.where import network
+    monkeypatch.setattr(network, "learn_addresses", lambda gate, server: None)
     from omabackups.core import config
     values = config.load()
     values["away.limit_mb"] = limit_mb

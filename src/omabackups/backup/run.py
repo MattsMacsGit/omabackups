@@ -83,8 +83,8 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
 
     progress("unlock")
     gate_version = gate.check_version().get("gate", 0)
-    if not away and server.get("kind") != "disk":
-        network.learn_away_addresses(gate, server)
+    if server.get("kind") != "disk":
+        network.learn_addresses(gate, server)      # D48: at home or away, where it is now
     record = load_record()
     try:
         # Not before a migrated computer's takeover: it can only read until then.

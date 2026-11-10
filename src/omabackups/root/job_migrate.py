@@ -92,6 +92,8 @@ def _open():
     server = location.load()
     gate, _away = location.connect(server)
     _gate_ok(gate)
+    from omabackups.where import network
+    network.learn_addresses(gate, server)          # D48
     return gate, server["backup"]
 
 
