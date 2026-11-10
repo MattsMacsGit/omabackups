@@ -5,9 +5,9 @@ spelled out; and starting only once every page has been seen. Enter only
 moves to the next page; S starts (as Save in the file chooser), so nobody
 starts it by accident (D41).
 
-Pages: Settings & logins first (what matters most), then Apps, Keybindings,
-bar & theme, System tweaks, Backgrounds, Your files (its first row: now or
-later). Suggestions start ticked; the lines under the list explain the
+Pages (D46, audit/pages.py): Logins & keys first (what matters most), then
+Apps, Your desktop, Backgrounds, Terminal & automation, System tweaks, Your
+files (its first row: now or later). Suggestions start ticked; the lines under the list explain the
 highlighted one. Run Migrate again: what an earlier run brought over shows
 green, "Already in", with no box, and can't be ticked (D44).
 """
@@ -15,12 +15,13 @@ green, "Already in", with no box, and can't be ticked (D44).
 import curses
 import os
 
+from omabackups.audit.pages import GROUPS
 from omabackups.backup.check import human
 from omabackups.migrate import plan
 from omabackups.tui import kit
 
-ORDER = ("settings", "apps", "desktop", "tweaks", "backgrounds", "files")
-TITLES = {"settings": "Settings & logins"}
+ORDER = tuple(g for g, _ in GROUPS)          # D46: one page layout (audit/pages.py)
+TITLES: dict[str, str] = {}
 SUGGEST = {"keep": "Keep", "you": "Up to you", "leave": "Leave"}
 ALREADY = "✓ Already in"
 NOW_ROW = {"id": "@now", "name": "Bring them back now, in the same run (start it and walk away)"}
@@ -63,11 +64,26 @@ class Chooser:
 
     # --- drawing ---------------------------------------------------------------------
 
+    def labels(self, width: int) -> list[str]:
+        """The tabs, as much as fits on one line: full, then without the
+        counts, then the other pages as numbers only (D46: seven pages)."""
+        def full(n, p):
+            mine = [i for i in p["items"] if i["id"] not in self.already]
+            return f" {n + 1} {p['title']} ({sum(i['id'] in self.picked for i in mine)}/{len(mine)}) "
+        shapes = (lambda n, p: full(n, p),
+                  lambda n, p: full(n, p) if n == self.page else f" {n + 1} {p['title']} ",
+                  lambda n, p: full(n, p) if n == self.page else f" {n + 1} ")
+        for shape in shapes:
+            out = [shape(n, p) for n, p in enumerate(self.pages)]
+            if sum(len(x) + 3 for x in out) + 1 <= width:
+                return out
+        return out
+
     def draw_tabs(self) -> None:
         ui, x = self.ui, 1
+        labels = self.labels(ui.size()[1] - 1)
         for n, p in enumerate(self.pages):
-            mine = [i for i in p["items"] if i["id"] not in self.already]
-            label = f" {n + 1} {p['title']} ({sum(i['id'] in self.picked for i in mine)}/{len(mine)}) "
+            label = labels[n]
             attr = curses.A_REVERSE | curses.A_BOLD if n == self.page else 0
             x = ui.put(2, x, label, attr)
             done = n in self.seen

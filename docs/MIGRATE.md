@@ -19,8 +19,14 @@ from another system**. Then:
    you chose when you set backups up. That's what proves this computer may
    open your backup; it then gets a key of its own, so you never type it again.
 2. **Pick the restore point** to start from. The newest is usually the one.
-3. **Choose what comes over.** One page per group: Apps, Settings, System
-   tweaks, Keybindings, bar & theme, Backgrounds, Your files. What's
+3. **Choose what comes over.** One page per group: **Logins & keys** (SSH
+   and GPG keys, saved passwords, Wi-Fi, Bluetooth, GitHub...), **Apps** (with
+   their settings), **Your desktop** (keybindings, bar, theme, and the extras:
+   your fonts, icons and cursors, default apps, file manager bookmarks,
+   desktop settings, your own app launchers and the apps you start at
+   login), **Backgrounds**, **Terminal & automation** (your shell and its
+   history, your scripts, your own services and scheduled jobs), **System
+   tweaks**, **Your files**. What's
    suggested is already ticked, and that includes everything that holds your
    own settings or history: your terminal setup and command history, and the
    settings of each app you changed, terminal apps too. Untick what you'd

@@ -188,6 +188,23 @@ def units(wanted: list) -> list[dict]:
     return problems
 
 
+def crontab(root: Path, home: Path, from_user: str, user: str) -> list[dict]:
+    """D46: a crontab is filed under the user name: the old one becomes this
+    user's (cron ignores a file another user owns)."""
+    old, new = root / "var/spool/cron" / from_user, root / "var/spool/cron" / user
+    if from_user == user or not old.is_file():
+        return []
+    if new.exists():
+        return [{"what": f"Your old scheduled jobs are in {old}: this user has its own already, "
+                         "so they weren't put in its place. Copy what you need with crontab -e.",
+                 "details": ""}]
+    owner = home.stat()
+    os.chown(old, owner.st_uid, owner.st_gid)
+    os.chmod(old, 0o600)
+    os.replace(old, new)
+    return []
+
+
 def missing(home: Path, root: Path, home_items: list[str], system_items: list[str]) -> list[dict]:
     """Step 4's check: every setting asked for is really here now (1.x)."""
     gone = [f"~/{i}" for i in home_items if not os.path.lexists(home / i)]
@@ -208,13 +225,16 @@ def run(get, home: Path, root: Path, from_user: str, user: str, home_items: list
         finally:
             let_go()
         report, problems = swap(fetched, root)
+        problems += crontab(root, home, from_user, user)
         problems = fetched.problems + desk_problems + problems + units(unit_list)
         later: list[str] = []
         renamed = rename.fix(home, home_items + desk, f"/home/{from_user}", later) if from_user != user else []
         if from_user != user:       # D44: names too (an app's folders named after the old home)
             renamed += rename.names(home, home_items, f"/home/{from_user}")
         rename.save_later(home, f"/home/{from_user}", later)
-        problems += missing(home, root, home_items, system_items)
+        renamed_cron = [f"var/spool/cron/{user}" if i == f"var/spool/cron/{from_user}" else i
+                        for i in system_items]
+        problems += missing(home, root, home_items, renamed_cron)
         return {"services": report, "theme": fetched.theme, "renamed": renamed, "later": later, "merged": desk,
                 "problems": problems,
                 "home": len(home_items), "system": len(system_items)}

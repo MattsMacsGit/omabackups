@@ -13,7 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from omabackups.audit import model, omarchy, packages, tools, tweaks
+from omabackups.audit import extras, model, omarchy, packages, tools, tweaks
 from omabackups.audit.model import item
 from omabackups.core import log
 
@@ -86,7 +86,8 @@ def scan(user: str | None = None) -> dict:
     apps, notes = packages.packages(home, known, finder)
     found += apps + packages.flatpaks(user, known, finder) + omarchy.webapps(home)
     found += tools.tools(user, home)
-    found += omarchy.desktop(home, finder.claimed) + tweaks.tweaks() + home_folders(home, known, finder)
+    found += omarchy.desktop(home, finder.claimed) + extras.extras(home, user, finder)    # D46
+    found += tweaks.tweaks() + home_folders(home, known, finder)
     sizer = Sizer(SIZE_BUDGET)
     for i in found:
         if i["group"] != "files" and i["paths"]:

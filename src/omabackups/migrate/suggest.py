@@ -43,4 +43,5 @@ def today(changes: dict, known: dict | None = None) -> dict:
         elif kind == "hidden" and name in hidden:
             now = hidden[name].get("suggest", now)
         items.append({**it, "suggest": now} if now != it.get("suggest") else it)
-    return {**changes, "items": items}
+    from omabackups.audit.pages import sort
+    return sort({**changes, "items": items})            # D46: this version's pages too

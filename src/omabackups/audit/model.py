@@ -24,21 +24,14 @@ import time
 
 FORMAT = 1
 
-# The picker's pages, in order (BUILD 3.2, 7.2: "Choose what comes over").
-GROUPS = (
-    ("apps", "Apps"),
-    ("settings", "Settings"),
-    ("tweaks", "System tweaks"),
-    ("desktop", "Keybindings, bar & theme"),
-    ("backgrounds", "Backgrounds"),
-    ("files", "Your files"),
-)
+# The picker's pages, in order (D46: audit/pages.py sorts each row onto one).
+from omabackups.audit.pages import GROUPS, OLD, sort  # noqa: E402
 SUGGEST = ("keep", "you", "leave")
 
 
 def item(id: str, group: str, name: str, kind: str, refs=(), paths=(), suggest: str = "you",
          weight: float = 30, what: str = "", why: str = "", back: str = "", **extra) -> dict:
-    assert group in dict(GROUPS) and suggest in SUGGEST
+    assert (group in dict(GROUPS) or group in OLD) and suggest in SUGGEST
     return {"id": id, "group": group, "name": name, "what": what, "why": why, "back": back,
             "suggest": suggest, "weight": round(float(weight), 1),
             "source": {"kind": kind, "refs": list(refs)}, "paths": list(paths),
@@ -47,10 +40,8 @@ def item(id: str, group: str, name: str, kind: str, refs=(), paths=(), suggest: 
 
 
 def audit(source: dict, user: str, items: list, notes: dict) -> dict:
-    order = [g for g, _ in GROUPS]
-    items = sorted(items, key=lambda i: (order.index(i["group"]), -i["weight"], i["name"].lower()))
-    return {"format": FORMAT, "made": int(time.time()), "source": source, "user": user,
-            "groups": [{"id": g, "title": t} for g, t in GROUPS], "items": items, "notes": notes}
+    return sort({"format": FORMAT, "made": int(time.time()), "source": source, "user": user,
+                 "items": items, "notes": notes})
 
 
 def summary(audit_: dict) -> str:

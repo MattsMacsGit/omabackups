@@ -67,7 +67,7 @@ def test_the_format_is_neutral_and_ordered():
     a = model.audit({"system": "omarchy", "version": "4"}, "u", items, {})
     assert [i["id"] for i in a["items"]] == ["app:b", "app:a", "files:Documents"]
     assert a["format"] == model.FORMAT and a["source"]["system"] == "omarchy"
-    assert [g["title"] for g in a["groups"]][:3] == ["Apps", "Settings", "System tweaks"]
+    assert [g["title"] for g in a["groups"]][:3] == ["Logins & keys", "Apps", "Your desktop"]   # D46
     with pytest.raises(AssertionError):
         model.item("x", "nonsense", "X", "file")
 
