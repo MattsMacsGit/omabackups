@@ -13,6 +13,7 @@ from omabackups.core.errors import OmaError
 from omabackups.core.events import Events
 
 UNIT = "omabackups-backup@{}.service"
+KINDS = ("now", "scheduled", "anyway")       # every backup service there is
 
 
 def add(sub) -> None:
@@ -25,7 +26,7 @@ def add(sub) -> None:
     choice.set_defaults(run=run_away)
     sub.add_parser("health-run", help=argparse.SUPPRESS).set_defaults(run=run_health)
     root = sub.add_parser("backup-run", help=argparse.SUPPRESS)
-    root.add_argument("kind", choices=("now", "scheduled", "anyway"))
+    root.add_argument("kind", choices=KINDS)
     root.set_defaults(run=run_root)
 
 
@@ -92,7 +93,9 @@ def _start_and_follow(kind: str, events: Events) -> int:
 
 def run_stop(args, events: Events) -> int:
     # One unit per call: some systemd versions refuse a multi-unit stop from a user (1.x lesson).
-    for kind in ("now", "scheduled"):
+    # Every kind: "anyway" (the away question's Back up now) was left out once,
+    # and Stop did nothing to it.
+    for kind in KINDS:
         _systemctl("stop", UNIT.format(kind))
     events.result({"stopped": True}, "Stopped. The next backup picks up where this one stopped.")
     return 0

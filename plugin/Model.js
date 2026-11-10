@@ -48,11 +48,12 @@ function free(header) {
 }
 
 // What a running backup is doing, in words.
-var STEPS = { unlock: "Opening your backup", check: "Checking what changed", send: "Backing up",
+var STEPS = { starting: "Starting the backup", unlock: "Opening your backup", check: "Checking what changed", send: "Backing up",
               audit: "Noting your changes to Omarchy", point: "Making the restore point" }
 
 function doing(running) {
   if (!running) return ""
+  if (running.stopping) return "Stopping…"
   var text = STEPS[running.step] || "Backing up"
   return running.part ? text + " " + running.part + "…" : text + "…"
 }

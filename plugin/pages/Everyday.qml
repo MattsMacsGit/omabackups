@@ -158,9 +158,11 @@ Column {
     }
     ActionButton {
       id: stopButton
-      text: "Stop"
+      readonly property bool stopping: !!(page.service && page.service.running && page.service.running.stopping)
+      text: stopping ? "Stopping…" : "Stop"
+      enabled: !stopping
       hasCursorHere: page.cursorOn(this)
-      onClicked: page.service.stop()
+      onClicked: if (!stopping) page.service.stop()
     }
     Prose { width: parent.width; dim: true; text: "Stopping is safe: the next backup picks up where this one stopped." }
   }

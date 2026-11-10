@@ -68,3 +68,29 @@ def test_bugs_still_get_a_proper_message(sandbox):
 def test_version(sandbox):
     done = sandbox.run("--version")
     assert done.returncode == 0 and done.stdout.startswith("omabackups 2.0")
+
+
+def test_stop_stops_every_kind_of_backup(monkeypatch):
+    """Stop once missed the away question's "anyway" backup."""
+    from omabackups.commands import backup
+    stopped = []
+    monkeypatch.setattr(backup, "_systemctl", lambda *a: stopped.append(a) or None)
+
+    class Quiet:
+        def result(self, *a):
+            pass
+    backup.run_stop(None, Quiet())
+    assert {a[1] for a in stopped if a[0] == "stop"} == {backup.UNIT.format(k) for k in backup.KINDS}
+    assert "anyway" in backup.KINDS
+
+
+def test_a_stopped_backup_isnt_shown_as_running(sandbox):
+    """Killed or stopped, the progress file still says running: the service decides."""
+    from omabackups.backup import progress
+    from test_migrate_apply import fake_state
+    fake_state(sandbox, active=["omabackups-backup@anyway.service"])
+    data = {"running": True, "kind": "anyway", "step": "send"}
+    assert progress.alive(data)
+    fake_state(sandbox, active=[])
+    assert not progress.alive(data)
+    assert not progress.alive({"running": False, "kind": "now"})

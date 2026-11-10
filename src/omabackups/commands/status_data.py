@@ -132,6 +132,8 @@ def build() -> dict:
     server = _read(paths.server_file())
     record = _read(paths.system_state_dir() / "backup.json")
     now = progress.read()
+    if now.get("running") and not progress.alive(now):
+        now = {**now, "running": False}
     try:
         settings = config.load()
     except Exception:  # noqa: BLE001 - a bad settings file shows as defaults here; settings says why

@@ -17,7 +17,19 @@ Item {
   property string noticeDetails: ""
 
   readonly property string flow: status.flow || ""
-  readonly property var running: status.running || null
+  // Back up now and Stop show at once (a button reacts the moment it's pressed:
+  // the user sees it was pushed); the status checks catch up after.
+  property double startAsked: 0
+  property bool stopAsked: false
+  readonly property var running: status.running
+      ? (stopAsked ? Object.assign({}, status.running, { stopping: true }) : status.running)
+      : (startAsked ? { step: "starting" } : null)
+  onStatusChanged: {
+    if (status.running) startAsked = 0
+    else stopAsked = false
+    // A backup that didn't start (the away limit, a problem) goes back after a while.
+    if (startAsked && Date.now() - startAsked > 15000) startAsked = 0
+  }
   readonly property var header: status.header || null
   // D32: a switch shows its new state at once. `expected` holds what the
   // panel asked for until status confirms it (or the command fails: then it
@@ -175,9 +187,9 @@ Item {
   function backupNow() {
     // D29: the very first backup opens the picker first; saving starts it.
     if (!firstBackupDone) terminal("omabackups pick --then-backup")
-    else start(["backup"])
+    else { startAsked = Date.now(); start(["backup"]) }
   }
-  function stop() { run(["stop"]) }
+  function stop() { stopAsked = true; run(["stop"]) }
   function awayAnswer(now) { if (now) start(["away", "answer", "now"]); else run(["away", "answer", "wait"]) }
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }
   function keep(point, on) { run([on ? "keep" : "release", point], "keep:" + point, on) }

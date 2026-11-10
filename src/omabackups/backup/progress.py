@@ -36,6 +36,20 @@ def read() -> dict:
         return {}
 
 
+def alive(data: dict) -> bool:
+    """A backup the progress file says is running really is: its service is
+    still up. Stopped or killed, nobody tidies the file, and the panel showed
+    "running" for ever."""
+    kind = data.get("kind")
+    if not data.get("running") or not kind:
+        return bool(data.get("running"))
+    import subprocess
+    done = subprocess.run(["systemctl", "--no-ask-password", "is-active", f"omabackups-backup@{kind}.service"],
+                          capture_output=True, text=True)
+    # 0: active; starting and stopping answer non-zero but say so.
+    return done.returncode == 0 or done.stdout.strip() in ("activating", "reloading", "deactivating")
+
+
 def text(data: dict) -> str:
     step = STEPS.get(data.get("step", ""), data.get("step", ""))
     part = data.get("part", "")
