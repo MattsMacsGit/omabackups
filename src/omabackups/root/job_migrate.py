@@ -25,7 +25,7 @@ from omabackups.backup import run
 from omabackups.core import log, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
-from omabackups.migrate import apply
+from omabackups.migrate import apply, brought
 from omabackups.root import keys
 from omabackups.root.job_server import ADDRESS, HOST_KEY
 from omabackups.where import location
@@ -223,7 +223,10 @@ def settings(request: dict) -> dict:
     logger = log.get("migrate")
     gate, bid = _open()
     server = location.load()
-    if server.get("migrating"):          # the handover starts from here (first backup)
+    if server.get("migrating") and brought.newer(point, server.get("from_point")):
+        # the handover starts from here (first backup): the newest point
+        # Migrate came from, so a part fetched from an older one later
+        # (Run Migrate again) never moves the Return point back (D44)
         write_atomic(paths.server_file(), (json.dumps({**server, "from_point": point,
                                                        "from_user": from_user}, indent=2)
                                            + "\n").encode(), 0o644)

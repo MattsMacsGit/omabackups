@@ -13,7 +13,8 @@ as "Already in".
 - Shell history: in when it has the past in it, the backup's last commands
   (if it has the past it came over; if it only has what's been typed since,
   it was blank). It keeps growing, so its size and time never match.
-Folders (Your files) are left to Restore my files' own record.
+- Your files (folders): the same 9 in 10 (a folder you've worked in since
+  stays in; one that wasn't brought back isn't).
 
 The root side lists the restore point against this computer with a dry run
 of rsync (nothing is copied); tally() reads that listing.
@@ -90,8 +91,6 @@ def asked(changes: dict) -> tuple[list[str], list[str]]:
     """The settings and tweaks to look for: (home items, system items)."""
     home, system = [], []
     for it in changes.get("items", []):
-        if it.get("group") == "files":
-            continue
         for p in it.get("paths", []):
             if p.startswith("~/"):
                 home.append(p[2:])
@@ -105,8 +104,6 @@ def found(changes: dict, home_in: set[str], system_in: set[str], installed=None)
     packages, flatpaks = installed if installed is not None else _installed()
     out = set()
     for it in changes.get("items", []):
-        if it.get("group") == "files":
-            continue
         src = it.get("source", {})
         kind, refs = src.get("kind"), src.get("refs", [])
         if kind == "package" and not (refs and all(r in packages for r in refs)):

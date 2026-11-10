@@ -201,7 +201,7 @@ def test_an_app_is_in_when_installed_and_its_settings_are_here():
     installed = ({"herdr", "btop"}, set())
     assert here.found(changes, {".bashrc"}, set(), installed) == {"app:btop"}
     assert here.found(changes, {".bashrc", ".bash_history", ".config/herdr", "Music"}, set(), installed) == \
-        {"app:btop", "app:herdr", "setting:shell"}
+        {"app:btop", "app:herdr", "setting:shell", "files:Music"}
 
 
 def test_a_history_with_the_past_in_it_is_in():
@@ -226,3 +226,30 @@ def test_an_app_you_log_in_to_is_in_when_installed_and_logged_in(monkeypatch):
     assert here.found(changes, set(), set(), ({"tailscale"}, set())) == set()       # logged out
     monkeypatch.setattr(here, "LOGGED_IN", {"tailscale": ["true"]})
     assert here.found(changes, set(), set(), (set(), set())) == set()               # not installed
+
+
+def test_a_rerun_adds_to_what_migrate_saved_never_replaces_it(sandbox):
+    from omabackups.commands import migrate as cmd
+    from omabackups.core import flow, state
+    state.write(flow.MIGRATE, cmd._state("003-2026-11-09-1928", {"user": "c"}, ["Music", "Work"], False))
+    again = cmd._state("002-2026-11-08-1537", {"user": "b"}, [], False)      # older point, no folders
+    assert again["files"] == ["Music", "Work"] and again["files_restored"] is True
+    assert again["point"] == "003-2026-11-09-1928" and again["from_user"] == "c"   # newest stays
+    state.write(flow.MIGRATE, again)
+    newer = cmd._state("004-2026-11-10-0900", {"user": "d"}, ["Videos"], True)
+    assert newer["point"] == "004-2026-11-10-0900" and newer["files_restored"] is False
+    assert newer["files"] == ["Music", "Videos", "Work"]
+
+
+def test_newer_compares_restore_point_times():
+    assert brought.newer("003-2026-11-09-1928", None)
+    assert brought.newer("003-2026-11-09-1928", "002-2026-11-09-1541")
+    assert not brought.newer("002-2026-11-08-1537", "003-2026-11-09-1928")
+
+
+def test_a_folder_thats_here_is_already_in():
+    from omabackups.migrate import here
+    changes = {"items": [{"id": "files:Music", "group": "files", "paths": ["~/Music"]},
+                         {"id": "files:Work", "group": "files", "paths": ["~/Work"]}]}
+    assert here.asked(changes) == (["Music", "Work"], [])
+    assert here.found(changes, {"Music"}, set(), (set(), set())) == {"files:Music"}

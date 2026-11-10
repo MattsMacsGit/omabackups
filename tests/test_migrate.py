@@ -114,6 +114,13 @@ def test_run_migrate_again_sees_whats_here_already(world, sandbox, monkeypatch):
     rootjob.run("migrate-settings", {"point": point, "from_user": "u", "home": job["home"],
                                      "system": job["system"], "units": []})
     home, system = here.asked(changes)
+    newest = json.loads(paths.server_file().read_text())
+    assert newest["from_point"] == point
+    later = {**newest, "from_point": "001-2099-01-01-0000"}          # a newer point migrated from
+    paths.server_file().write_text(json.dumps(later))
+    rootjob.run("migrate-settings", {"point": point, "from_user": "u", "home": [], "system": [], "units": []})
+    assert json.loads(paths.server_file().read_text())["from_point"] == "001-2099-01-01-0000"   # D45: never back
+    paths.server_file().write_text(json.dumps(newest))
     seen = rootjob.run("migrate-here", {"point": point, "from_user": "u", "home": home, "system": system})
     assert seen == {"home": [".config/app"], "system": ["etc/thing.conf"]}
     assert not (sandbox.home / ".config/big").exists()                   # a dry run: nothing copied

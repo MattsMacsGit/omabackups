@@ -252,9 +252,7 @@ def run(args, events: Events) -> int:
                                             result["files_now"]))
     files_left = bool(job["files"]) and not result["files_now"]
     if not again:
-        state.write(flow.MIGRATE, {"done": True, "files_restored": not files_left, "point": point,
-                                   "from_user": changes.get("user") or "", "files": job["files"],
-                                   "restart": True, "at": int(time.time())})   # D41: always
+        state.write(flow.MIGRATE, _state(point, changes, job["files"], files_left))
     lines = [f"Brought over: {_said(job)}."]
     for svc in result["services"]:
         if svc.get("running"):
@@ -271,6 +269,21 @@ def run(args, events: Events) -> int:
                   "\n".join(x for x in lines if x))
     _finish(result["files_now"])
     return 0
+
+
+def _state(point: str, changes: dict, files: list[str], files_left: bool) -> dict:
+    """What Migrate saves: added to an earlier run's, never in place of it
+    (a rerun with no folders ticked once erased the record of the folders
+    that came back). The newest point it came from stays its point."""
+    from omabackups.migrate.brought import newer
+    before = state.read(flow.MIGRATE) or {}
+    newest = newer(point, before.get("point"))
+    return {"done": True,
+            "files_restored": (before.get("files_restored", True) if before else True) and not files_left,
+            "point": point if newest else before["point"],
+            "from_user": (changes.get("user") or "") if newest else before.get("from_user", ""),
+            "files": sorted(set(before.get("files", [])) | set(files)),
+            "restart": True, "at": int(time.time())}      # D41: always
 
 
 def _finish(files_now: bool) -> None:

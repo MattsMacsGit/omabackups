@@ -17,6 +17,16 @@ def line(point: str) -> str:
     return point.split("-", 1)[0]
 
 
+def newer(point: str, than: str | None) -> bool:
+    """point is at least as new as `than` (none yet: yes). D45: the newest
+    point Migrate came from stays the takeover's start."""
+    from omabackups.backup.thinning import when
+    if not than:
+        return True
+    a, b = when(point), when(than)
+    return bool(a and b and a >= b)
+
+
 def already(point: str) -> set[str]:
     saved = state.read(NAME) or {}
     return set(saved.get("lines", {}).get(line(point), []))
