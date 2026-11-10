@@ -175,12 +175,26 @@ def here(request: dict) -> dict:
         home, root = Path(pwd.getpwnam(run.linked_user()).pw_dir), Path("/")
     gate, bid = _open()
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
+    import tempfile
+    from omabackups.migrate.here import has_past, histories
+    kept = set()
     try:
         mine = _listing(gate, bid, point, f"home/{from_user}", home_items, home)
         system = _listing(gate, bid, point, "system", system_items, root)
+        with tempfile.TemporaryDirectory(prefix="omabackups-here.") as tmp:
+            names = histories(mine)
+            _fetch(gate, bid, point, f"home/{from_user}", names, Path(tmp), "")
+            for name in names:
+                try:
+                    old = (Path(tmp) / name).read_text(errors="replace")
+                    now = (home / name).read_text(errors="replace")
+                except OSError:
+                    continue
+                if has_past(old, now):
+                    kept.add(name)
     finally:
         gate.call("lock", bid, hold)
-    return {"home": sorted(tally(mine, home_items)), "system": sorted(tally(system, system_items))}
+    return {"home": sorted(tally(mine, home_items, kept)), "system": sorted(tally(system, system_items))}
 
 
 def _merges(asked) -> list[dict]:

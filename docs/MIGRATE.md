@@ -118,7 +118,10 @@ box: what an earlier Migrate from that old computer brought over, apps that
 are installed, and settings that are here as they are in the backup (it
 looks first; nothing is copied for that). It's never brought over twice, so
 your keybindings and bar don't get doubled. The same goes for folders
-already brought back. Settings you've changed since show as normal rows. Only the rest can be ticked. To get a part
+already brought back. Settings you've changed since show as normal rows.
+Two things count as in even though they keep changing: an app you log in to
+(Tailscale), once it's installed and logged in, and your terminal history,
+once it has your old commands in it. Only the rest can be ticked. To get a part
 back as it was in the backup anyway, open the restore point (Browse) and
 copy it out.
 

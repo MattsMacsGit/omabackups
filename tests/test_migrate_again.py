@@ -180,10 +180,10 @@ def test_an_older_restore_points_rows_get_this_versions_ticks():
 
 def test_nearly_all_files_here_counts_as_in():
     from omabackups.migrate import here
-    same = "".join(f".f          .config/chromium/f{n}\n" for n in range(19))
-    one_changed = same + ">f..t...... .config/chromium/Local State\n"           # 19 of 20 here
-    fresh = ">f.st...... .bashrc\n.f          .bash_profile\n"                    # 1 of 2: not in
-    listing = one_changed + fresh + "cd+++++++++ .config/new/\n>f+++++++++ .config/new/x\n"
+    same = "".join(f".f          10 .config/chromium/f{n}\n" for n in range(19))
+    one_changed = same + ">f..t...... 10 .config/chromium/Local State\n"        # 19 of 20 here
+    fresh = ">f.st...... 10 .bashrc\n.f          10 .bash_profile\n"              # 1 of 2: not in
+    listing = one_changed + fresh + "cd+++++++++ 0 .config/new/\n>f+++++++++ 5 .config/new/x\n"
     got = here.tally(listing, [".config/chromium", ".bashrc", ".bash_profile", ".config/new", ".config/gone"])
     assert got == {".config/chromium", ".bash_profile"}
 
@@ -202,3 +202,27 @@ def test_an_app_is_in_when_installed_and_its_settings_are_here():
     assert here.found(changes, {".bashrc"}, set(), installed) == {"app:btop"}
     assert here.found(changes, {".bashrc", ".bash_history", ".config/herdr", "Music"}, set(), installed) == \
         {"app:btop", "app:herdr", "setting:shell"}
+
+
+def test_a_history_with_the_past_in_it_is_in():
+    from omabackups.migrate import here
+    old = "".join(f"old command {n}\n" for n in range(30))
+    assert here.has_past(old, old + "typed since\n" * 5)                 # came over, then grew
+    assert not here.has_past(old, "typed since\n" * 50)                  # blank, then typed in
+    assert not here.has_past("", "anything\n")
+    line = ">f.st...... 400 .bash_history\n.f          10 .bashrc\n"
+    assert here.histories(line) == [".bash_history"]
+    assert here.tally(line, [".bash_history", ".bashrc"], {".bash_history"}) == {".bash_history", ".bashrc"}
+    assert here.tally(line, [".bash_history", ".bashrc"]) == {".bashrc"}
+
+
+def test_an_app_you_log_in_to_is_in_when_installed_and_logged_in(monkeypatch):
+    from omabackups.migrate import here
+    changes = {"items": [{"id": "app:tailscale", "group": "apps", "paths": ["/var/lib/tailscale"],
+                          "source": {"kind": "package", "refs": ["tailscale"]}}]}
+    monkeypatch.setattr(here, "LOGGED_IN", {"tailscale": ["true"]})
+    assert here.found(changes, set(), set(), ({"tailscale"}, set())) == {"app:tailscale"}
+    monkeypatch.setattr(here, "LOGGED_IN", {"tailscale": ["false"]})
+    assert here.found(changes, set(), set(), ({"tailscale"}, set())) == set()       # logged out
+    monkeypatch.setattr(here, "LOGGED_IN", {"tailscale": ["true"]})
+    assert here.found(changes, set(), set(), (set(), set())) == set()               # not installed

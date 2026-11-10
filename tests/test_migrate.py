@@ -103,6 +103,9 @@ def test_run_migrate_again_sees_whats_here_already(world, sandbox, monkeypatch):
     """D44: a dry run against the restore point, nothing copied: what came
     over is here; a part not brought, or changed since, isn't."""
     from omabackups.migrate import here
+    old_history = "".join(f"old command {n}\n" for n in range(30))
+    (world[3].root / "home/u").mkdir(parents=True, exist_ok=True)
+    (world[3].root / "home/u/.bash_history").write_text(old_history)
     point = old_computer_backs_up(world)
     become_a_new_computer(world, sandbox, monkeypatch)
     rootjob.run("migrate-join", {"address": "test", "host_keys": HOST_KEYS, "password": "password1"})
@@ -119,3 +122,10 @@ def test_run_migrate_again_sees_whats_here_already(world, sandbox, monkeypatch):
     (sandbox.home / ".config/app/conf").write_text("changed since, by you")
     again = rootjob.run("migrate-here", {"point": point, "from_user": "u", "home": home, "system": system})
     assert again["home"] == []
+    # History: in when it has the past in it, however much was typed since.
+    ask = {"point": point, "from_user": "u", "home": [".bash_history"], "system": []}
+    history = sandbox.home / ".bash_history"
+    history.write_text("typed on the new computer\n" * 40)
+    assert rootjob.run("migrate-here", ask)["home"] == []                  # blank, then typed in
+    history.write_text(old_history + "typed since\n" * 40)
+    assert rootjob.run("migrate-here", ask)["home"] == [".bash_history"]   # came over, then grew
