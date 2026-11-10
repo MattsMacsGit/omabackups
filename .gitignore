@@ -5,3 +5,5 @@ __pycache__/
 packaging/pkg/
 packaging/src/
 packaging/*.pkg.tar.*
+# the Rescue USB image (rescue/iso/build.sh)
+rescue/out/

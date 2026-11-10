@@ -1,0 +1,38 @@
+# The Rescue USB's packages (D47): Omarchy's kernel and firmware, what a
+# rescue needs, and nothing else. Omarchy's own package repo supplies
+# linux-omarchy; the omabackups package comes from this repo (build.sh).
+base
+linux-omarchy
+linux-firmware
+amd-ucode
+intel-ucode
+mkinitcpio
+mkinitcpio-archiso
+syslinux
+# Network: Wi-Fi, wired (systemd-networkd), SSH, Tailscale
+iwd
+wireless-regdb
+systemd-resolvconf
+openssh
+tailscale
+# The restore: disks, encryption, btrfs, copying, the boot loader
+rsync
+cryptsetup
+btrfs-progs
+dosfstools
+gptfdisk
+e2fsprogs
+efibootmgr
+limine
+arch-install-scripts
+# The wizard: Python, gum, the console font
+python
+gum
+jq
+terminus-font
+less
+nano
+zsh
+pciutils
+usbutils
+omabackups

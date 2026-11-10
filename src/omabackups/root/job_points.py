@@ -1,6 +1,7 @@
 """Root jobs on the backup itself (as root, through the gatekeeper):
 keep / release a restore point (kept ones are never thinned or deleted),
-delete one (to make room, D35), and change your backup's password."""
+delete one (to make room, D35), change your backup's password, and a Rescue
+USB's read-only key (5.7, D11)."""
 
 import json
 
@@ -64,3 +65,15 @@ def change_password(request: dict) -> dict:
                        "Run: omabackups setup server --update", code="gate-version")
     gate.call("password", bid, data=json.dumps({"old": old, "new": new}).encode())
     return {"changed": True}
+
+
+def rescue_key(request: dict) -> dict:
+    """A new Rescue USB key on the server (the last stick's taken off): the
+    stick's settings, for the user's side to write onto it."""
+    from omabackups.rescue import settings
+    server = location.load()
+    if server.get("kind") == "disk" or server.get("migrating"):
+        raise OmaError("A Rescue USB needs this computer's backup on a backup server.",
+                       "Set up backups to a server first (a disk rescue comes later).", code="no-server")
+    gate, _bid = _open()
+    return {"settings": settings.make(gate, server)}

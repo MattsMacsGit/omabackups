@@ -8,10 +8,15 @@ from omabackups.core.events import Events
 
 def add(sub) -> None:
     p = sub.add_parser("rescue-usb", help="the Rescue USB")
-    verbs = p.add_subparsers(dest="verb", metavar="later|preview|make|refresh", required=True)
+    verbs = p.add_subparsers(dest="verb", metavar="later|preview|settings|wizard|make|refresh", required=True)
     verbs.add_parser("later", help="not now (the panel keeps reminding)").set_defaults(run=run_later)
     verbs.add_parser("preview", help="see the Rescue USB's screens (sample answers, nothing changes)") \
         .set_defaults(run=run_preview)
+    p_set = verbs.add_parser("settings", help="write a new Rescue USB's settings to a folder (testing; "
+                                              "takes the last stick's key off the server)")
+    p_set.add_argument("folder")
+    p_set.set_defaults(run=run_settings)
+    verbs.add_parser("wizard", help="the rescue itself (runs on the Rescue USB)").set_defaults(run=run_wizard)
     for verb in ("make", "refresh"):
         verbs.add_parser(verb, help=f"{verb} the Rescue USB (comes in a later version)").set_defaults(run=run_soon)
 
@@ -38,3 +43,20 @@ def run_preview(args, events: Events) -> int:
     preview.run()
     events.result({"preview": True}, "Preview finished. Nothing was changed.")
     return 0
+
+
+def run_settings(args, events: Events) -> int:
+    from pathlib import Path
+    from omabackups.core import rootjob
+    from omabackups.rescue import settings
+    bundle = rootjob.run("rescue-key", {})["settings"]
+    folder = Path(args.folder).expanduser().resolve()
+    settings.write(bundle, folder)
+    events.result({"folder": str(folder)}, f"A Rescue USB's settings are in {folder}. "
+                  "The last stick's key no longer opens anything.")
+    return 0
+
+
+def run_wizard(args, events: Events) -> int:
+    from omabackups.rescue import wizard
+    return wizard.run(events)
