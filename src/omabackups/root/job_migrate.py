@@ -131,11 +131,15 @@ def _clean(paths_: list, absolute: bool) -> list[str]:
     return out
 
 
-def _fetch(gate, bid: str, point: str, part: str, items: list[str], dest: Path, chown: str) -> str:
-    """rsync just these paths (relative to the part) into dest; the error text if any."""
+def _fetch(gate, bid: str, point: str, part: str, items: list[str], dest: Path, chown: str,
+           keep: Path | None = None) -> str:
+    """rsync just these paths (relative to the part) into dest; the error text if any.
+    keep: what's replaced is moved there first, same paths (D45)."""
     if not items:
         return ""
     dest.mkdir(parents=True, exist_ok=True)
+    if keep:          # the gatekeeper allows no backup options: what's replaced is copied aside first
+        apply.keep_first(_listing(gate, bid, point, part, items, dest), dest, keep)
     command = ["rsync", "-aHAX", "-r", "--files-from=-", "--from0", *chown.split(),
                "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} {part}",
                f"{gate.rsync_target()}:{part}/", f"{dest}/"]
@@ -246,15 +250,26 @@ def settings(request: dict) -> dict:
             keeper.stop()
             gate.call("lock", bid, hold)
 
+    # D45: what Migrate replaces is kept, dated: yours in your home, the
+    # system's where only root reads it (Wi-Fi passwords...).
+    stamp, n = time.strftime("%Y-%m-%d-%H%M%S"), 1
+    keep_home = home / ".local/state/omabackups/replaced" / stamp
+    keep_root = root / "var/lib/omabackups/replaced" / stamp
+    while keep_home.exists() or keep_root.exists():      # one folder per run, never shared
+        n += 1
+        keep_home, keep_root = keep_home.with_name(f"{stamp}-{n}"), keep_root.with_name(f"{stamp}-{n}")
+
     def get(part: str, items: list[str], dest: Path, owned: bool) -> str:
-        return _fetch(gate, bid, point, part, items, dest, owner if owned else "")
+        keep = keep_home if dest == home else keep_root if dest == root else None
+        return _fetch(gate, bid, point, part, items, dest, owner if owned else "", keep)
 
     try:
         done = apply.run(get, home, root, from_user, user, home_items, system_items,
                          request.get("units", []), bool(request.get("theme")), let_go,
-                         _merges(request.get("merge", [])))
+                         _merges(request.get("merge", [])), keep_root)
     finally:
         let_go()
+    done["replaced"] = apply.kept(home, keep_home, keep_root)
     logger.info("migrate settings from %s: %d home, %d system, services %s, %d renamed, %d problems",
                 point, len(home_items), len(system_items), done["services"], len(done["renamed"]),
                 len(done["problems"]))

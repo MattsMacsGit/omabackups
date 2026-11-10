@@ -123,7 +123,7 @@ PICK = """
 import json, sys
 from omabackups.tui import migrate_pick
 changes = json.loads(sys.argv[1])
-got = migrate_pick.run(changes, "today", already={"setting:shell"})
+got = migrate_pick.run(changes, "today", already={"setting:shell"}, warning="Older than the one you came from")
 print("RESULT", json.dumps(got))
 """
 
@@ -153,7 +153,7 @@ def test_the_picker_shows_already_in_and_wont_tick_it(sandbox):
     read(0.3)
     os.close(main)
     screen = seen.decode("utf-8", "replace")
-    assert "Already in" in screen
+    assert "Already in" in screen and "Older than the one you came from" in screen     # D45
     result = json.loads(screen.split("RESULT", 1)[1].strip().splitlines()[0])
     assert result["picked"] == ["setting:git"]
 
@@ -253,3 +253,18 @@ def test_a_folder_thats_here_is_already_in():
                          {"id": "files:Work", "group": "files", "paths": ["~/Work"]}]}
     assert here.asked(changes) == (["Music", "Work"], [])
     assert here.found(changes, {"Music"}, set(), (set(), set())) == {"files:Music"}
+
+
+def test_what_didnt_come_over_is_named():
+    items = [{"id": "desktop:theme/rick", "group": "desktop", "name": "Your theme: rick",
+              "paths": ["~/.config/omarchy/themes/rick"]},
+             {"id": "desktop:hypr/bindings.lua", "group": "desktop", "name": "Key bindings",
+              "paths": ["~/.config/hypr/bindings.lua"]},                       # merged: never matches
+             {"id": "desktop:theme-current", "group": "desktop", "name": "Theme: rick",
+              "paths": ["~/.local/state/omarchy/current/theme.name"]},        # set by name
+             {"id": "files:Music", "group": "files", "name": "Music", "paths": ["~/Music"]},
+             {"id": "app:x", "group": "apps", "name": "X", "paths": [], "source": {"kind": "package"}},
+             {"id": "setting:ssh", "group": "logins", "name": "SSH keys", "paths": ["~/.ssh"]}]
+    came = {i["id"] for i in items}
+    got = brought.missed(came, {"setting:ssh"}, items)
+    assert [m["id"] for m in got] == ["desktop:theme/rick", "app:x"]

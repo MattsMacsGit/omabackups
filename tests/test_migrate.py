@@ -5,6 +5,7 @@ user name differs), and its first backup takes the backup over."""
 import json
 import shutil
 import sys
+from pathlib import Path
 
 import pytest
 from fake_source import FakeSource
@@ -136,3 +137,23 @@ def test_run_migrate_again_sees_whats_here_already(world, sandbox, monkeypatch):
     assert rootjob.run("migrate-here", ask)["home"] == []                  # blank, then typed in
     history.write_text(old_history + "typed since\n" * 40)
     assert rootjob.run("migrate-here", ask)["home"] == [".bash_history"]   # came over, then grew
+
+
+def test_what_migrate_replaces_is_kept(world, sandbox, monkeypatch):
+    """D45: a setting here that the backup's replaces is kept first, dated,
+    at the same path; nothing kept when nothing was replaced."""
+    point = old_computer_backs_up(world)
+    become_a_new_computer(world, sandbox, monkeypatch)
+    rootjob.run("migrate-join", {"address": "test", "host_keys": HOST_KEYS, "password": "password1"})
+    (sandbox.home / ".config/app").mkdir(parents=True)
+    (sandbox.home / ".config/app/conf").write_text("here before")
+    done = rootjob.run("migrate-settings", {"point": point, "from_user": "u", "home": ["~/.config/app"],
+                                            "system": ["/etc/thing.conf"], "units": []})
+    assert (sandbox.home / ".config/app/conf").read_text() == "mine"
+    assert len(done["replaced"]) == 1
+    kept = Path(done["replaced"][0])
+    assert (kept / ".config/app/conf").read_text() == "here before"
+    assert str(kept).startswith(str(sandbox.home / ".local/state/omabackups/replaced/"))
+    again = rootjob.run("migrate-settings", {"point": point, "from_user": "u", "home": ["~/.config/app"],
+                                             "system": [], "units": []})
+    assert again["replaced"] == []                                   # the same file: nothing replaced

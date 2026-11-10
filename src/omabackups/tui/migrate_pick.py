@@ -39,10 +39,10 @@ def ordered(changes: dict) -> list[dict]:
 
 class Chooser:
     def __init__(self, scr, changes: dict, when: str, picked: set[str] | None = None, preview: bool = False,
-                 already: set[str] | None = None):
+                 already: set[str] | None = None, warning: str = ""):
         self.ui = kit.Screen(scr)
         self.pages = ordered(changes)
-        self.already = set(already or ())
+        self.already, self.warning = set(already or ()), warning
         self.picked = set(plan.suggested(changes) if picked is None else picked) - self.already
         self.files_now, self.preview = True, preview
         self.when, self.page, self.cursor, self.top = when, 0, {}, 0
@@ -112,6 +112,8 @@ class Chooser:
         ui.put(0, 1, title, ui.col(kit.ACCENT, curses.A_BOLD))
         right = f"Here's what you had as of {self.when}"
         ui.put(0, max(len(title) + 4, w - len(right) - 2), right, curses.A_BOLD)
+        if self.warning:                                   # D45: an older restore point
+            ui.put(1, 1, ("⚠ " + self.warning)[:w - 2], ui.col(kit.YELLOW, curses.A_BOLD))
         self.draw_tabs()
         rows, top_y = self.rows(), 4
         height = max(1, h - top_y - kit.Screen.BOTTOM)
@@ -217,8 +219,8 @@ class Chooser:
 
 
 def run(changes: dict, when: str, picked: set[str] | None = None, preview: bool = False,
-        already: set[str] | None = None) -> dict | None:
+        already: set[str] | None = None, warning: str = "") -> dict | None:
     os.environ.setdefault("ESCDELAY", "25")
     if not plan.pages(changes):
         return {"picked": [], "files_now": False}
-    return curses.wrapper(lambda scr: Chooser(scr, changes, when, picked, preview, already).run())
+    return curses.wrapper(lambda scr: Chooser(scr, changes, when, picked, preview, already, warning).run())

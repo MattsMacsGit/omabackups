@@ -44,8 +44,9 @@ def tools(user: str, home: Path) -> list[dict]:
     for f in sorted(cargo.iterdir()) if cargo.is_dir() else []:
         if f.name not in CARGO_OWN:
             found.append(("cargo", f.name, f"cargo install {f.name}"))
-    out = [item(f"tool:{mgr}:{name}", "apps", name, "tool", [name], [], "you", 12,
-                f"A command-line tool installed with {mgr}.", "", f"quick to install again ({hint})",
+    out = [item(f"tool:{mgr}:{name}", "apps", name, "tool", [name], [], "keep", 12,       # D46: you chose it
+                f"A command-line tool installed with {mgr}.", "you installed it",
+                f"quick to install again ({hint})",
                 manager=mgr, reinstall=hint)
            for mgr, name, hint in found]
 

@@ -65,3 +65,22 @@ def restored(migrate_state: dict | None) -> set[str]:
     """Folders Restore my files has finished bringing back for that Migrate."""
     m = migrate_state or {}
     return {f"files:{f}" for f in m.get("files", [])} if m.get("files_restored") else set()
+
+
+def missed(came: set[str], here: set[str], items: list[dict]) -> list[dict]:
+    """D45: the rows that were brought over but aren't here by the "is it
+    here?" check (D44). Not checked: merged files (they never match the
+    backup's), the theme in use (set again by name), folders (Restore my
+    files has its own progress), rows with nothing to look at."""
+    from omabackups.migrate import plan
+    out = []
+    for it in items:
+        if it["id"] not in came or it["id"] in here or it.get("group") == "files":
+            continue
+        paths = it.get("paths", [])
+        if any(plan.merge_kind(p) or plan.THEME.match(p) for p in paths):
+            continue
+        if not paths and it.get("source", {}).get("kind") not in ("package", "flatpak", "tool"):
+            continue
+        out.append(it)
+    return out

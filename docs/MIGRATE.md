@@ -88,6 +88,22 @@ back, so they never start again from scratch on empty folders. Then they're
 pointed at the folders here; if one was running it's closed for that, and the
 panel says to start it again.
 
+## What Migrate tells you at the end
+
+The report lists what came over and anything that needs a look. Before it
+ends, Migrate checks that each thing you ticked is really here now; anything
+that isn't is listed as **Didn't come over**, so nothing goes missing
+quietly. Run Migrate again to try once more, or copy it out with Browse.
+
+If Migrate replaced a setting that was already here and different, the one
+that was here is kept first, in a dated folder with the same paths:
+`~/.local/state/omabackups/replaced/` (and System tweaks in
+`/var/lib/omabackups/replaced/`, readable by root only). The report says
+where. So any Migrate can be undone by hand.
+
+Picking a restore point older than the one you migrated from? The chooser
+says so at the top: what you tick then replaces newer settings.
+
 ## Finishing
 
 The panel then shows what's left, only while it's true:

@@ -40,6 +40,8 @@ def today(changes: dict, known: dict | None = None) -> dict:
                 now = k["suggest"]
             elif now == "you" and it.get("paths"):
                 now = "keep"                   # an app with your settings, window icon or not
+        elif kind == "tool" and now == "you":
+            now = "keep"                       # D46: a tool you installed, like an app
         elif kind == "hidden" and name in hidden:
             now = hidden[name].get("suggest", now)
         items.append({**it, "suggest": now} if now != it.get("suggest") else it)

@@ -134,7 +134,8 @@ def _apply(point: str, changes: dict, chosen: dict, say) -> dict:
         say("Bringing back your files (the panel shows how far)...")
         rootjob.run("restore-files-start", {"point": point, "from_user": from_user, "only": job["files"]})
     return {"job": job, "problems": problems, "files_now": files_now, "skipped": job["skipped"],
-            "services": done.get("services", []), "renamed": done.get("renamed", [])}
+            "services": done.get("services", []), "renamed": done.get("renamed", []),
+            "replaced": done.get("replaced", [])}
 
 
 def _not_mixed(folders: list[str]) -> list[str]:
@@ -240,7 +241,12 @@ def run(args, events: Events) -> int:
     from omabackups.migrate import brought
     already = brought.already(point) | brought.restored(state.read(flow.MIGRATE)) | \
         _here(point, changes)                                                    # D44
-    chosen = migrate_pick.run(changes, when(point), already=already)
+    before = state.read(flow.MIGRATE) or {}
+    older = ""
+    if before.get("point") and not brought.newer(point, before["point"]):       # D45
+        older = (f"Older than the restore point you came from ({when(before['point'])}): "
+                 "what you tick replaces newer settings.")
+    chosen = migrate_pick.run(changes, when(point), already=already, warning=older)
     if chosen is None:
         events.result({"migrated": False}, "Nothing was brought over.")
         return 0
@@ -248,8 +254,9 @@ def run(args, events: Events) -> int:
     chosen["picked"] = [i for i in chosen["picked"] if i not in already]
     result = _apply(point, changes, chosen, lambda text: menu.say(f"  {text}"))
     job = result["job"]
-    brought.record(point, brought.came_over(job, chosen["picked"], changes.get("items", []),
-                                            result["files_now"]))
+    came = brought.came_over(job, chosen["picked"], changes.get("items", []), result["files_now"])
+    missed = brought.missed(came, _here(point, changes) if came else set(), changes.get("items", []))
+    brought.record(point, came - {m["id"] for m in missed})
     files_left = bool(job["files"]) and not result["files_now"]
     if not again:
         state.write(flow.MIGRATE, _state(point, changes, job["files"], files_left))
@@ -261,11 +268,17 @@ def run(args, events: Events) -> int:
         lines.append(f"  Your old user name was changed to this one in {len(result['renamed'])} settings files.")
     for p in result["problems"] + [{"name": s, "what": ""} for s in result["skipped"]]:
         lines.append(f"  Needs a look: {p['name']} {p['what']}".rstrip())
+    for m in missed:                                                               # D45
+        lines.append(f"  Didn't come over: {m['name']} ({', '.join(m.get('paths', [])) or 'not installed'}). "
+                     "Run Migrate again to try once more, or bring it back from Browse.")
+    for folder in result["replaced"]:
+        lines.append(f"  What Migrate replaced is kept in {folder} (same paths), in case you want it back.")
     if files_left:
         lines.append("Your files: Restore my files on the panel brings them back while you work.")
     lines.append("After the restart: Back up now on the panel. This computer then takes the backup over."
                  if not again else "")
-    events.result({"migrated": True, "point": point, "problems": result["problems"]},
+    events.result({"migrated": True, "point": point, "problems": result["problems"],
+                   "missed": [m["id"] for m in missed]},
                   "\n".join(x for x in lines if x))
     _finish(result["files_now"])
     return 0

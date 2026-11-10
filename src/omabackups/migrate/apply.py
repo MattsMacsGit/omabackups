@@ -140,7 +140,45 @@ def _write(path: Path, text: str, owner) -> None:
     os.replace(tmp, path)
 
 
-def swap(fetched: Fetched, root: Path) -> tuple[list[dict], list[dict]]:
+def keep_first(listing: str, dest: Path, keep: Path) -> None:
+    """D45: from a dry run's listing, the files here that the fetch will
+    replace are copied to keep (same paths) before it runs."""
+    for line in listing.splitlines():
+        flags, name = line[:11], line[12:].partition(" ")[2]
+        if len(flags) < 2 or flags[0] != ">" or flags[1] not in "fL" or "+++++" in flags or not name:
+            continue
+        here = dest / name
+        if not os.path.lexists(here):
+            continue
+        target = keep / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(here, target, follow_symlinks=False)
+
+
+def kept(home: Path, keep_home: Path, keep_root: Path) -> list[str]:
+    """D45: where what Migrate replaced was kept (only if something was);
+    the home copy is this user's, as the files were."""
+    out = []
+    if keep_home.is_dir() and any(keep_home.iterdir()):
+        owner = home.stat()
+        state = keep_home.parent.parent          # ~/.local/state/omabackups: rsync may have made it
+        if state.stat().st_uid != owner.st_uid:
+            os.lchown(state, owner.st_uid, owner.st_gid)
+        for folder, dirs, files in os.walk(keep_home.parent):
+            for name in [folder, *(os.path.join(folder, x) for x in dirs + files)]:
+                os.lchown(name, owner.st_uid, owner.st_gid)
+        out.append(str(keep_home))
+    elif keep_home.is_dir():
+        shutil.rmtree(keep_home, ignore_errors=True)
+    if keep_root.is_dir() and any(keep_root.iterdir()):
+        os.chmod(keep_root.parent, 0o700)
+        out.append(str(keep_root))
+    elif keep_root.is_dir():
+        shutil.rmtree(keep_root, ignore_errors=True)
+    return out
+
+
+def swap(fetched: Fetched, root: Path, keep: Path | None = None) -> tuple[list[dict], list[dict]]:
     """Step 3: each service's settings go in with it stopped; then it comes
     back as the old system had it. Returns (services, problems)."""
     report, problems = [], []
@@ -149,7 +187,8 @@ def swap(fetched: Fetched, root: Path) -> tuple[list[dict], list[dict]]:
         was_running = active(unit)
         if was_running and not live and systemctl("stop", unit).returncode != 0:
             problems.append({"what": f"{svc} couldn't be stopped to put its settings in.", "details": ""})
-        done = subprocess.run(["rsync", "-a", "--numeric-ids", f"{fetched.stage / svc}/", f"{root}/"],
+        kept_ = ["--backup", f"--backup-dir={keep}"] if keep else []
+        done = subprocess.run(["rsync", "-a", "--numeric-ids", *kept_, f"{fetched.stage / svc}/", f"{root}/"],
                               capture_output=True, text=True)
         if done.returncode != 0:
             problems.append({"what": f"The settings for {svc} couldn't be put in place.",
@@ -213,7 +252,8 @@ def missing(home: Path, root: Path, home_items: list[str], system_items: list[st
 
 
 def run(get, home: Path, root: Path, from_user: str, user: str, home_items: list[str],
-        system_items: list[str], unit_list: list, theme: bool, let_go, merges: list | None = None) -> dict:
+        system_items: list[str], unit_list: list, theme: bool, let_go, merges: list | None = None,
+        keep: Path | None = None) -> dict:
     """The whole of it. let_go(): step 2, called once everything is fetched."""
     base = root / "var/tmp"
     base.mkdir(parents=True, exist_ok=True)
@@ -224,7 +264,7 @@ def run(get, home: Path, root: Path, from_user: str, user: str, home_items: list
             desk, desk_problems = merged(get, home, root, stage, from_user, merges or [])
         finally:
             let_go()
-        report, problems = swap(fetched, root)
+        report, problems = swap(fetched, root, keep)
         problems += crontab(root, home, from_user, user)
         problems = fetched.problems + desk_problems + problems + units(unit_list)
         later: list[str] = []
