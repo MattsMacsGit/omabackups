@@ -105,10 +105,10 @@ Column {
     text: page.r && page.r.note ? page.r.note : ""
   }
 
-  PanelSeparator { visible: page.step === "finish" }
+  PanelSeparator { visible: page.step === "finish" && !page.m.rescued }
   NavRow {
     id: again
-    visible: page.step === "finish"
+    visible: page.step === "finish" && !page.m.rescued      // a rescued computer is the same one
     title: "Run Migrate again"
     explainer: "Brings back the migration chooser, so you can pick any preferences you left behind: "
                + "you can still recover them here."

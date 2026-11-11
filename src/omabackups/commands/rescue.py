@@ -58,5 +58,12 @@ def run_settings(args, events: Events) -> int:
 
 
 def run_wizard(args, events: Events) -> int:
+    """The wizard owns the whole screen: its results go to the log, not onto
+    the screen under it (a stray "The rescue is done." sat beside the end screen)."""
+    import io
+    from omabackups.core import log
     from omabackups.rescue import wizard
-    return wizard.run(events)
+    quiet = Events(as_json=True, out=io.StringIO())
+    code = wizard.run(quiet)
+    log.get("rescue").info("wizard finished: %s", quiet.out.getvalue().strip()[-500:])
+    return code

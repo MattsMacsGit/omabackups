@@ -64,8 +64,18 @@ def clear_logo() -> None:
     _gum(["style", "--foreground", GREEN, "--padding", f"1 0 0 {_pad()}", logo()], capture=False)
 
 
+def text_width() -> int:
+    """Body text is as wide as the logo above it (and never past the screen's
+    edge): a long line wraps inside that column, as the installer's does. With
+    no width, it ran to the edge and wrapped back to the far left."""
+    widest = max(len(line) for line in logo().splitlines())
+    return max(20, min(widest, _width() - _pad() - 1))
+
+
 def say(text: str = "", colour: str = "") -> None:
-    args = ["style", "--padding", f"0 0 0 {_pad()}"] + (["--foreground", colour] if colour else []) + [text or " "]
+    pad = _pad()
+    args = ["style", "--padding", f"0 0 0 {pad}", "--width", str(pad + text_width())] + \
+        (["--foreground", colour] if colour else []) + [text or " "]
     _gum(args, capture=False)
 
 

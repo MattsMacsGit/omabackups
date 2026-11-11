@@ -96,7 +96,9 @@ Panel {
     return ({ settings: "Settings", kept: "Restore points",
               yourBackup: "Your backup", where: "Set up backups", server: "Set up backups",
               disk: "Set up backups", firstBackup: "Set up backups", migrating: "Migrate",
-              finish: "Finish Migrate" })[name] || "OmaBackups"
+              // After a Rescue USB, the same computer is back: it's a restore, not a Migrate.
+              finish: svc.status.migrate && svc.status.migrate.rescued ? "Finish restore" : "Finish Migrate"
+            })[name] || "OmaBackups"
   }
 
   // A finished setup in the terminal moves the panel on by itself.

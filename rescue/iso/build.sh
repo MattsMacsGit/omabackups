@@ -49,6 +49,15 @@ rm -f "$profile/airootfs/etc/motd"
 # Omarchy's kernel instead of Arch's (file names in the boot menus).
 grep -rl 'vmlinuz-linux\|initramfs-linux' "$profile/syslinux" "$profile/efiboot" "$profile/grub" 2>/dev/null |
   xargs -r sed -i -e 's/vmlinuz-linux\b/vmlinuz-linux-omarchy/g' -e 's/initramfs-linux\.img/initramfs-linux-omarchy.img/g'
+# The boot menus say what this is: OmaBackups Rescue, not Arch's installer
+# (the first thing anyone sees when they pick the stick).
+grep -rl 'Arch Linux' "$profile/syslinux" "$profile/efiboot" "$profile/grub" 2>/dev/null |
+  xargs -r sed -i -e 's/Arch Linux install medium/OmaBackups Rescue/g' -e 's/Arch Linux live medium/OmaBackups Rescue/g' \
+    -e 's/It allows you to install Arch Linux or perform system maintenance/It brings your computer back from your backup/g' \
+    -e 's/MENU TITLE Arch Linux/MENU TITLE OmaBackups Rescue/g' \
+    -e 's/OmaBackups Rescue (%ARCH%, \(UEFI\|BIOS\|${archiso_platform}\))/OmaBackups Rescue/g'
+# No screen reader on the stick (espeakup): its menu entry would only confuse.
+rm -f "$profile"/efiboot/loader/entries/*speech*.conf
 # Omarchy's own screens (D47): taken from the Omarchy package, never copied into this repo.
 mkdir -p "$profile/airootfs/usr/share/omabackups/rescue"
 cp /usr/share/omarchy/logo.txt /usr/share/omarchy/install/provisioning/progress-icon.sh \
