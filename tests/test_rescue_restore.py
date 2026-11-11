@@ -182,3 +182,24 @@ def test_a_layout_that_never_shows_stops_before_anything_is_written(monkeypatch)
     with pytest.raises(newdisk.OmaError) as caught:
         newdisk.settle(newdisk.NewDisk("/dev/sdz", "/dev/sdz1", "/dev/sdz2"))
     assert "Nothing was taken" in caught.value.todo and "old-id" in caught.value.details
+
+
+def test_a_network_drop_mid_rescue_stops_it_with_what_to_do(tmp_path):
+    """Stage 10: the connection goes while the rescue copies: it stops with
+    what happened and what to do (run it again), never a half-said error."""
+    from omabackups.core.errors import OmaError
+
+    class DroppedLine:
+        def rsh(self):
+            return "false"                     # ssh that fails at once
+
+        def rsync_target(self):
+            return "omabackups-gate@192.0.2.34"
+
+        def rsync_env(self):
+            return None
+    with pytest.raises(OmaError) as caught:
+        system.fetch(DroppedLine(), "b" * 32, "004-2026-11-10-2103", "system", tmp_path / "@", [],
+                     lambda f: None)
+    assert caught.value.code == "rescue-copy"
+    assert "again" in caught.value.todo and caught.value.details

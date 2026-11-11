@@ -77,3 +77,24 @@ def test_folders_already_here_are_named_before_old_files_are_mixed_in(tmp_path):
     (tmp_path / "src/clone").mkdir(parents=True)
     (tmp_path / "Documents").mkdir()                 # empty, as a fresh install makes it
     assert already_here(tmp_path, ["src", "Documents", "Music"]) == ["src"]
+
+
+def test_a_network_drop_mid_restore_says_so_and_carries_on_next_time(world, tmp_path, monkeypatch):
+    """Stage 10: the connection goes mid-copy. The user is told what happened
+    and what to do; run again, it brings back what's still missing."""
+    srv, kid, bid, src, box = world
+    (src.root / "home/u/Documents").mkdir(parents=True, exist_ok=True)
+    for n in range(5):
+        (src.root / f"home/u/Documents/{n}.txt").write_text(str(n))
+    point = run.backup(source=src)["point"]
+    home = tmp_path / "h"
+    monkeypatch.setenv("OMABACKUPS_TEST_RSH", "false")             # the line drops: ssh fails
+    state = files.restore(point, "u", home=home)
+    assert not state.get("done") and state["error"]["code"] == "restore-failed"
+    assert "again" in state["error"]["todo"] and state["error"]["what"]
+    from test_run import FAKE_SSH
+    import sys
+    monkeypatch.setenv("OMABACKUPS_TEST_RSH", f"{sys.executable} {FAKE_SSH}")   # back again
+    again = files.restore(point, "u", home=home)
+    assert again.get("done") and sorted(p.name for p in (home / "Documents").iterdir()) == \
+        [f"{n}.txt" for n in range(5)]
