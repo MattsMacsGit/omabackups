@@ -16,7 +16,10 @@ from omabackups.core import log
 NEEDS_GATE = 8
 
 
-def fresh_files(plan: Plan, snapshot: str) -> list:
+def fresh_files(plan: Plan, snapshot: str, renamed: tuple[str, str] | None = None) -> list:
+    """New files the server may hold already. renamed (new, old): this user's
+    home had another name on the computer it came from (Migrate): the server
+    may hold the file under that name too."""
     out = []
     for rel in plan.fresh:
         try:
@@ -24,7 +27,10 @@ def fresh_files(plan: Plan, snapshot: str) -> list:
         except OSError:
             continue
         if os.path.isfile(os.path.join(snapshot, rel)) and not os.path.islink(os.path.join(snapshot, rel)):
-            out.append([rel, info.st_size, info.st_mtime_ns])
+            entry = [rel, info.st_size, info.st_mtime_ns]
+            if renamed and rel.startswith(renamed[0] + "/"):
+                entry.append(renamed[1] + rel[len(renamed[0]):])
+            out.append(entry)
     return out
 
 

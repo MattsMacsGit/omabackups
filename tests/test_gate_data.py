@@ -239,3 +239,21 @@ def test_reuse_stays_inside(box):
     srv, kid, bid, line = box
     for asked in ({"dirs": ["../../points"]}, {"files": [["/etc/passwd", 1, 1]]}):
         assert srv.call(kid, f"reuse {bid} 001 home", json.dumps(asked).encode())[0] == 1
+
+
+def test_reuse_finds_a_file_under_the_old_user_name(box):
+    """A Migrate with a new user name, then Restore my files: the server had the
+    file all along under the old name; it's cloned, not sent again (gate 14)."""
+    srv, kid, bid, line = box
+    home = line / "home"
+    (home / "old/Documents").mkdir(parents=True)
+    (home / "old/Documents/report.pdf").write_bytes(b"R" * 700)
+    srv.ok(kid, f"snapshot {bid} 001 001-2026-11-01-1000", b"{}")
+    was = (line.parent.parent / "points/001-2026-11-01-1000/home/old/Documents/report.pdf").stat()
+    asked = {"files": [["new/Documents/report.pdf", was.st_size, was.st_mtime_ns, "old/Documents/report.pdf"]]}
+    assert srv.ok(kid, f"reuse {bid} 001 home", json.dumps(asked).encode())["files"] == 1
+    assert (home / "new/Documents/report.pdf").read_bytes() == b"R" * 700
+    for bad in ("../../points/x", "/etc/passwd"):                    # the old name stays inside too
+        asked = {"files": [["new/x", 1, 1, bad]]}
+        assert srv.call(kid, f"reuse {bid} 001 home", json.dumps(asked).encode())[0] in (0, 1)
+        assert not (home / "new/x").exists()

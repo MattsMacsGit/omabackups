@@ -234,20 +234,28 @@ def v_reuse(call):
                 break
     for entry in files:
         rel, size, mtime = str(entry[0]), int(entry[1]), int(entry[2])
+        # A 4th item (gate 14): where it may be under an older user name (a
+        # Migrate with a new name; Restore my files sent 1.5 GB again without it).
+        names = [rel] + ([str(entry[3])] if len(entry) > 3 and entry[3] else [])
         target = _inside(root, rel)
         if os.path.lexists(target):
             continue
         for src_root in sources:
-            src = found_in(src_root, rel)
-            try:
-                info = os.lstat(src) if src else None
-            except OSError:
-                continue
-            if info and stat.S_ISREG(info.st_mode) and info.st_size == size and info.st_mtime_ns == mtime:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                host().clone(src, target)
-                done["files"] += 1
-                done["bytes"] += size
+            found = False
+            for name in names:
+                src = found_in(src_root, name)
+                try:
+                    info = os.lstat(src) if src else None
+                except OSError:
+                    continue
+                if info and stat.S_ISREG(info.st_mode) and info.st_size == size and info.st_mtime_ns == mtime:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    host().clone(src, target)
+                    done["files"] += 1
+                    done["bytes"] += size
+                    found = True
+                    break
+            if found:
                 break
     return done
 

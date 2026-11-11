@@ -37,6 +37,19 @@ def record_file() -> Path:
     return paths.system_state_dir() / RECORD
 
 
+def renamed_home(server: dict, part: str) -> tuple[str, str] | None:
+    """(this user, the name it had) when Migrate came from another user name:
+    reuse looks for files under the old name too (stage 10)."""
+    old = server.get("from_user", "")
+    if part != "home" or not old:
+        return None
+    try:
+        new = linked_user()
+    except Exception:  # noqa: BLE001  (no linked user: nothing to map)
+        return None
+    return (new, old) if new and new != old else None
+
+
 def load_record() -> dict:
     try:
         return json.loads(record_file().read_text())
@@ -128,7 +141,7 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                 needed += check.size_of(plan, str(new))
                 if reusing:   # never send the same data twice (D25)
                     needed -= reuse.ask(gate, bid, line, part.name, [],
-                                        reuse.fresh_files(plan, str(new)))["bytes"]
+                                        reuse.fresh_files(plan, str(new), renamed_home(server, part.name)))["bytes"]
                 work.append((part, skip, new, plan))
             else:
                 known = False

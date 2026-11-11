@@ -13,12 +13,12 @@ import os
 import re
 from pathlib import Path
 
-VERSION = 13          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses;
+VERSION = 14          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses;
                      # 4: health; 5: scrub as its own service; 6: a disk of its own;
                      # 7: the check stands aside for backups; 8: reuse;
                      # 9: changes.json in restore points, info; 10: password;
                      # 11: unlock checks the secret even when open; 12: browse;
-                     # 13: join, handover, newline)
+                     # 13: join, handover, newline; 14: reuse under an older user name)
 CONTRACT = 1         # the version of its verbs and answers (BUILD 5.10)
 ACCOUNT = "omabackups-gate"
 

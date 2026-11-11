@@ -395,3 +395,16 @@ def test_d29_automatic_backups_wait_for_a_back_up_now(world, sandbox):
     assert run.load_record()["automatic_paused"] is True
     done = sandbox.run("--json", "status")
     assert "automatic-off" in done.stdout
+
+
+def test_new_files_name_their_old_place_after_a_user_rename(tmp_path):
+    """Stage 10: after a Migrate from another user name, reuse is told where
+    the server may hold each file (the old name), home only."""
+    from omabackups.backup import changes, reuse
+    (tmp_path / "newu/Documents").mkdir(parents=True)
+    (tmp_path / "newu/Documents/a.txt").write_text("a")
+    plan = changes.Plan(files=["newu/Documents/a.txt"], fresh=["newu/Documents/a.txt"])
+    entry = reuse.fresh_files(plan, str(tmp_path), ("newu", "oldu"))[0]
+    assert entry[0] == "newu/Documents/a.txt" and entry[3] == "oldu/Documents/a.txt"
+    assert len(reuse.fresh_files(plan, str(tmp_path))[0]) == 3
+    assert run.renamed_home({"from_user": "oldu"}, "system") is None
