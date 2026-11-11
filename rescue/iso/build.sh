@@ -31,7 +31,10 @@ if [[ -n $settings ]]; then
 fi
 releng=/usr/share/archiso/configs/releng
 [[ -d $releng ]] || { echo "archiso isn't installed (sudo pacman -S archiso)." >&2; exit 1; }
-for f in /usr/share/omarchy/logo.txt /usr/share/omarchy/install/provisioning/progress-icon.sh; do
+# Omarchy's own screens: an installed Omarchy's, or (on GitHub's build machine,
+# rescue/iso/ci-build.sh) the files taken out of Omarchy's packages.
+share=${OMARCHY_SHARE:-/usr/share/omarchy}
+for f in "$share/logo.txt" "$share/install/provisioning/progress-icon.sh"; do
   [[ -f $f ]] || { echo "Omarchy's $f is missing: build on an Omarchy system." >&2; exit 1; }
 done
 builder=${SUDO_USER:-}
@@ -60,8 +63,7 @@ grep -rl 'Arch Linux' "$profile/syslinux" "$profile/efiboot" "$profile/grub" 2>/
 rm -f "$profile"/efiboot/loader/entries/*speech*.conf
 # Omarchy's own screens (D47): taken from the Omarchy package, never copied into this repo.
 mkdir -p "$profile/airootfs/usr/share/omabackups/rescue"
-cp /usr/share/omarchy/logo.txt /usr/share/omarchy/install/provisioning/progress-icon.sh \
-  "$profile/airootfs/usr/share/omabackups/rescue/"
+cp "$share/logo.txt" "$share/install/provisioning/progress-icon.sh" "$profile/airootfs/usr/share/omabackups/rescue/"
 # Tailscale runs, so a rescue away from home can log in (D48).
 mkdir -p "$profile/airootfs/etc/systemd/system/multi-user.target.wants"
 ln -sf /usr/lib/systemd/system/tailscaled.service "$profile/airootfs/etc/systemd/system/multi-user.target.wants/"

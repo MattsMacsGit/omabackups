@@ -1,0 +1,54 @@
+name: rescue-usb
+
+# The Rescue USB image (D16, 9c): built here, published with its checksum, so
+# Make Rescue USB downloads it instead of anyone building it. While testing it
+# goes to the "rescue-edge" pre-release; at release each version gets its own
+# image and signature (stage 12).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [edge]
+    paths:
+      - "rescue/**"
+      - "src/omabackups/rescue/**"
+      - "src/omabackups/restore/**"
+      - "src/omabackups/where/**"
+      - "packaging/**"
+      - ".github/workflows/rescue.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rescue-usb
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      # Actions are pinned to exact commits (plugin store rule).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the image (archiso, in an Arch container)
+        run: |
+          docker run --rm --privileged -v "$PWD:/src" -w /src archlinux:latest \
+            bash rescue/iso/ci-build.sh /src/rescue/out
+          sudo chown -R "$(id -u)" rescue/out
+      - name: Name it and its checksum
+        run: |
+          cd rescue/out
+          mv omabackups-rescue-*.iso omabackups-rescue-x86_64.iso
+          sha256sum omabackups-rescue-x86_64.iso > omabackups-rescue-x86_64.iso.sha256
+          printf '%s\n' "$(git rev-parse --short HEAD)" > omabackups-rescue-x86_64.version
+          ls -la
+      - name: Publish to the rescue-edge pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view rescue-edge >/dev/null 2>&1 || \
+            gh release create rescue-edge --prerelease --title "Rescue USB (testing)" \
+              --notes "The Rescue USB image for testing (built from edge). Make Rescue USB downloads it."
+          gh release upload rescue-edge rescue/out/omabackups-rescue-x86_64.iso \
+            rescue/out/omabackups-rescue-x86_64.iso.sha256 rescue/out/omabackups-rescue-x86_64.version --clobber
