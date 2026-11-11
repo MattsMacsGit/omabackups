@@ -18,7 +18,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from omabackups.core import paths
+from omabackups.core import mounts, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
 
@@ -93,7 +93,7 @@ def _let_go(part: str) -> None:
     for _ in range(5):
         if subprocess.run(["findmnt", "-S", part], capture_output=True).returncode != 0:
             return
-        subprocess.run(["umount", part], capture_output=True)
+        mounts.let_go(part)
 
 
 def _format(part: str) -> None:

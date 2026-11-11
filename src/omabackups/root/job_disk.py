@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from omabackups.backup.source import Snapshots, parts
-from omabackups.core import ids, paths
+from omabackups.core import ids, mounts, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
 from omabackups.root import keys
@@ -45,7 +45,7 @@ def prepare(device: str) -> str:
             for grandchild in [child, *child.get("children", [])]:
                 for mount in grandchild.get("mountpoints") or []:
                     if mount:
-                        _run("umount", mount)
+                        _run(*mounts.umount_command(mount))
     _run("wipefs", "-a", "-q", device)
     _run("sfdisk", "--quiet", "--wipe", "always", "--wipe-partitions", "always", device,
          data="label: gpt\nsize=+, type=linux, name=OmaBackups\n")

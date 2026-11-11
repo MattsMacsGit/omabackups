@@ -17,6 +17,7 @@ lsblk
 mkfs.btrfs
 mkfs.fat
 mount
+nsenter
 partx
 rsync
 sgdisk

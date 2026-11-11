@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from omabackups.core import mounts
 from omabackups.core.errors import OmaError
 
 ESP_SIZE = "2G"
@@ -65,7 +66,7 @@ def free(disk: str) -> None:
         parts = line.split(" ", 2)
         for mount in (parts[2].split("\\x0a") if len(parts) > 2 else []):
             if mount:
-                subprocess.run(["umount", "-R", mount], capture_output=True)
+                mounts.let_go("-R", mount)
         if len(parts) > 1 and parts[1] == "crypt":
             subprocess.run(["cryptsetup", "close", parts[0]], capture_output=True)
 
