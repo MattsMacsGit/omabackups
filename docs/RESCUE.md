@@ -16,8 +16,7 @@ Settings). A window opens:
    downloaded once and kept; if the download stops, it carries on where it
    stopped. It's checked against its published checksum before anything is
    written: a download that doesn't match is never used.
-3. **Writing it.** Your computer's password is asked for (a pop-up). The
-   window shows how far it is.
+3. **Writing it.** The window shows how far it is.
 4. **Its settings.** A small part of the stick holds where your backup server
    is and the stick's own key. That key can only read your backup: it can't
    change or delete anything, and it can't open your backup by itself, so

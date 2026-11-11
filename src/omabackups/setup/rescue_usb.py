@@ -93,7 +93,7 @@ def make() -> dict:
     disk = _pick_stick("should become the Rescue USB")
     path = _the_image()
     menu.title(f"Everything on {disk.path} will be erased",
-               "It becomes your Rescue USB. Your computer's password is asked for (a pop-up).")
+               "It becomes your Rescue USB.")
     if menu.choose("Make the Rescue USB?", ["Make it", "No, stop here"], 1) != 0:
         raise OmaError(menu.CANCELLED, code="cancelled")
     done = _with_progress("rescue-usb-write", {"disk": disk.path, "image": path}, "Starting...")
