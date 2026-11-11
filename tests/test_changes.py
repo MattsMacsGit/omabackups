@@ -105,7 +105,22 @@ def test_many_new_files_are_quick():
                  f"utimes          ./new/Projects/f{n}.txt"]
     rows.append("rename          ./new/Projects   dest=./new/Work")      # a real folder move, after
     started = time.time()
-    changed, ops, extents, new = changes.parse(dump(*rows), "new")
+    changed, ops, extents, new, _details = changes.parse(dump(*rows), "new")
     assert time.time() - started < 5
     assert "Work/f24999.txt" in changed and "Projects/f0.txt" not in changed
     assert "Work/f0.txt" in new and len(new) == 25001
+
+
+def test_a_file_whose_owner_changed_isnt_counted_whole(tmp_path):
+    """After a rescue, Restore my files gives files to their user: a 1.4 GB file
+    whose group changed counted 1.4 GB, though rsync sends a few bytes."""
+    from omabackups.backup import check
+    make(tmp_path / "new", {"big.iso": b"x" * 5000, "edited.txt": b"y" * 300})
+    p = changes.plan(dump("chown           ./new/big.iso                   gid=1000 uid=1000",
+                          "utimes          ./new/big.iso                   atime=1 mtime=1 ctime=1",
+                          "write           ./new/edited.txt                offset=0 len=300",
+                          "chown           ./new/edited.txt                gid=1000 uid=1000"),
+                     "new", str(tmp_path / "new"), Skips([]))
+    assert sorted(p.files) == ["big.iso", "edited.txt"]       # both still go (rsync fixes the owner)
+    assert p.light == ["big.iso"]
+    assert check.size_of(p, str(tmp_path / "new")) == 300

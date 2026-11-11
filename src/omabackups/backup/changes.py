@@ -23,6 +23,10 @@ LINE = re.compile(r"(\S+)\s+(\./(?:\\.|[^\s\\])*)\s*(.*)")    # escaped spaces s
 DEST = re.compile(r"dest=(\./(?:\\.|[^\s\\])*)")
 EXTENT = re.compile(r"offset=(\d+)\s+len=(\d+)")
 WHOLE = ("clone", "write", "encoded_write", "fallocate", "fileattr", "enable_verity")
+# Changes to a file's details, not its contents: rsync sends a few bytes for
+# them, so they don't count towards the size (a file whose owner changed was
+# counted whole: 1.4 GB for a rescue image after a rescue).
+DETAILS = ("chown", "chmod", "utimes", "set_xattr", "remove_xattr")
 
 
 @dataclass
@@ -30,6 +34,7 @@ class Plan:
     ops: list = field(default_factory=list)       # ["rename", a, b] / ["delete", a]
     files: list = field(default_factory=list)     # paths for rsync
     fresh: list = field(default_factory=list)     # of those, the ones new since the last backup
+    light: list = field(default_factory=list)     # of those, only their details changed (owner, dates)
     ranges: dict = field(default_factory=dict)    # path -> [(offset, length), ...]
 
 
@@ -77,6 +82,7 @@ def parse(text: str, name: str):
     ops: list[list[str]] = []
     extents: dict[str, list] = {}
     new: set[str] = set()              # made since the last backup: whole file
+    details: set[str] = set()          # only their details changed, not their contents
     on_server: set[str] = set()
 
     def temp_root(p: str) -> str | None:
@@ -101,6 +107,7 @@ def parse(text: str, name: str):
                 changed |= {dest + c[len(path):] for c in inside}
                 extents = moved(extents, path, dest)
                 new = set(moved(dict.fromkeys(new), path, dest))
+                details = set(moved(dict.fromkeys(details), path, dest))
                 for c in list(changed) + list(new) + list(extents):
                     if c == dest or c.startswith(dest + "/"):
                         note(c)
@@ -113,6 +120,9 @@ def parse(text: str, name: str):
                 if path in new:
                     new.discard(path)
                     new.add(dest)
+                if path in details:
+                    details.discard(path)
+                    details.add(dest)
                 note(dest)
             src_t = temp_root(path)
             if src_t is None or src_t in on_server:
@@ -131,6 +141,11 @@ def parse(text: str, name: str):
             if t is None or t in on_server:
                 ops.append(["delete", path])
         else:
+            if cmd in DETAILS:
+                if path not in changed:
+                    details.add(path)      # nothing else changed it (yet)
+            else:
+                details.discard(path)
             changed.add(path)
             note(path)
             if cmd in ("mkfile", "mkdir", "mknod", "mkfifo", "mksock", "symlink", "link"):
@@ -139,12 +154,12 @@ def parse(text: str, name: str):
                 extents.setdefault(path, []).append((int(e.group(1)), int(e.group(2))))
             elif cmd in WHOLE:
                 new.add(path)          # can't send this one as ranges
-    return changed, ops, extents, new
+    return changed, ops, extents, new, details
 
 
 def plan(text: str, name: str, snapshot: str, skips: Skips) -> Plan:
     """The plan for one part, with the skip list applied (any file or folder)."""
-    changed, ops, extents, new = parse(text, name)
+    changed, ops, extents, new, details = parse(text, name)
     out = Plan()
     for op in ops:
         if op[0] == "delete":
@@ -173,6 +188,8 @@ def plan(text: str, name: str, snapshot: str, skips: Skips) -> Plan:
             out.files.append(path)
             if path in new:
                 out.fresh.append(path)
+            elif path in details:
+                out.light.append(path)
     return out
 
 

@@ -38,7 +38,10 @@ def human(size: int) -> str:
 def size_of(plan: Plan, snapshot: str) -> int:
     """About how much the everyday mix will send."""
     total = sum(n for spans in plan.ranges.values() for _, n in spans)
+    light = set(plan.light)            # only details changed: a few bytes, not the file
     for rel in plan.files:
+        if rel in light:
+            continue
         try:
             info = os.lstat(os.path.join(snapshot, rel))
         except OSError:
