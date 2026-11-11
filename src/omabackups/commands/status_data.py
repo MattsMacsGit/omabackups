@@ -94,7 +94,7 @@ def lines(step, settings: dict, record: dict, now: dict, mine: dict) -> list[dic
     if everyday and not mine.get("rescue_usb"):
         out.append(line("no-rescue-usb", "yellow", "No Rescue USB yet",
                         "A USB stick that brings this computer back if it won't start. "
-                        "Make one from Settings.", "rescue"))
+                        "Click to make one.", "rescue"))
     return out
 
 

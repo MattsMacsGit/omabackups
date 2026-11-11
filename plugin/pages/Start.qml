@@ -20,7 +20,7 @@ Column {
     if (step === "where") return [toServer, toDisk]
     if (step === "server") return [address, login, goServer]
     if (step === "disk") return [goDisk]
-    if (step === "firstBackup") return service && service.running ? [later]
+    if (step === "firstBackup") return service && service.running ? [makeStick, later]
                                        : [firstBackup, migrateAgain].filter(function(t) { return t.visible })
     return []
   }
@@ -198,8 +198,15 @@ Column {
     visible: page.step === "firstBackup" && !!(page.service && page.service.running) && !page.service.status.rescue_later
     width: parent.width
     dim: true
-    text: "A USB stick that brings this computer back if it won't start. Making one comes with a later "
-          + "version of OmaBackups; until then the panel reminds you."
+    text: "A USB stick that brings this computer back if it won't start. Both run at once: the "
+          + "backup takes a while anyway."
+  }
+  ActionButton {
+    id: makeStick
+    visible: later.visible
+    text: "Make Rescue USB"
+    hasCursorHere: page.cursorOn(this)
+    onClicked: page.service.rescueMake()
   }
   ActionButton {
     id: later

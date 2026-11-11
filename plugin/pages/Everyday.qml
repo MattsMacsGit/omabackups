@@ -101,7 +101,7 @@ Column {
       service: page.service
       hasCursorHere: page.cursorOn(this)
       onActivated: {
-        if (modelData.action === "rescue") page.panel.go("settings")
+        if (modelData.action === "rescue") page.service.rescueMake()
         else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupNow()
       }
       // In the line's own button row, under its text (they sat on top of it, garbled).

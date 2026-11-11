@@ -15,8 +15,9 @@ the whole system, and move your setup onto a fresh install.
 5. [Backing up](#backing-up)
 6. [Restore points](#restore-points) (and [getting things back](RESTORING.md))
 7. [Your changes to Omarchy](#your-changes-to-omarchy) (and [Migrate](MIGRATE.md))
-8. [Start over](#start-over)
-9. [The omabackups command](#the-omabackups-command) ([its own page](COMMANDS.md))
+8. [The Rescue USB](RESCUE.md): bring your computer back when it won't start
+9. [Start over](#start-over)
+10. [The omabackups command](#the-omabackups-command) ([its own page](COMMANDS.md))
 
 ## Install and remove
 

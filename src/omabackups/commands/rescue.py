@@ -1,5 +1,6 @@
-"""`omabackups rescue-usb later`: the Rescue USB's Later button (D11).
-(Make / Refresh Rescue USB come with stage 9.)"""
+"""`omabackups rescue-usb`: Make / Refresh Rescue USB (9c, a terminal window
+the panel opens), Later (D11), the preview of its screens, its settings for
+testing, and the wizard that runs on the stick."""
 
 from omabackups.core import state
 from omabackups.core.errors import OmaError
@@ -17,8 +18,8 @@ def add(sub) -> None:
     p_set.add_argument("folder")
     p_set.set_defaults(run=run_settings)
     verbs.add_parser("wizard", help="the rescue itself (runs on the Rescue USB)").set_defaults(run=run_wizard)
-    for verb in ("make", "refresh"):
-        verbs.add_parser(verb, help=f"{verb} the Rescue USB (comes in a later version)").set_defaults(run=run_soon)
+    verbs.add_parser("make", help="make a Rescue USB (in a terminal)").set_defaults(run=run_make)
+    verbs.add_parser("refresh", help="refresh your Rescue USB's settings (in a terminal)").set_defaults(run=run_make)
 
 
 def run_later(args, events: Events) -> int:
@@ -28,9 +29,22 @@ def run_later(args, events: Events) -> int:
     return 0
 
 
-def run_soon(args, events: Events) -> int:
-    raise OmaError("Making a Rescue USB isn't built yet.", "It comes with a later version of OmaBackups.",
-                   code="not-yet")
+def run_make(args, events: Events) -> int:
+    import os
+    if not (os.isatty(0) and os.isatty(1)):
+        raise OmaError("Making a Rescue USB needs a terminal window.",
+                       "Start it from the panel (it opens one), or run omabackups rescue-usb make in a terminal.",
+                       code="no-terminal")
+    from omabackups.setup import menu, rescue_usb
+    try:
+        done = rescue_usb.make() if args.verb == "make" else rescue_usb.refresh()
+    finally:
+        try:
+            menu.ask("Press Enter to close this window")
+        except OmaError:
+            pass
+    events.result({"rescue_usb": True, "disk": done.get("disk")}, "The Rescue USB is ready.")
+    return 0
 
 
 def run_preview(args, events: Events) -> int:

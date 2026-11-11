@@ -21,7 +21,7 @@ Column {
       health.gearShown && health.gearOpen ? startAt.buttons.concat(howLong.buttons) : [],
       [away],
       away.gearShown && away.gearOpen ? awayLimit.buttons : [],
-      [points, yourBackup])
+      [points, yourBackup, rescue])
   function cursorOn(item) { return panel && panel.cursorTarget === item }
   function set(name, value) { service.setSetting(name, value) }
 
@@ -138,8 +138,15 @@ Column {
   }
 
   NavRow {
-    title: "Rescue USB"
-    explainer: "Make / Refresh Rescue USB comes with a later version."
-    enabledRow: false
+    id: rescue
+    readonly property var made: page.service ? page.service.status.rescue_usb : null
+    title: made ? "Refresh Rescue USB" : "Make Rescue USB"
+    explainer: made
+      ? "Your stick, up to date: only its small settings part is rewritten (seconds), and a newer "
+        + "rescue system is offered if there is one."
+      : "A USB stick that brings this computer back if it won't start. The rescue system downloads "
+        + "once (about 1 GB); any stick of 4 GB or more."
+    hasCursorHere: page.cursorOn(this)
+    onActivated: made ? page.service.rescueRefresh() : page.service.rescueMake()
   }
 }

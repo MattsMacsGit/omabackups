@@ -194,6 +194,10 @@ Item {
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }
   function keep(point, on) { run([on ? "keep" : "release", point], "keep:" + point, on) }
   function rescueLater() { run(["rescue-usb", "later"]) }
+  // Make / Refresh Rescue USB (9c): a terminal window, like setup (it downloads,
+  // asks which stick, and the computer's password for writing it).
+  function rescueMake() { terminal("omabackups rescue-usb make") }
+  function rescueRefresh() { terminal("omabackups rescue-usb refresh") }
   // Opens it in the default file manager (the command does that, D37).
   function browse(point) { run(["browse", point], "browse", point) }
   function browseDone() { run(["browse", "done"]) }
