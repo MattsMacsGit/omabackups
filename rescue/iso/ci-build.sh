@@ -16,6 +16,10 @@ pacman-key --populate archlinux
 pacman-key --add "$here/omarchy.gpg"
 pacman-key --lsign-key "$OMARCHY_KEY"
 printf '\n[omarchy]\nServer = https://pkgs.omarchy.org/stable/$arch\n' >>/etc/pacman.conf
+# Arch's Docker image slims itself (NoExtract: no docs, translations...). The
+# build copies these package settings into the image, which then came out
+# missing files it needs (its own pacman.conf, the mirror list): not here.
+sed -i '/^NoExtract/d; /^NoUpgrade/d' /etc/pacman.conf
 pacman -Syu --noconfirm --needed archiso base-devel sudo
 
 # Omarchy's logo (omarchy-settings) and progress screen (omarchy), as files only.

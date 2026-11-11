@@ -80,7 +80,17 @@ def write(bundle: dict, folder: Path) -> None:
         write_atomic(folder / name, bundle[name].encode(), 0o600)
 
 
+def _mount_settings_part() -> None:
+    """On the stick: its own small settings part (OMABACKUPS), read only."""
+    import subprocess
+    part = Path("/dev/disk/by-label/OMABACKUPS")
+    if part.exists() and not os.path.ismount(PLACES[0]):
+        PLACES[0].mkdir(parents=True, exist_ok=True)
+        subprocess.run(["mount", "-o", "ro", str(part), str(PLACES[0])], capture_output=True)
+
+
 def find() -> Path | None:
+    _mount_settings_part()
     for place in PLACES:
         if all((place / name).is_file() for name in FILES):
             return place
