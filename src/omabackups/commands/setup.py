@@ -60,10 +60,15 @@ def cipher_name(cipher: str) -> str:
 def run_update(args, events: Events) -> int:
     """Update the gatekeeper on the server this computer already uses (keeps the backup)."""
     try:
-        address = json.loads(paths.server_file().read_text())["address"]
+        saved = json.loads(paths.server_file().read_text())
+        saved["address"]
     except (OSError, ValueError, KeyError):
         raise OmaError("This computer doesn't back up to a server yet.",
                        "Set one up first: omabackups setup server", code="not-set-up") from None
+    # The way backups find it (D48): home, name.local, then Tailscale. Only the
+    # saved address was tried, so away from home the update couldn't reach it.
+    from omabackups.where import network
+    address, _away = network.route(saved)
     events.message("Update OmaBackups on your backup server. Your backup and its restore points\n"
                    "are kept. The server asks for your password twice: to log you in, then for sudo.")
     login = args.login or menu.ask("Your user name on the server", os.environ.get("USER", ""))
