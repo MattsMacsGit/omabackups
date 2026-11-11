@@ -45,3 +45,51 @@ def test_the_root_job_writes_only_the_users_own_image(sandbox, monkeypatch, tmp_
     stray.write_bytes(b"x")
     with pytest.raises(OmaError):
         job_rescue._image({"image": str(stray)})                # not under the user's home
+
+
+def test_an_old_settings_part_past_the_image_is_blanked(sandbox, monkeypatch, tmp_path):
+    """A stick made before keeps its settings part past the image; the desktop
+    opened it again as soon as it reappeared and it couldn't be formatted."""
+    from omabackups.root import job_rescue
+    monkeypatch.setattr(job_rescue, "CLEAR", 3 << 20)
+    img, disk = tmp_path / "rescue.iso", tmp_path / "stick"
+    img.write_bytes(b"R" * (5 << 20))
+    job_rescue._copy(img, str(disk))
+    written = disk.read_bytes()
+    assert written[:5 << 20] == img.read_bytes()
+    assert written[5 << 20:] == bytes(3 << 20)
+
+
+def test_a_settings_part_the_desktop_opened_is_let_go_and_formatted(monkeypatch):
+    import subprocess
+    from omabackups.root import job_rescue
+    calls, state = [], {"mounted": True, "busy": 2}
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd[0])
+        code = 0
+        if cmd[0] == "findmnt":
+            code = 0 if state["mounted"] else 1
+        elif cmd[0] == "umount":
+            state["mounted"] = False
+        elif cmd[0] == "mkfs.fat":
+            if state["busy"]:
+                state["busy"] -= 1
+                state["mounted"] = True             # opened again behind our back
+                code = 1
+        return subprocess.CompletedProcess(cmd, code, b"", b"Device or resource busy" if code else b"")
+    monkeypatch.setattr(job_rescue.subprocess, "run", fake_run)
+    monkeypatch.setattr(job_rescue.time, "sleep", lambda s: None)
+    job_rescue._format("/dev/sdz3")
+    assert calls.count("mkfs.fat") == 3 and calls.count("umount") == 3
+
+
+def test_a_part_that_stays_busy_says_so_with_the_details(monkeypatch):
+    import subprocess
+    from omabackups.root import job_rescue
+    monkeypatch.setattr(job_rescue.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0 if cmd[0] == "findmnt" else 1, b"", b"mkfs.fat: unable to open /dev/sdz3: Device or resource busy"))
+    monkeypatch.setattr(job_rescue.time, "sleep", lambda s: None)
+    with pytest.raises(OmaError) as caught:
+        job_rescue._format("/dev/sdz3")
+    assert caught.value.code == "rescue-usb" and "busy" in caught.value.details

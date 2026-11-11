@@ -24,6 +24,10 @@ from omabackups.core.state import write_atomic
 
 LABEL = "OMABACKUPS"
 SETTINGS_SIZE = "64M"
+# Blanked just past the image, where the settings part goes (the size check
+# keeps this much room): an old stick's settings part found there again is
+# opened by the desktop the moment it reappears, and can't be formatted.
+CLEAR = 80 << 20
 
 
 def progress_file() -> Path:
@@ -73,6 +77,9 @@ def _copy(image: Path, disk: str) -> None:
             dst.write(block)
             done += len(block)
             _say("write", int(100 * done / total))
+        zeros, left = bytes(4 << 20), CLEAR
+        while left > 0:
+            left -= dst.write(zeros[:min(len(zeros), left)])
         os.fsync(dst.fileno())
 
 
@@ -80,6 +87,25 @@ def _reread(disk: str) -> None:
     if subprocess.run(["blockdev", "--rereadpt", disk], capture_output=True).returncode != 0:
         subprocess.run(["partx", "-u", disk], capture_output=True)
     subprocess.run(["udevadm", "settle"], capture_output=True)
+
+
+def _let_go(part: str) -> None:
+    for _ in range(5):
+        if subprocess.run(["findmnt", "-S", part], capture_output=True).returncode != 0:
+            return
+        subprocess.run(["umount", part], capture_output=True)
+
+
+def _format(part: str) -> None:
+    """The settings part formatted. The desktop may open a stick's part as
+    soon as it appears: let go of it and try again before giving up."""
+    for _ in range(9):
+        _let_go(part)
+        if subprocess.run(["mkfs.fat", "-n", LABEL, part], capture_output=True).returncode == 0:
+            return
+        time.sleep(1)
+    _let_go(part)
+    _run("mkfs.fat", "-n", LABEL, part)
 
 
 def _settings_part(disk: str) -> str | None:
@@ -131,7 +157,7 @@ def write(request: dict) -> dict:
         if os.path.exists(part):
             break
         time.sleep(0.5)
-    _run("mkfs.fat", "-n", LABEL, part)
+    _format(part)
     made = _write_settings(part)
     _say("done", 100)
     return {"made": made, "disk": disk}
