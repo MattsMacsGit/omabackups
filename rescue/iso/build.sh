@@ -78,5 +78,17 @@ awk -v local="[omabackups-local]\nSigLevel = Optional TrustAll\nServer = file://
 echo "==> Building (this downloads what isn't here yet, then takes a while)"
 mkdir -p "$out"
 mkarchiso -v -w "$work/build" -o "$out" "$profile"
+
+echo "==> Checking every program the rescue runs is in the image"
+missing=()
+while read -r prog; do
+  [[ -z $prog || $prog == \#* ]] && continue
+  [[ -x $work/build/x86_64/airootfs/usr/bin/$prog ]] || missing+=("$prog")
+done <"$here/programs.txt"
+if ((${#missing[@]})); then
+  rm -f "$out"/*.iso
+  echo "Not in the image: ${missing[*]}. Add their packages to rescue/iso/packages.x86_64; no image was kept." >&2
+  exit 1
+fi
 chown -R "$builder" "$out"
 ls -la "$out"

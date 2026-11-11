@@ -1,0 +1,30 @@
+# Every program the Rescue USB runs. build.sh stops if one isn't in the
+# image, and tests/test_rescue_programs.py stops if the code calls one that
+# isn't listed here (partprobe once wasn't on the stick: the rescue stopped
+# at "Preparing the disk").
+arch-chroot
+bash
+blkid
+blockdev
+btrfs
+cryptsetup
+efibootmgr
+findmnt
+gum
+ip
+iwctl
+lsblk
+mkfs.btrfs
+mkfs.fat
+mount
+partx
+rsync
+sgdisk
+ssh
+ssh-keygen
+sync
+systemctl
+tailscale
+udevadm
+umount
+wipefs

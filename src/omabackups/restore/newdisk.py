@@ -70,6 +70,41 @@ def free(disk: str) -> None:
             subprocess.run(["cryptsetup", "close", parts[0]], capture_output=True)
 
 
+def _guid(disk: str, n: int) -> str:
+    """The ID sgdisk just gave partition n (read from the disk itself)."""
+    for line in _run("sgdisk", "-i", str(n), disk).splitlines():
+        if line.startswith("Partition unique GUID:"):
+            return line.split(":", 1)[1].strip().lower()
+    return ""
+
+
+def _seen(dev: str) -> str:
+    done = subprocess.run(["lsblk", "-dno", "PARTUUID", dev], capture_output=True, text=True)
+    return done.stdout.strip().lower()
+
+
+def settle(new: NewDisk) -> None:
+    """Nothing is written into the new layout until the computer sees it.
+    The old partitions often sat at the same places, so /dev/sdX1 and 2 may
+    exist all along: wait for the new partitions' own IDs, not their names.
+    blockdev and partx are util-linux, always on the stick (partprobe wasn't)."""
+    want = (_guid(new.disk, 1), _guid(new.disk, 2))
+    for _ in range(30):
+        if subprocess.run(["blockdev", "--rereadpt", new.disk], capture_output=True).returncode != 0:
+            subprocess.run(["partx", "-u", new.disk], capture_output=True)
+        here = [d for d in (new.disk, new.esp, new.luks) if os.path.exists(d)]
+        subprocess.run(["udevadm", "trigger", "--action=change", *here], capture_output=True)
+        subprocess.run(["udevadm", "settle"], capture_output=True)
+        if all(want) and all(os.path.exists(p) for p in (new.esp, new.luks)) \
+                and (_seen(new.esp), _seen(new.luks)) == want:
+            return
+        time.sleep(0.5)
+    raise OmaError("The disk's new layout didn't show up.",
+                   "Nothing was taken from your backup. Unplug the disk, plug it in again, and run the rescue again.",
+                   f"wanted {new.esp}={want[0]} {new.luks}={want[1]}; "
+                   f"seen {_seen(new.esp) or '-'} {_seen(new.luks) or '-'}", code="disk-failed")
+
+
 def prepare(disk: str, password: str) -> NewDisk:
     """Wipe, partition, encrypt, format, make the subvolumes, mount them."""
     free(disk)
@@ -77,16 +112,10 @@ def prepare(disk: str, password: str) -> NewDisk:
     _run("sgdisk", "--zap-all", disk)
     _run("sgdisk", "-n", f"1:0:+{ESP_SIZE}", "-t", "1:ef00", "-c", "1:ESP",
          "-n", "2:0:0", "-t", "2:8309", "-c", "2:root", disk)
-    subprocess.run(["partprobe", disk], capture_output=True)
-    subprocess.run(["udevadm", "settle"], capture_output=True)
     new = NewDisk(disk, partition(disk, 1), partition(disk, 2))
-    for _ in range(20):
-        if os.path.exists(new.esp) and os.path.exists(new.luks):
-            break
-        time.sleep(0.5)
-    else:
-        raise OmaError("The new partitions didn't appear.", "Unplug the disk, plug it in again, and retry.",
-                       f"{new.esp} {new.luks}", code="disk-failed")
+    settle(new)
+    for part in (new.esp, new.luks):        # what the old layout left at the same places
+        subprocess.run(["wipefs", "-a", part], capture_output=True)
     _run("mkfs.fat", "-F32", "-n", "OMARCHY", new.esp)
     key = password.encode()
     _run("cryptsetup", "luksFormat", "--type", "luks2", "--batch-mode", "--key-file=-", new.luks, data=key)

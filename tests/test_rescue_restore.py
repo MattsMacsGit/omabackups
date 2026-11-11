@@ -134,3 +134,51 @@ def test_partitions_are_named_as_the_kernel_names_them():
     assert newdisk.partition("/dev/sda", 1) == "/dev/sda1"
     assert newdisk.partition("/dev/nvme0n1", 2) == "/dev/nvme0n1p2"
     assert newdisk.partition("/dev/vda", 2) == "/dev/vda2"
+
+
+class _Disk:
+    """A disk whose new layout shows up after a few looks (old IDs until then)."""
+    def __init__(self, shows_after: int, rereadpt_ok: bool = True):
+        self.looks, self.shows_after, self.rereadpt_ok, self.calls = 0, shows_after, rereadpt_ok, []
+
+    def run(self, cmd, **kw):
+        self.calls.append(cmd[0])
+        out, code = "", 0
+        if cmd[:2] == ["sgdisk", "-i"]:
+            out = f"Partition GUID code: X\nPartition unique GUID: {'AAAA-1' if cmd[2] == '1' else 'AAAA-2'}\n"
+        elif cmd[0] == "lsblk":
+            self.looks += 1
+            new = self.looks > 2 * self.shows_after
+            out = ("aaaa-1" if cmd[-1].endswith("1") else "aaaa-2") if new else "old-id"
+        elif cmd[0] == "blockdev":
+            code = 0 if self.rereadpt_ok else 1
+        text = kw.get("text")
+        return subprocess.CompletedProcess(cmd, code, out if text else out.encode(), "" if text else b"")
+
+
+def _fake_disk(monkeypatch, disk):
+    monkeypatch.setattr(newdisk.subprocess, "run", disk.run)
+    monkeypatch.setattr(newdisk.os.path, "exists", lambda p: True)
+    monkeypatch.setattr(newdisk.time, "sleep", lambda s: None)
+
+
+def test_nothing_is_written_until_the_new_layout_shows(monkeypatch):
+    disk = _Disk(shows_after=3)
+    _fake_disk(monkeypatch, disk)
+    newdisk.settle(newdisk.NewDisk("/dev/sdz", "/dev/sdz1", "/dev/sdz2"))
+    assert disk.looks >= 6 and "partprobe" not in disk.calls and "udevadm" in disk.calls
+
+
+def test_a_busy_disk_is_reread_with_partx(monkeypatch):
+    disk = _Disk(shows_after=1, rereadpt_ok=False)
+    _fake_disk(monkeypatch, disk)
+    newdisk.settle(newdisk.NewDisk("/dev/sdz", "/dev/sdz1", "/dev/sdz2"))
+    assert "partx" in disk.calls
+
+
+def test_a_layout_that_never_shows_stops_before_anything_is_written(monkeypatch):
+    disk = _Disk(shows_after=10_000)
+    _fake_disk(monkeypatch, disk)
+    with pytest.raises(newdisk.OmaError) as caught:
+        newdisk.settle(newdisk.NewDisk("/dev/sdz", "/dev/sdz1", "/dev/sdz2"))
+    assert "Nothing was taken" in caught.value.todo and "old-id" in caught.value.details
