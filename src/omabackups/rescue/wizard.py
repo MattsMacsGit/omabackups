@@ -99,7 +99,7 @@ def unlock(gate, bid: str) -> tuple[str, str]:
             time.sleep(2)
 
 
-def pick_point(gate, bid: str, hold: str, mine: dict) -> str:
+def pick_point(gate, bid: str, hold: str, mine: dict) -> tuple[str, list[str]]:
     listed = gate.call("points", bid)
     names = sorted(listed["points"], reverse=True)
     if not names:
@@ -114,7 +114,7 @@ def pick_point(gate, bid: str, hold: str, mine: dict) -> str:
                 (["kept"] if name in kept.get("kept", []) else [])
         return f"{who}  ·  {_when(name)}" + (f"  ({', '.join(notes)})" if notes else "")
     screens.step("Which restore point?", "Each shows the computer it's from and when.")
-    return names[screens.choose("Restore points", [label(n) for n in names])]
+    return names[screens.choose("Restore points", [label(n) for n in names])], names
 
 
 def pick_disk():
@@ -167,7 +167,7 @@ def run(events) -> int:
     bid = server["backup"]
     password, hold = unlock(gate, bid)
     try:
-        point = pick_point(gate, bid, hold, {**mine, "line": server.get("line")})
+        point, names = pick_point(gate, bid, hold, {**mine, "line": server.get("line")})
     finally:
         gate.call("lock", bid, hold)
     while True:          # "Change" comes back here: the backup stays found and opened once
@@ -184,4 +184,6 @@ def run(events) -> int:
         if screens.confirm("Start the rescue?", "Rescue", "Change"):
             break
     from omabackups.rescue import restore_run
-    return restore_run.run(events, gate, server, password, point, full, disk, disk_pw, mine)
+    from omabackups.restore.seed import newest_of_line
+    return restore_run.run(events, gate, server, password, point, full, disk, disk_pw, mine,
+                           newest_of_line(point, names))

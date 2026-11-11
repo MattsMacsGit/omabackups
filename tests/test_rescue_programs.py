@@ -16,7 +16,7 @@ NOT_PROGRAMS = {"choose", "confirm", "input", "spin", "style", "station", "kept"
 
 def _stick_code():
     yield from (SRC / "rescue").glob("*.py")
-    yield from (SRC / "restore" / f for f in ("newdisk.py", "bootfix.py", "system.py"))
+    yield from (SRC / "restore" / f for f in ("newdisk.py", "bootfix.py", "system.py", "seed.py"))
     yield from (SRC / "where").glob("*.py")
 
 

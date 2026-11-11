@@ -149,7 +149,7 @@ def _record(root: Path, point: str, full: bool) -> None:
 
 
 def rescue(gate, bid: str, password: str, point: str, full: bool, disk: str, disk_password: str,
-           show) -> dict:
+           show, newest: bool = False) -> dict:
     """The whole rescue. show(phase, fraction, status). Returns notes for the end."""
     logger = log.get("rescue")
     from omabackups.backup.run import HoldKeeper
@@ -170,6 +170,12 @@ def rescue(gate, bid: str, password: str, point: str, full: bool, disk: str, dis
         show("boot", 0, "Bringing back the boot files")
         fetch(gate, bid, point, "boot", newdisk.ESP, ["--delete-delay"],
               lambda f: show("boot", f, "Bringing back the boot files"), FAT_COPY)
+        if newest:          # the first backup after the rescue is quick (seed.py)
+            try:
+                from omabackups.restore import seed
+                seed.seed(newdisk.ROOT, point, full)
+            except (OSError, subprocess.CalledProcessError) as exc:
+                logger.warning("no snapshots for the first backup (it checks every file): %s", exc)
         notes = make_it_start(new, newdisk.ROOT, point, full,
                               lambda f, status: show("start", f, status))
         logger.info("rescue from %s onto %s done (%s)", point, disk, "full" if full else "quick")

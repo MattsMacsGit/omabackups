@@ -27,7 +27,7 @@ def _when(point: str) -> str:
     return when(point)
 
 
-def run(events, gate, server, password, point, full, disk, disk_password, mine) -> int:
+def run(events, gate, server, password, point, full, disk, disk_password, mine, newest=False) -> int:
     phases = system.FULL_PHASES if full else system.PHASES
     progress = Progress(list(phases))
     tip = {"n": 0, "at": time.monotonic()}
@@ -38,7 +38,8 @@ def run(events, gate, server, password, point, full, disk, disk_password, mine) 
         progress.show(phase, fraction, status, TIPS[tip["n"] % len(TIPS)])
 
     try:
-        done = system.rescue(gate, server["backup"], password, point, full, disk.path, disk_password, show)
+        done = system.rescue(gate, server["backup"], password, point, full, disk.path, disk_password, show,
+                             newest)
     except OmaError as exc:
         progress.close()
         screens.step("The rescue stopped", exc.what)
