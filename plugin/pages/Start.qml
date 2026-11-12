@@ -191,11 +191,13 @@ Column {
   PanelSeparator { visible: page.step === "firstBackup" && !!(page.service && page.service.running) }
   Prose {
     visible: page.step === "firstBackup" && !!(page.service && page.service.running) && !page.service.status.rescue_later
+             && !page.service.status.rescue_usb
     width: parent.width
     text: "While you wait: make a Rescue USB"
   }
   Prose {
     visible: page.step === "firstBackup" && !!(page.service && page.service.running) && !page.service.status.rescue_later
+             && !page.service.status.rescue_usb
     width: parent.width
     dim: true
     text: "A USB stick that brings this computer back if it won't start. Both run at once: the "
@@ -211,6 +213,7 @@ Column {
   ActionButton {
     id: later
     visible: page.step === "firstBackup" && !!(page.service && page.service.running) && !page.service.status.rescue_later
+             && !page.service.status.rescue_usb
     text: "Later"
     hasCursorHere: page.cursorOn(this)
     onClicked: page.service.rescueLater()
