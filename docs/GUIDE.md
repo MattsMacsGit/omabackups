@@ -188,6 +188,8 @@ on your computer first, so nothing moves when you tick or untick it), and
 
 - The **tick** says what's backed up from the next backup on: **✓** all of
   it, **•** part of it (open it to see what's skipped), no mark: skipped.
+  Hidden things the Quick skips leave out everywhere (like `.cache`
+  folders) don't count towards **•**: they're explained under Quick skips.
 - The **colour** says what your backup holds:
   - **green ✓**: in your latest restore point, and stays backed up;
   - **blue ✓**: not in your backup yet: it goes in at the next backup;

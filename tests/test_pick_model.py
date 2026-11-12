@@ -187,3 +187,29 @@ def test_the_four_looks(world, tmp_path):
     assert m.colour(new) == "grey"                                     # never in any restore point
     m.toggle(new)
     assert (m.mark(new), m.colour(new)) == ("✓", "blue")               # ticked: goes next time
+
+
+def test_caches_deep_inside_dont_make_a_folder_partly_skipped(world, tmp_path):
+    """A folder said "2 things inside are skipped": caches, folders deep. The
+    built-in and Quick skips are explained once, under Quick skips."""
+    for rel in ("u/Projects/app/.cache/x", "u/Projects/app/sub/.cache/y"):
+        (tmp_path / "home" / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "home" / rel).write_bytes(b"c" * 10)
+    world.measure(world.home())
+    projects = Node("home", "u/Projects", "Projects", True)
+    assert world.inside_skipped(projects) == 0 and world.mark(projects) == "✓"
+    assert world.explain(projects) == "Projects: everything in it is backed up."
+    videos = Node("home", "u/Videos", "Videos", True)          # your own skip still shows
+    assert world.explain(videos) == "Videos: 1 thing inside is skipped. Open it to see."
+
+
+def test_things_you_can_see_still_count_however_they_were_skipped(world, tmp_path):
+    """Only hidden things drop out of the count: a visible folder left out by
+    a built-in rule (lost+found) still makes its folder partly skipped."""
+    (tmp_path / "home/u/Projects/lost+found").mkdir(parents=True)
+    (tmp_path / "home/u/Projects/lost+found/x").write_bytes(b"l")
+    world.rules["home"].append("lost+found")                    # a built-in rule
+    world._refresh()
+    world.measure(world.home())
+    projects = Node("home", "u/Projects", "Projects", True)
+    assert world.inside_skipped(projects) == 1 and world.mark(projects) == "•"

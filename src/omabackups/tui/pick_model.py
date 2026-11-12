@@ -61,6 +61,15 @@ class Model:
         # never changes it, so rows don't jump about (they sorted by the
         # backed-up size, which drops to 0 when a row is skipped).
         self._disk = {}
+        # Hidden things left out by the built-in or Quick skips (".cache"
+        # everywhere...) are explained once, under Quick skips: they don't
+        # make a folder "partly skipped" (one said "2 things inside are
+        # skipped" and they were caches, folders deep). Things you can see
+        # still count, however they were skipped.
+        self._background = {p: set(skips.DEFAULTS.get(p, [])) for p in ("home", "system")}
+        for q in QUICK:
+            for part, rules in quick.rules(q, user).items():
+                self._background.setdefault(part, set()).update(rules)
         self._refresh()
 
     def _refresh(self) -> None:
@@ -132,7 +141,8 @@ class Model:
         return bool(node.rel) and self.skips[node.part].skipped(node.rel)
 
     def inside_skipped(self, node: Node) -> int:
-        """How many things inside are skipped (found while measuring)."""
+        """How many things inside are skipped (found while measuring); hidden
+        things left out by the built-in or Quick skips aren't counted."""
         with self._lock:
             return self._inside.get(node, 0)
 
@@ -279,6 +289,14 @@ class Model:
         with self._lock:
             return self._sizes.get(node)
 
+    def quietly_skipped(self, node: Node) -> bool:
+        """Hidden (a dot name, or inside a dot folder) and skipped by a
+        built-in or Quick skip rule, not one of your own."""
+        if not any(part.startswith(".") for part in node.rel.split("/")):
+            return False
+        why = self.skips[node.part].why(node.rel) if node.rel else None
+        return bool(why) and why[0] in self._background.get(node.part, set())
+
     def disk_size(self, node: Node) -> int | None:
         """The size on the computer, ticked or not (for the order)."""
         with self._lock:
@@ -314,7 +332,10 @@ class Model:
                 self.measure(child, stop)
             total += self.size(child) or 0
             disk += self.disk_size(child) or 0
-            inside += 1 if self.skipped(child) else self.inside_skipped(child)
+            if self.skipped(child):
+                inside += 0 if self.quietly_skipped(child) else 1
+            else:
+                inside += self.inside_skipped(child)
         with self._lock:
             self._sizes[node], self._inside[node] = (0 if skipped else total), inside
             self._disk[node] = disk
