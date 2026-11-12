@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Wayland
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -117,7 +118,27 @@ Panel {
     else if (y + t.height > f.contentY + f.height)
       f.contentY = Math.min(f.contentHeight - f.height, y + t.height - f.height + Style.space(8))
   }
-  onOpenedChanged: { svc.panelOpen = opened; if (opened) svc.refresh() }
+  onOpenedChanged: {
+    svc.panelOpen = opened
+    if (opened) svc.refresh()
+    // Opened by a click, the pointer is on the bar icon, not the card: the
+    // keyboard stays with your window until the pointer comes onto the card.
+    if (opened) { panel.pointerAway = root.pressedOpen; root.pressedOpen = false }
+  }
+
+  // The keyboard follows the pointer: away from the card it goes back to the
+  // window you were in, so typing lands there while the panel stays up; back
+  // on the card, the panel takes it again (Omarchy's brief prime, then OnDemand).
+  property bool pressedOpen: false
+  function pointerOnCard(on) {
+    if (!panel.open) return
+    if (!on) { panel.pointerAway = true; return }
+    if (!panel.pointerAway) return
+    panel.pointerAway = false
+    panel.focusPrimed = false
+    panel.beginFocusPrime()
+    Qt.callLater(function() { if (panel.open && panel.focusTarget) panel.focusTarget.forceActiveFocus() })
+  }
 
   Service { id: svc }
 
@@ -128,7 +149,11 @@ Panel {
     text: "󰁯"
     foreground: root.hasRedLine ? svc.colour("red")
                 : (svc.flow === "everyday" ? root.barForeground : Qt.darker(root.barForeground, 1.55))
-    onPressed: function(code) { if (code === Qt.MiddleButton) svc.backupNow(); else root.toggle() }
+    onPressed: function(code) {
+      if (code === Qt.MiddleButton) { svc.backupNow(); return }
+      root.pressedOpen = !root.opened
+      root.toggle()
+    }
   }
 
   KeyboardPanel {
@@ -138,6 +163,11 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: panel.loadedContent
+    // Omarchy's KeyboardPanel keeps the keyboard while open; this panel lets it
+    // go while the pointer is away from the card (see pointerOnCard).
+    property bool pointerAway: false
+    WlrLayershell.keyboardFocus: !open || pointerAway ? WlrKeyboardFocus.None
+                                 : (focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
     contentWidth: panel.fittedContentWidth(Style.space(380))
     contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(620))
 
@@ -148,6 +178,7 @@ Panel {
                                       settings: settingsPage, details: detailsPage, migrate: migratePage })
       anchors.fill: parent
       implicitHeight: column.implicitHeight
+      HoverHandler { onHoveredChanged: root.pointerOnCard(hovered) }
       onMoveRequested: function(dx, dy) {
         if (dx < 0) { root.back(); return }
         if (dx > 0) { if (root.cursorTarget && root.cursorTarget.openOptions) root.cursorTarget.openOptions(); return }

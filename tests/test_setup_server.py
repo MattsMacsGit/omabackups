@@ -174,3 +174,19 @@ def test_an_outdated_gatekeeper_says_how_to_update(monkeypatch):
         Gate("srv").check_version()
     assert caught.value.code == "gate-version"
     assert "setup server --update" in caught.value.todo
+
+
+def test_an_update_knows_the_server_it_was_set_up_with(sandbox):
+    """setup server --update asked to confirm the server's key again: setup's
+    own list is in /run (gone after a restart); the backups' list knows it."""
+    paths.known_hosts_file().parent.mkdir(parents=True, exist_ok=True)
+    paths.known_hosts_file().write_text(f"{paths.SERVER_ALIAS} ssh-ed25519 AAAA\n")
+    login = server.Login("192.0.2.10", "someone")
+    files = next(x for x in login.base if x.startswith("UserKnownHostsFile="))
+    assert files == f"UserKnownHostsFile={login.known_hosts} {paths.known_hosts_file()}"
+
+
+def test_a_new_server_is_asked_about_as_before(sandbox):
+    login = server.Login("192.0.2.10", "someone")
+    files = next(x for x in login.base if x.startswith("UserKnownHostsFile="))
+    assert files == f"UserKnownHostsFile={login.known_hosts}"

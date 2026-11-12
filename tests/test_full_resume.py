@@ -112,6 +112,7 @@ def test_progress_reads_as_a_sentence():
     assert progress.text(state) == ("Backing up home... 42% · 12.4 GB of 310 GB · 48.0 MB/s · "
                                     "about 1 h 50 min left (part 2 of 3)")
     assert progress.text({"step": "check", "part": "home"}) == "Checking home..."
+    assert progress.text({"step": "clear", "part": "home"}) == "Clearing removed and skipped files from home..."
 
 
 def test_rsync_that_moves_nothing_for_3_minutes_is_stopped(monkeypatch, tmp_path):
@@ -156,3 +157,19 @@ def test_every_parts_deletes_come_before_any_copy(world, monkeypatch):
     first_copy = next(i for i, c in enumerate(calls) if c[0] == "copy")
     assert all(i < first_copy for i, c in enumerate(calls) if c[0] == "remove")
     assert not (latest(box) / "home/u/Documents").exists()
+
+
+def test_snapshots_left_by_a_stopped_backup_are_tidied(world, monkeypatch):
+    """Stop kills the backup, so it never drops its snapshot: the next one does."""
+    srv, kid, bid, src, box = world
+    run.backup(source=src)
+    snaps = src.root / "snaps"
+    since = run.load_record()["since"]
+    for part in ("system", "home"):
+        (snaps / f"{part}-20990101T000000").mkdir()          # left by a stopped run
+    monkeypatch.setattr(run, "point_name", lambda line, latest: f"{line}-2099-01-01-0000")
+    run.backup(source=src)
+    left = sorted(p.name for p in snaps.iterdir())
+    assert not any(name.endswith("20990101T000000") for name in left)
+    assert set(run.load_record()["since"].values()) <= set(left)
+    assert not (set(since.values()) & set(left))             # the old since went as usual

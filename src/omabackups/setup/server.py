@@ -63,6 +63,13 @@ class Login:
         self.known_hosts = paths.runtime_dir() / "setup_known_hosts"
         self.base = ssh.as_user(address, user, self.known_hosts)
         self.base[1:1] = ["-o", "HashKnownHosts=no"]
+        # Setup's own list lives in /run and is gone after a restart, so a
+        # `setup server --update` asked to confirm the server's key again.
+        # The backups' list already knows it: read both, write only setup's.
+        system = paths.known_hosts_file()
+        if system.is_file() and " " not in f"{system}{self.known_hosts}":
+            mine = f"UserKnownHostsFile={self.known_hosts}"
+            self.base = [f"{mine} {system}" if x == mine else x for x in self.base]
         # Keep the login open while the user reads the server's disk list.
         self.base = [x if x != "ControlPersist=60" else "ControlPersist=900" for x in self.base]
 

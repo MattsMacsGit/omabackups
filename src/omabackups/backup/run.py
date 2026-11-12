@@ -136,6 +136,13 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
                 continue
             snaps = stack.enter_context(source.snapshots(part) if source else Snapshots(part.device))
             opened[part.name] = snaps
+            # A stopped backup is killed, so it never tidies up: its snapshot
+            # stayed for good. Only the "since" one and an unfinished full
+            # backup's are needed (D49); this run's comes next.
+            still_used = {since.get(part.name), full.keep(part.name)}
+            for name in snaps.names():
+                if name.startswith(f"{part.name}-") and name not in still_used:
+                    snaps.drop(name)
             new = snaps.take(part, run)
             made[part.name] = new.name
             left_out += [f"{part.mount.rstrip('/')}/{rel}" for rel in snaps.nested(part)
@@ -176,7 +183,7 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
         # files while home's skipped folders still waited to be cleared).
         for part, skip, new, plan in work:
             if isinstance(plan, full.FullList) and plan.ops:
-                progress("send", part.name)
+                progress("clear", part.name)
                 sender.remove(part.name, plan.ops)
                 plan.ops = []
         for number, (part, skip, new, plan) in enumerate(work, 1):
