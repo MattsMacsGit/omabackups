@@ -183,7 +183,8 @@ omabackups pick
 
 opens the picker in the terminal (the panel opens it for you from Settings).
 It starts with your home folders (folders first, then files, each biggest
-first), and **☰ Quick skips** at the bottom:
+on your computer first, so nothing moves when you tick or untick it), and
+**☰ Quick skips** at the bottom:
 
 - The **tick** says what's backed up from the next backup on: **✓** all of
   it, **•** part of it (open it to see what's skipped), no mark: skipped.

@@ -57,6 +57,10 @@ class Model:
         self.dirty = False
         self.show_hidden = False    # hidden files: Migrate's business; H shows them
         self._sizes, self._inside, self._lock, self._held = {}, {}, threading.Lock(), {}
+        # The size on the computer, skipped or not: the rows' order. Ticking
+        # never changes it, so rows don't jump about (they sorted by the
+        # backed-up size, which drops to 0 when a row is skipped).
+        self._disk = {}
         self._refresh()
 
     def _refresh(self) -> None:
@@ -111,9 +115,10 @@ class Model:
             out.append(Node(node.part, f"{node.rel}/{e.name}".lstrip("/"), e.name, is_dir))
         if node == self.home():
             out.append(self.quick())
-        # Folders before files, each biggest first; hidden ones after; Quick skips last.
+        # Folders before files, each biggest on the computer first (never by
+        # what's ticked); hidden ones after; Quick skips last.
         key = lambda n: (n.part == "quick", n.name.startswith("."), not n.is_dir,  # noqa: E731
-                         -(self.size(n) or 0), n.name.lower())
+                         -(self.disk_size(n) or 0), n.name.lower())
         return sorted(out, key=key)
 
     # --- what a row says -----------------------------------------------------
@@ -274,6 +279,11 @@ class Model:
         with self._lock:
             return self._sizes.get(node)
 
+    def disk_size(self, node: Node) -> int | None:
+        """The size on the computer, ticked or not (for the order)."""
+        with self._lock:
+            return self._disk.get(node)
+
     def measure(self, node: Node, stop=lambda: False) -> int:
         """Size of what's backed up under node (0 if skipped); counts skips inside.
         A Quick skip's size is what it holds, skipped or not (what skipping saves)."""
@@ -286,27 +296,29 @@ class Model:
                 with self._lock:
                     self._sizes[item] = got
             return 0
-        if self.skipped(node):
-            return 0
+        skipped = self.skipped(node)
         if not node.is_dir:
             try:
                 total = os.lstat(node.path(self.roots)).st_size
             except OSError:
                 total = 0
             with self._lock:
-                self._sizes[node] = total
-            return total
-        total, inside = 0, 0
+                self._disk[node] = total
+                self._sizes[node] = 0 if skipped else total
+            return 0 if skipped else total
+        total, disk, inside = 0, 0, 0
         for child in self.children(node) if node != self.home() else self.children_plain(node):
             if stop():
                 return total
-            known = self.size(child)
-            got = known if known is not None else self.measure(child, stop)
-            total += got
+            if self.size(child) is None or self.disk_size(child) is None:
+                self.measure(child, stop)
+            total += self.size(child) or 0
+            disk += self.disk_size(child) or 0
             inside += 1 if self.skipped(child) else self.inside_skipped(child)
         with self._lock:
-            self._sizes[node], self._inside[node] = total, inside
-        return total
+            self._sizes[node], self._inside[node] = (0 if skipped else total), inside
+            self._disk[node] = disk
+        return 0 if skipped else total
 
     def children_plain(self, node: Node) -> list[Node]:
         return [c for c in self.children(node) if c.part != "quick"]

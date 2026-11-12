@@ -35,10 +35,10 @@ def names(model, node):
 def test_first_page(world):
     world.measure(world.home())
     shown = [n.name for n in world.listing(world.home())]
-    assert shown == ["Videos", "Projects", "Downloads", "Quick skips"]     # hidden ones aren't shown...
+    assert shown == ["Downloads", "Videos", "Projects", "Quick skips"]     # hidden ones aren't shown...
     world.show_hidden = True                                               # ...until h
-    assert [n.name for n in world.listing(world.home())] == ["Videos", "Projects", "Downloads",
-                                                             ".config", ".cache", "Quick skips"]
+    assert [n.name for n in world.listing(world.home())] == ["Downloads", "Videos", "Projects",
+                                                             ".cache", ".config", "Quick skips"]
 
 
 def test_marks_colours_and_lines(world):
@@ -151,10 +151,24 @@ def test_quick_sizes_are_what_they_hold(world, tmp_path):
 
 
 def test_folders_come_before_files(world, tmp_path):
+    """Folders, then files, each biggest on the computer first: the skipped
+    Downloads is still the biggest folder."""
     (tmp_path / "home/u/huge-file.bin").write_bytes(b"x" * 50_000)
     world.measure(world.home())
     shown = [n.name for n in world.listing(world.home())]
-    assert shown == ["Videos", "Projects", "Downloads", "huge-file.bin", "Quick skips"]
+    assert shown == ["Downloads", "Videos", "Projects", "huge-file.bin", "Quick skips"]
+
+
+def test_ticking_never_moves_a_row(world):
+    """Rows sorted by what's backed up jumped about as they were ticked."""
+    world.measure(world.home())
+    before = [n.name for n in world.listing(world.home())]
+    for name in ("Videos", "Downloads", "Projects"):
+        world.toggle(Node("home", f"u/{name}", name, True))
+        world.measure(world.home())
+        assert [n.name for n in world.listing(world.home())] == before, name
+    videos = Node("home", "u/Videos", "Videos", True)
+    assert world.size(videos) == 0 and world.disk_size(videos) == 7000   # shown: backed up; order: real
 
 
 def test_the_four_looks(world, tmp_path):
