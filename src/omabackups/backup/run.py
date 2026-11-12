@@ -171,6 +171,14 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
 
         # 2. Send. From here until the end, the record says "not finished".
         save_record({**record, "finished": False, "started": int(time.time())})
+        # Every part's deletes first: the room they free is there before
+        # anything is copied (a full backup space failed on 7 MB of system
+        # files while home's skipped folders still waited to be cleared).
+        for part, skip, new, plan in work:
+            if isinstance(plan, full.FullList) and plan.ops:
+                progress("send", part.name)
+                sender.remove(part.name, plan.ops)
+                plan.ops = []
         for number, (part, skip, new, plan) in enumerate(work, 1):
             progress("send", part.name, part_no=number, parts=len(work))
             sender.report = lambda fields, name=part.name, n=number: progress(
@@ -179,8 +187,6 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
                 sender.full(part.name, part.mount, skip)
                 how[part.name] = "copied"
             elif isinstance(plan, full.FullList):
-                if plan.ops:
-                    sender.remove(part.name, plan.ops)
                 sender.copy(part.name, str(new), plan.items, plan.already)
                 how[part.name] = "full, carried on" if plan.resumed else "full, checked once"
             elif plan is not None:

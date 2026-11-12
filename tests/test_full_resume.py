@@ -126,3 +126,33 @@ def test_rsync_that_moves_nothing_for_3_minutes_is_stopped(monkeypatch, tmp_path
     m = meter_mod.Meter(100)
     code, out, err, stuck = sender._live([sys.executable, "-c", "import time; time.sleep(60)"], m, 0, None)
     assert stuck and m.sent == 0
+
+
+def test_every_parts_deletes_come_before_any_copy(world, monkeypatch):
+    """A full space: home's skipped folder is cleared before the system part
+    is copied, so the room is there."""
+    srv, kid, bid, src, box = world
+    _more_files(src)
+    real = _cut_off_home_half_way(monkeypatch)
+    with pytest.raises(OmaError):
+        run.backup(source=src)
+    paths.system_config_dir().mkdir(parents=True, exist_ok=True)
+    (paths.system_config_dir() / "skips.json").write_text(json.dumps({"home": ["Documents"]}))
+    calls = []
+    real_remove = Sender.remove
+
+    def remove(self, part, ops):
+        calls.append(("remove", part))
+        return real_remove(self, part, ops)
+
+    def copy(self, part, *args, **kwargs):
+        calls.append(("copy", part))
+        return real(self, part, *args, **kwargs)
+    monkeypatch.setattr(Sender, "remove", remove)
+    monkeypatch.setattr(Sender, "copy", copy)
+    monkeypatch.setattr(run, "point_name", lambda line, latest: f"{line}-2099-01-01-0000")
+    run.backup(source=src)
+    assert ("remove", "home") in calls
+    first_copy = next(i for i, c in enumerate(calls) if c[0] == "copy")
+    assert all(i < first_copy for i, c in enumerate(calls) if c[0] == "remove")
+    assert not (latest(box) / "home/u/Documents").exists()
