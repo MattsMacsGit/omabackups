@@ -84,7 +84,8 @@ def test_only_listed_files_are_sent(box, tmp_path):
 @pytest.mark.parametrize("bad", [
     ["--log-file=/etc/x"], ["--link-dest=/"], ["--temp-dir", "/tmp"], ["--backup-dir=/etc"],
     ["--remove-source-files"], ["--partial-dir", "/etc"], ["--sender"], ["--files-from=/etc/shadow"],
-    ["-lHogDtprxe.iLsf;rm"], ["--rsync-path=x"]])
+    ["-lHogDtprxe.iLsf;rm"], ["--rsync-path=x"],
+    ["--log-format=%i;rm"], ["--log-format=/etc/x"], ["--log-format=%f %i"]])   # D49: only %i or X
 def test_dangerous_rsync_options_are_refused(box, bad):
     srv, kid, bid, line = box
     words = " ".join(["--server", "-lHogDtpAXre.iLsfxCIvu", *bad, ".", "x/"])

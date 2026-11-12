@@ -126,9 +126,11 @@ Column {
     id: backupButton
     visible: !(page.service && page.service.running)
     width: parent.width
-    text: "Back up now"
+    // D49: a stopped or cut-off backup carries on from where it got to.
+    readonly property bool resumes: !!(page.service && page.service.status.unfinished)
+    text: resumes ? "Resume backup" : "Back up now"
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.service.backupNow()
+    onClicked: resumes ? page.service.resume() : page.service.backupNow()
   }
 
   // While a backup runs: what it's doing, one step at a time, and Stop.
@@ -136,25 +138,10 @@ Column {
     visible: !!(page.service && page.service.running)
     width: parent.width
     spacing: Style.space(6)
-    Prose { width: parent.width; text: Model.doing(page.service ? page.service.running : null) }
-    Rectangle {
+    BackupProgress {
       width: parent.width
-      height: Style.space(4)
-      radius: height / 2
-      color: Qt.darker(Commons.Color.foreground, 3)
-      Rectangle {
-        id: sweep
-        width: parent.width / 4
-        height: parent.height
-        radius: parent.radius
-        color: page.service ? page.service.colour("blue") : Commons.Color.accent
-        SequentialAnimation on x {
-          running: !!(page.service && page.service.running) && !Style.reduceMotion
-          loops: Animation.Infinite
-          NumberAnimation { from: 0; to: sweep.parent.width - sweep.width; duration: Style.duration(1200) }
-          NumberAnimation { from: sweep.parent.width - sweep.width; to: 0; duration: Style.duration(1200) }
-        }
-      }
+      running: page.service ? page.service.running : null
+      barColour: page.service ? page.service.colour("blue") : Commons.Color.accent
     }
     ActionButton {
       id: stopButton
@@ -164,7 +151,7 @@ Column {
       hasCursorHere: page.cursorOn(this)
       onClicked: if (!stopping) page.service.stop()
     }
-    Prose { width: parent.width; dim: true; text: "Stopping is safe: the next backup picks up where this one stopped." }
+    Prose { width: parent.width; dim: true; text: "Stopping is safe: Resume backup carries on from where it got to." }
   }
 
   PanelSeparator {}

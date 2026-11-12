@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../parts"
 import "../Model.js" as Model
@@ -20,8 +21,8 @@ Column {
     if (step === "where") return [toServer, toDisk]
     if (step === "server") return [address, login, goServer]
     if (step === "disk") return [goDisk]
-    if (step === "firstBackup") return service && service.running ? [makeStick, later]
-                                       : [firstBackup, migrateAgain].filter(function(t) { return t.visible })
+    if (step === "firstBackup") return (service && service.running ? [firstStop, makeStick, later]
+                                       : [firstBackup, migrateAgain]).filter(function(t) { return t.visible })
     return []
   }
   function cursorOn(item) { return panel && panel.cursorTarget === item }
@@ -179,14 +180,32 @@ Column {
     id: firstBackup
     width: parent.width
     visible: page.step === "firstBackup" && !(page.service && page.service.running)
-    text: "Back up now"
+    // D49: stopped or cut off, the first backup carries on from its list (no picker again).
+    readonly property bool resumes: !!(page.service && page.service.status.unfinished)
+    text: resumes ? "Resume backup" : "Back up now"
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.service.backupNow()
+    onClicked: resumes ? page.service.resume() : page.service.backupNow()
   }
-  Prose {
+  BackupProgress {
     visible: page.step === "firstBackup" && !!(page.service && page.service.running)
     width: parent.width
-    text: Model.doing(page.service ? page.service.running : null)
+    running: page.service ? page.service.running : null
+    barColour: page.service ? page.service.colour("blue") : Commons.Color.accent
+  }
+  ActionButton {
+    id: firstStop
+    visible: page.step === "firstBackup" && !!(page.service && page.service.running)
+    readonly property bool stopping: !!(page.service && page.service.running && page.service.running.stopping)
+    text: stopping ? "Stopping…" : "Stop"
+    enabled: !stopping
+    hasCursorHere: page.cursorOn(this)
+    onClicked: if (!stopping) page.service.stop()
+  }
+  Prose {
+    visible: firstStop.visible
+    width: parent.width
+    dim: true
+    text: "Stopping is safe: Resume backup carries on from where it got to."
   }
   PanelSeparator { visible: page.step === "firstBackup" && !!(page.service && page.service.running) }
   Prose {

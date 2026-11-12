@@ -65,7 +65,8 @@ screen:
 - a line for anything worth knowing, only while it's true: waiting for a
   known network, can't reach your backup, the last backup failed, automatic
   backups are off, a health check problem, no Rescue USB yet;
-- **Back up now**, or, while a backup runs, what it's doing and **Stop**;
+- **Back up now** (**Resume backup** after a backup was stopped or cut off),
+  or, while a backup runs, what it's doing, how far it's got, and **Stop**;
 - your restore points, newest first: click one to open it (**More…**: all).
 
 The gear opens **Settings**: choose what gets backed up, automatic backups,
@@ -93,8 +94,25 @@ omabackups backup
 
 It shows what it's doing, then the name of the new **restore point**, for
 example `001-2026-11-07-1400` (backup line 001, 7 November 2026, 2:00 pm).
-`omabackups stop` stops a backup that's running. Nothing is lost: the next
-backup picks up where it stopped.
+
+**How far it's got.** Each part (system, home, boot) shows its own step:
+first "Checking home…", then "Backing up home…" with a bar. The bar is
+honest: it measures what this backup really has to send, worked out before
+the copy starts, so it never jumps back or stops short. Under it: how much
+is sent of how much, the speed over the last minute, and the time left
+once it can be trusted (after a few minutes of steady sending). While it's
+still checking, a line sweeps back and forth, because the total isn't known
+yet.
+
+**Stuck.** If nothing moves for 3 minutes (no data sent, no file finished),
+the backup stops by itself and says so. The panel warns from the first
+minute. An automatic backup tries again at the next one; your first backup
+waits for you to press **Resume backup**. A computer that's asleep isn't
+stuck: the 3 minutes only count while it's awake.
+
+**Stop and Resume backup.** `omabackups stop` (or **Stop** on the panel)
+stops a backup that's running. Nothing is lost: **Resume backup** (or
+`omabackups backup`) carries on from where it got to.
 
 ### Automatic backups
 
@@ -227,12 +245,19 @@ you brought back from a restore point, is already in your backup: the server
 checks it's unchanged (same place, size and date) and reuses its copy, which
 takes no time and no extra space. Only what's really different is sent.
 
-If a backup is cut off (the network drops, the computer turns off), the next
-one checks every file instead and finishes the job: it only sends what's
-still missing.
+**A full backup checks once, then knows.** The first backup (and any full
+one) starts by asking the backup server what it's missing: a few minutes,
+however much there is. That list is kept on your computer, and each file is
+ticked off as it arrives. If the backup is cut off (the network drops, the
+battery goes flat, you press Stop), the next one doesn't ask the server
+again: your disk says what changed since, and it carries on with what's
+still unticked plus those changes. The list is deleted when the backup
+finishes. If an everyday backup is cut off, the next one checks once and
+finishes the job.
 
 One snapshot stays on your computer between backups. It's what the next
-backup compares against, and it's replaced each time.
+backup compares against, and it's replaced each time. An unfinished full
+backup keeps its own snapshot until it's done.
 
 ## Restore points
 

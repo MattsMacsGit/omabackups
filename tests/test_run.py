@@ -62,7 +62,7 @@ def same(point: Path, src: FakeSource) -> None:
 def test_first_backup_is_full_then_quick(world, monkeypatch):
     srv, kid, bid, src, box = world
     first = run.backup(source=src)
-    assert first["how"] == {"system": "full check", "home": "full check", "boot": "copied"}
+    assert first["how"] == {"system": "full, checked once", "home": "full, checked once", "boot": "copied"}
     same(latest(box), src)
     info = json.loads((latest(box) / "point.json").read_text())
     assert info["owner"] and info["follows"] is None and info["skips"]["home"]
@@ -98,7 +98,7 @@ def test_a_cut_off_backup_is_finished_by_the_next(world, monkeypatch):
     monkeypatch.setattr(run.Sender, "everyday", real)
     monkeypatch.setattr(run, "point_name", lambda line, latest: f"{line}-2099-01-01-0000")
     again = run.backup(source=src)
-    assert again["how"]["home"] == "full check"     # resumes with a full check
+    assert again["how"]["home"] == "full, checked once"     # an everyday cut off: checked once
     same(latest(box), src)
     assert run.load_record()["finished"] is True
 
@@ -110,7 +110,7 @@ def test_a_changed_skip_list_means_a_full_check(world, monkeypatch):
     (paths.system_config_dir() / "skips.json").write_text(json.dumps({"home": ["notes.txt"]}))
     monkeypatch.setattr(run, "point_name", lambda line, latest: f"{line}-2099-01-01-0000")
     again = run.backup(source=src)
-    assert again["how"]["home"] == "full check"
+    assert again["how"]["home"] == "full, checked once"
     assert not (latest(box) / "home/u/notes.txt").exists()
 
 
@@ -264,7 +264,7 @@ def test_boot_counts_only_what_changed(world):
 def test_the_hold_is_kept_alive_during_a_long_part(world, monkeypatch):
     srv, kid, bid, src, box = world
     monkeypatch.setattr(run.HoldKeeper, "EVERY", 0.2)
-    real = run.Sender.full
+    real = run.Sender.copy             # a full backup's home goes as its checked list (D49)
     seen = []
 
     def slow(self, part, *args, **kwargs):
@@ -276,7 +276,7 @@ def test_the_hold_is_kept_alive_during_a_long_part(world, monkeypatch):
             time.sleep(1)                          # ...the keeper refreshes it meanwhile
             seen.append(hold.stat().st_mtime > 1000)
         return real(self, part, *args, **kwargs)
-    monkeypatch.setattr(run.Sender, "full", slow)
+    monkeypatch.setattr(run.Sender, "copy", slow)
     run.backup(source=src)
     assert seen == [True]
 

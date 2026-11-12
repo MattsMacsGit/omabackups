@@ -54,6 +54,44 @@ var STEPS = { starting: "Starting the backup", unlock: "Opening your backup", ch
 function doing(running) {
   if (!running) return ""
   if (running.stopping) return "Stopping…"
+  if (running.step === "check" && running.part) return "Checking " + running.part + "…"
   var text = STEPS[running.step] || "Backing up"
-  return running.part ? text + " " + running.part + "…" : text + "…"
+  text = running.part ? text + " " + running.part + "…" : text + "…"
+  if (running.step === "send" && running.parts > 1) text += "  (part " + running.part_no + " of " + running.parts + ")"
+  return text
+}
+
+// D49: the honest numbers under the bar. Time left only once the backup
+// says it can be trusted (it sends null until then).
+function rounded(seconds) {
+  if (seconds === null || seconds === undefined) return ""
+  if (seconds < 60) return "less than a minute"
+  var minutes = seconds / 60
+  if (minutes < 10) return "about " + Math.round(minutes) + " min"
+  if (minutes < 60) return "about " + Math.round(minutes / 5) * 5 + " min"
+  var step = minutes >= 120 ? 10 : 5
+  var whole = Math.round(minutes / step) * step
+  var h = Math.floor(whole / 60), m = whole % 60
+  return "about " + h + " h" + (m ? " " + m + " min" : "")
+}
+
+function detail(running) {
+  if (!running || running.step !== "send" || !running.total) return ""
+  var bits = [(running.percent || 0) + "%", human(running.sent || 0) + " of " + human(running.total)]
+  if (running.speed) bits.push(human(running.speed) + "/s")
+  var left = rounded(running.left)
+  if (left) bits.push(left + " left")
+  return bits.join(" · ")
+}
+
+function already(running) {
+  if (!running || running.step !== "send" || !running.already) return ""
+  return human(running.already) + " was already on your backup"
+}
+
+function quiet(running) {
+  if (!running || running.step !== "send" || !running.total || (running.quiet || 0) < 60) return ""
+  var minutes = Math.floor(running.quiet / 60)
+  return "Nothing has moved for " + minutes + (minutes === 1 ? " minute" : " minutes")
+         + ". It stops at 3 if nothing changes."
 }

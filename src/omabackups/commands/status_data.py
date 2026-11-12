@@ -148,6 +148,8 @@ def build() -> dict:
         "kept": record.get("kept") or [], "return_point": record.get("return_point"),
         "settings": settings, "first_backup_done": bool(record.get("last_point")),
         "running": now if now.get("running") else None,
+        # D49: a backup that started sending and didn't finish: "Resume backup".
+        "unfinished": record.get("finished") is False and not now.get("running"),
         "lines": lines(step, settings, record, now, mine),
         "rescue_usb": mine.get("rescue_usb"), "rescue_later": bool(mine.get("rescue_later")),
         "browsing": _browsing(),      # D37

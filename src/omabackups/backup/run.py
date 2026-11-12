@@ -20,7 +20,7 @@ from pathlib import Path
 
 from omabackups import __version__
 from omabackups.audit import scan as audit_scan
-from omabackups.backup import changes, check, health, reuse, schedule, skips, thinning
+from omabackups.backup import changes, check, full, health, reuse, schedule, skips, thinning, todo
 from omabackups.backup.send import Sender
 from omabackups.backup.source import Snapshots, parts
 from omabackups.core import ids, log, paths
@@ -85,7 +85,7 @@ def point_name(line: str, latest: str | None) -> str:
         time.sleep(5)   # a backup within the same minute as the last: wait for the next
 
 
-def backup(progress=lambda step, part="": None, source=None, anyway: bool = False,
+def backup(progress=lambda step, part="", **more: None, source=None, anyway: bool = False,
            manual: bool = True) -> dict:
     """Run one backup. `anyway`: the answer "Back up now" to the away limit.
     `source` (tests) stands in for this computer's parts and snapshots."""
@@ -110,7 +110,12 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
     keeper = HoldKeeper(gate, bid, hold, logger)        # still here, however long a part takes
     if server.get("migrating"):
         line = handover(gate, server, logger)
-    sender = Sender(gate, bid, line, compress=away)     # D25: zstd only when away
+    # D49: stuck for 3 minutes. The first full backup stays manual (D29).
+    first = not record.get("last_point") or record.get("automatic_paused")
+    sender = Sender(gate, bid, line, compress=away,     # D25: zstd only when away
+                    stuck_todo="Press Resume backup when you're connected again: it carries on from "
+                               "where it got to." if first else
+                               "It tries again at the next automatic backup, from where it got to.")
     run = datetime.now().strftime("%Y%m%dT%H%M%S")
     made, since, how, fingerprints, work, opened = {}, dict(record.get("since", {})), {}, {}, [], {}
     stack = ExitStack()
@@ -119,6 +124,8 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
         progress("check")
         needed, known, left_out, manifests = 0, True, [], {}
         for part in (source.parts() if source else parts()):
+            progress("check", part.name)
+            sender.report = lambda fields, name=part.name: progress("check", name, **fields)
             skip = skips.for_part(part.name)
             fingerprints[part.name] = skip.fingerprint()
             if not part.btrfs:
@@ -149,7 +156,13 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                 if reusing and old_patterns is not None and old_patterns != skip.patterns:
                     folders, files = reuse.unskipped(str(new), old_patterns, skip)
                     reuse.ask(gate, bid, line, part.name, folders, files)
-                work.append((part, skip, new, None))
+                listed = None
+                if not resend and gate_version >= full.NEEDS_GATE:     # D49 C: check once
+                    listed = full.prepare(part.name, skip, new, snaps, sender, record, bid, line,
+                                          fingerprints[part.name], logger)
+                    if listed.old_snapshot and listed.old_snapshot not in (new.name, since.get(part.name)):
+                        snaps.drop(listed.old_snapshot)
+                work.append((part, skip, new, listed))
         settings = schedule.user_settings(linked_user())
         if settings["away.on"]:
             check.away_limit(away, anyway, needed if known else None, settings["away.limit_mb"])
@@ -158,13 +171,20 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
 
         # 2. Send. From here until the end, the record says "not finished".
         save_record({**record, "finished": False, "started": int(time.time())})
-        for part, skip, new, plan in work:
-            progress("send", part.name)
+        for number, (part, skip, new, plan) in enumerate(work, 1):
+            progress("send", part.name, part_no=number, parts=len(work))
+            sender.report = lambda fields, name=part.name, n=number: progress(
+                "send", name, part_no=n, parts=len(work), **fields)
             if new is None:
                 sender.full(part.name, part.mount, skip)
                 how[part.name] = "copied"
+            elif isinstance(plan, full.FullList):
+                if plan.ops:
+                    sender.remove(part.name, plan.ops)
+                sender.copy(part.name, str(new), plan.items, plan.already)
+                how[part.name] = "full, carried on" if plan.resumed else "full, checked once"
             elif plan is not None:
-                sender.everyday(part.name, str(new), plan)
+                sender.everyday(part.name, str(new), plan, check.size_of(plan, str(new)))
                 how[part.name] = f"changes ({len(plan.files)} files, {len(plan.ops)} moves/deletes)"
             else:
                 sender.full(part.name, str(new), skip, checksum=resend)
@@ -216,11 +236,14 @@ def backup(progress=lambda step, part="": None, source=None, anyway: bool = Fals
                      else record.get("resent_for_pass")})
         for part_name, snap_name in old.items():
             opened[part_name].drop(snap_name)
+        for part_name in made:
+            todo.clear(part_name)          # finished: everyday backups carry on (D49)
     except BaseException:
         # Keep the old "since" snapshots; drop the new ones. If sending had
         # started, the record says "not finished": the next backup checks every file.
+        # A full backup's to-do list keeps its snapshot: the next run carries on (D49).
         for part_name, snap_name in made.items():
-            if since.get(part_name) != snap_name:
+            if since.get(part_name) != snap_name and full.keep(part_name) != snap_name:
                 opened[part_name].drop(snap_name)
         raise
     finally:

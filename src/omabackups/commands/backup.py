@@ -66,14 +66,22 @@ def start(kind: str) -> float:
 
 def _start_and_follow(kind: str, events: Events) -> int:
     started = start(kind)
-    shown = ""
+    shown, said = "", 0.0
     while True:
         state = progress.read()
         if state.get("running") and state.get("started", 0) >= started - 5:
-            line = progress.text(state)
-            if line != shown:
-                events.step(state.get("step", ""), line)
-                shown = line
+            heading = progress.text({k: state.get(k) for k in ("step", "part", "part_no", "parts")
+                                     if state.get(k) is not None})
+            if heading != shown:
+                events.step(state.get("step", ""), heading)
+                shown = heading
+            # D49: the honest numbers; a line a minute in a terminal, every change for the panel.
+            if state.get("total") and (events.as_json or time.monotonic() - said >= 60):
+                if events.as_json:
+                    events.progress(state.get("percent", 0), progress.text(state), state.get("left"))
+                else:
+                    events.message(progress.text(state))
+                said = time.monotonic()
         busy = (not os.environ.get("OMABACKUPS_SYSROOT")
                 and _systemctl("is-active", UNIT.format(kind)).stdout.strip() in ("active", "activating"))
         if not busy and not state.get("running"):
@@ -97,7 +105,7 @@ def run_stop(args, events: Events) -> int:
     # and Stop did nothing to it.
     for kind in KINDS:
         _systemctl("stop", UNIT.format(kind))
-    events.result({"stopped": True}, "Stopped. The next backup picks up where this one stopped.")
+    events.result({"stopped": True}, "Stopped. Resume backup (omabackups backup) carries on from where it got to.")
     return 0
 
 

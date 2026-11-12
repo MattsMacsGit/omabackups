@@ -39,7 +39,7 @@ def test_set_up_and_back_up_to_a_disk(disk, monkeypatch):
     assert flow.where() is flow.Step.SETTING_UP
 
     first = run.backup(source=src)
-    assert first["how"]["home"] == "full check" and first["away"] is False
+    assert first["how"]["home"] == "full, checked once" and first["away"] is False
     same(latest(box), src)
     assert flow.where() is flow.Step.EVERYDAY
     from omabackups.commands import status_data

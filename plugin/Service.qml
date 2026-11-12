@@ -189,6 +189,8 @@ Item {
     if (!firstBackupDone) terminal("omabackups pick --then-backup")
     else { startAsked = Date.now(); start(["backup"]) }
   }
+  // D49: an unfinished backup carries on from its list: no picker first, even the first time.
+  function resume() { startAsked = Date.now(); start(["backup"]) }
   function stop() { stopAsked = true; run(["stop"]) }
   function awayAnswer(now) { if (now) start(["away", "answer", "now"]); else run(["away", "answer", "wait"]) }
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }

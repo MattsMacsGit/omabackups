@@ -16,6 +16,11 @@ _LONG = {
     "--delete", "--delete-during", "--delete-after", "--delete-delay", "--delete-excluded",
     "--numeric-ids", "--inplace", "--stats", "--ignore-errors", "--force",
     "--compress-choice=zstd", "--size-only", "--checksum-choice=xxh128",
+    # D49: a backup's check lists what it would send and delete (--out-format
+    # on the computer). rsync then asks this side to describe each change:
+    # "%i" (the change codes) or "X" (rsync's own placeholder). Only words
+    # sent back to the computer: no file, nothing written here.
+    "--log-format=%i", "--log-format=X",
 }
 # A list of files sent over rsync's own connection (Migrate brings back only
 # the ticked settings): only meaningful inside the root the gatekeeper set.

@@ -3,6 +3,9 @@
 
 /run/omabackups/progress.json:
   {"running": true, "kind": "now"|"scheduled", "step": "...", "part": "...", "started": ...}
+  while sending (D49), also: "part_no", "parts", "sent", "total", "already",
+  "speed" (bytes/s, the last minute), "left" (seconds, or null until it can
+  be trusted), "percent", "quiet" (seconds since anything moved)
   {"running": false, "ok": true, "point": "...", ...}  or  {"running": false, "ok": false, "error": {...}}
 """
 
@@ -51,9 +54,23 @@ def alive(data: dict) -> bool:
 
 
 def text(data: dict) -> str:
-    step = STEPS.get(data.get("step", ""), data.get("step", ""))
+    """'Backing up home... 42% · 12.4 GB of 310 GB · 48 MB/s · about 1 h 50 min left'."""
+    from omabackups.backup.meter import rounded, size
+    step = data.get("step", "")
     part = data.get("part", "")
-    return f"{step} {part}".strip() + "..."
+    if step == "check" and part:
+        return f"Checking {part}..."
+    out = f"{STEPS.get(step, step)} {part}".strip() + "..."
+    if step == "send" and data.get("total"):
+        bits = [f"{data.get('percent', 0)}%", f"{size(data.get('sent', 0))} of {size(data['total'])}"]
+        if data.get("speed"):
+            bits.append(f"{size(data['speed'])}/s")
+        if rounded(data.get("left")):
+            bits.append(rounded(data.get("left")) + " left")
+        out += " " + " · ".join(bits)
+    if data.get("parts", 0) > 1:
+        out += f" (part {data.get('part_no')} of {data['parts']})"
+    return out
 
 
 @contextmanager
@@ -75,6 +92,6 @@ def only_one():
 def reporter(kind: str):
     started = int(time.time())
 
-    def report(step: str, part: str = "") -> None:
-        write({"running": True, "kind": kind, "step": step, "part": part, "started": started})
+    def report(step: str, part: str = "", **more) -> None:
+        write({"running": True, "kind": kind, "step": step, "part": part, "started": started, **more})
     return report
