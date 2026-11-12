@@ -86,6 +86,11 @@ class Sender:
             raise OmaError("Your backup stopped: nothing moved for 3 minutes.", self.stuck_todo,
                            f"{part}: no data sent and no file finished for 3 minutes "
                            f"({meter.sent} of {meter.total} bytes this time)", code="send-stuck")
+        if b"No space left on device" in err:          # D50
+            from omabackups.backup.check import WONT_FIT_TODO
+            raise OmaError(f"Your backup ran out of room while sending {part}: "
+                           "this won't fit on your backup location.", WONT_FIT_TODO,
+                           err.decode("utf-8", "replace").strip()[-2000:], code="backup-full")
         # 24: some files vanished while being sent (normal for a live /boot).
         if code not in (0, 24):
             raise OmaError(f"Sending the {part} part of your backup stopped.",

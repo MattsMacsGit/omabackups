@@ -102,7 +102,8 @@ Column {
       hasCursorHere: page.cursorOn(this)
       onActivated: {
         if (modelData.action === "rescue") page.service.rescueMake()
-        else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupNow()
+        else if (modelData.action === "pick") page.service.pickAgain()
+        else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupOrResume()
       }
       // In the line's own button row, under its text (they sat on top of it, garbled).
       buttons: [

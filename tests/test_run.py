@@ -150,13 +150,15 @@ def away_setup(monkeypatch, limit_mb=500):
     config.save(values)
 
 
-def test_away_a_full_check_waits_for_an_answer(world, monkeypatch):
+def test_away_a_full_backup_over_the_limit_waits_for_an_answer(world, monkeypatch):
+    """D49: the check knows a full backup's size, so the away limit applies to
+    it like any other (it used to wait whenever the size wasn't known)."""
     srv, kid, bid, src, box = world
-    away_setup(monkeypatch)
+    away_setup(monkeypatch, limit_mb=0)
     from omabackups.backup.check import AwayWait
     with pytest.raises(AwayWait) as caught:
         run.backup(source=src)
-    assert caught.value.size is None and "isn't known" in caught.value.what
+    assert caught.value.size and caught.value.size > 0
     assert not (box / "points").exists() or not list((box / "points").iterdir())
     assert run.load_record().get("finished") is not False      # nothing half done
     done = run.backup(source=src, anyway=True)                 # "Back up now"

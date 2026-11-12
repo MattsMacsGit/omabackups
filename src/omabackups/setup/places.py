@@ -99,13 +99,13 @@ def places(tree: dict, system: set[str], store: str = "") -> list[Place]:
 
 
 def sizes(free: int) -> list[int]:
-    """Sizes to offer for a backup in free space, in GB: a quarter, half and
-    three quarters of what's free (never under 1 GB, never the same twice)."""
+    """Sizes to offer for a backup in free space, in GB (D50): half of what's
+    free (suggested: the disk is often shared), then all of it (less 3% the
+    filesystem needs). Never under 1 GB, never the same twice."""
     gb = free >> 30
     offered = []
-    for share in (4, 2, 4 / 3):
-        n = int(gb / share)
+    for n in (gb // 2, max(1, int(gb * 0.97)) if gb >= 1 else 0):
         n = n - n % 10 if n >= 50 else n     # round numbers once they're big
         if n >= 1 and n not in offered:
             offered.append(n)
-    return offered or ([gb] if gb >= 1 else [])
+    return offered

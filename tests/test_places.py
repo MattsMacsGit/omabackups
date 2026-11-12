@@ -60,7 +60,7 @@ def test_the_store_already_on_a_disk_is_used_again():
 
 
 def test_sizes_offered_are_shares_of_the_free_space():
-    assert places.sizes(1200 * GB) == [300, 600, 900]
-    assert places.sizes(20 * GB) == [5, 10, 15]
+    assert places.sizes(1200 * GB) == [600, 1160]     # D50: half (suggested), all of it
+    assert places.sizes(20 * GB) == [10, 19]
     assert places.sizes(GB) == [1]
     assert places.sizes(GB // 2) == []

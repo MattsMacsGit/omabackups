@@ -189,6 +189,10 @@ Item {
     if (!firstBackupDone) terminal("omabackups pick --then-backup")
     else { startAsked = Date.now(); start(["backup"]) }
   }
+  // D50: won't fit -> choose again; saving starts the backup when it's the first one.
+  function pickAgain() { terminal(firstBackupDone ? "omabackups pick" : "omabackups pick --then-backup") }
+  // A line's button: carry on an unfinished backup, else start one.
+  function backupOrResume() { if (status.unfinished) resume(); else backupNow() }
   // D49: an unfinished backup carries on from its list: no picker first, even the first time.
   function resume() { startAsked = Date.now(); start(["backup"]) }
   function stop() { stopAsked = true; run(["stop"]) }

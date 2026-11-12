@@ -70,7 +70,11 @@ def lines(step, settings: dict, record: dict, now: dict, mine: dict) -> list[dic
                         limit_mb=now.get("limit_mb")))
     elif not now.get("running") and now.get("ok") is False and now.get("error"):
         error = now["error"]
-        if error.get("code") == "unreachable":
+        if error.get("code") == "backup-full":       # D50
+            out.append(line("full", "red", "This won't fit on your backup location",
+                            f"{error.get('what', '')} {error.get('todo', '')}".strip(), "pick",
+                            details=error.get("details", "")))
+        elif error.get("code") == "unreachable":
             out.append(line("unreachable", "yellow", "Your backup can't be reached",
                             error.get("todo", ""), details=error.get("details", "")))
         else:

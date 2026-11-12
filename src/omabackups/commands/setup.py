@@ -91,12 +91,18 @@ def _size(place) -> int:
         raise OmaError(f"{place.name} has only {human(place.free)} free: not enough for a backup.",
                        "Pick another disk, or make room on this one, then run setup again.",
                        code="no-room")
-    options = [f"{n} GB" for n in offered] + ["Another size"]
-    picked = menu.choose(f"How big should your backup be? ({human(place.free)} free; "
-                         "it can grow later)", options, selected=min(1, len(offered) - 1))
+    # D50: the size is set once; say what's there and suggest half (the disk is
+    # often shared with other things), never "it can grow later".
+    names = ["Half of it", "All of it"] if len(offered) == 2 else ["All of it"]
+    options = [f"{name}  ·  {n} GB" + ("  (suggested)" if i == 0 and len(offered) == 2 else "")
+               for i, (name, n) in enumerate(zip(names, offered))] + ["Type a size"]
+    menu.title("How big should your backup be?",
+               f"{place.name} has {human(place.free)} free. The size is set once: to change it "
+               "later, set up backups again.")
+    picked = menu.choose("Your backup's size", options, selected=0)
     if picked < len(offered):
         return offered[picked]
-    typed = menu.ask("Size in GB", str(offered[-1]))
+    typed = menu.ask(f"Size in GB (at most {place.free >> 30})", str(offered[0]))
     if not typed.isdigit() or not 1 <= int(typed) <= place.free >> 30:
         raise OmaError(f"The size must be a number of GB, at most {place.free >> 30}.",
                        "Run setup again and pick or type a size.", code="cancelled")

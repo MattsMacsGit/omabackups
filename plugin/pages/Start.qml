@@ -21,11 +21,21 @@ Column {
     if (step === "where") return [toServer, toDisk]
     if (step === "server") return [address, login, goServer]
     if (step === "disk") return [goDisk]
-    if (step === "firstBackup") return (service && service.running ? [firstStop, makeStick, later]
+    if (step === "firstBackup") return firstLines().concat(service && service.running ? [firstStop, makeStick, later]
                                        : [firstBackup, migrateAgain]).filter(function(t) { return t.visible })
     return []
   }
   function cursorOn(item) { return panel && panel.cursorTarget === item }
+  function firstLines() {
+    var out = []
+    for (var i = 0; i < firstLineRepeater.count; i++) {
+      var line = firstLineRepeater.itemAt(i)
+      var own = line ? Array.prototype.filter.call(line.buttonItems, function(b) { return b.visible }) : []
+      if (own.length) own.forEach(function(b) { out.push(b) })
+      else if (line) out.push(line)
+    }
+    return out
+  }
   // The same Where and server screens serve Migrate (6.1 F step 1).
   readonly property bool migrating: !!(panel && panel.migrateMode)
 
@@ -155,6 +165,37 @@ Column {
   }
 
   // --- C3. The first backup, with the Rescue USB beside it (D29, D11) ---------------------
+  // D50: why a backup didn't finish is always on screen, here too (only the
+  // everyday page showed the lines; the bar icon just went red).
+  Repeater {
+    id: firstLineRepeater
+    model: page.step === "firstBackup" && page.service ? page.service.lines : []
+    StatusLine {
+      required property var modelData
+      width: parent.width
+      item: modelData
+      service: page.service
+      hasCursorHere: page.cursorOn(this)
+      onActivated: {
+        if (modelData.action === "pick") page.service.pickAgain()
+        else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupOrResume()
+      }
+      buttons: [
+        ActionButton {
+          visible: modelData.kind === "waiting-network"
+          text: "Back up now"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.awayAnswer(true)
+        },
+        ActionButton {
+          visible: modelData.kind === "waiting-network"
+          text: "Wait until I'm on a known network"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.awayAnswer(false)
+        }
+      ]
+    }
+  }
   Prose {
     visible: page.step === "firstBackup" && !(page.service && page.service.running)
     width: parent.width

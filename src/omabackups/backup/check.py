@@ -74,6 +74,19 @@ def away_limit(away: bool, anyway: bool, size: int | None, limit_mb: int) -> Non
         raise AwayWait(size, limit_mb)
 
 
+WONT_FIT_TODO = ("Remove some files from what gets backed up (Choose what gets backed up), "
+                 "or pick a new disk for your backup (set up backups again).")
+
+
+def wont_fit(needed: int | None, free: int | None, space: dict) -> OmaError:
+    """D50: said before anything is sent, in plain words, with the numbers."""
+    numbers = (f": it needs {human(needed)} and there's {human(free)} free"
+               if needed is not None and free is not None else "")
+    return OmaError(f"This won't fit on your backup location{numbers}.", WONT_FIT_TODO,
+                    f"box {human(space.get('box', 0))}, used {human(space.get('used', 0))}, "
+                    f"free {human(space.get('free', 0))}", code="backup-full")
+
+
 def make_room(gate, bid: str, needed: int, logger, may_delete: bool = True) -> list[str]:
     """Make sure `needed` bytes fit; thin the oldest restore points if not.
     With smart thinning off (`may_delete` False, D35) nothing is ever deleted
@@ -97,12 +110,7 @@ def make_room(gate, bid: str, needed: int, logger, may_delete: bool = True) -> l
         kept = set(info["kept"].get("kept", [])) | {info["kept"].get("return_point")}
         candidates = thinning.space_order(info["points"], kept)
         if not candidates:
-            raise OmaError(
-                f"Your backup is full: this backup needs {human(needed)} and there's "
-                f"{human(free)} left, even after removing old restore points.",
-                "Make your backup bigger, or skip big folders you don't need backed up.",
-                f"box {human(space.get('box', 0))}, used {human(space.get('used', 0))}",
-                code="backup-full")
+            raise wont_fit(needed, free, space)
         logger.info("making room: removing %s", candidates[0])
         gate.call("delete", bid, candidates[0])
         gone.append(candidates[0])

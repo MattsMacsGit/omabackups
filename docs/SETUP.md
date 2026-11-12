@@ -17,7 +17,10 @@ Other things running on it are left alone.
   there, with its size, its free space and what's on it. You pick one, then:
   - **Its free space**: nothing is erased. OmaBackups makes its own folder,
     `omabackups-store`, at the top of the disk, next to what's already there,
-    and you pick how big your backup can be.
+    and you pick how big your backup can be: **half** of the free space
+    (suggested, since the disk is often shared with other things), **all of
+    it**, or a size you type. The size is set once: to change it later, set
+    up backups again.
   - **The whole disk**: it's erased and used only for backups. (The disk the
     server runs from is only offered for its free space.)
 

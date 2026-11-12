@@ -158,7 +158,6 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
                                         reuse.fresh_files(plan, str(new), renamed_home(server, part.name)))["bytes"]
                 work.append((part, skip, new, plan))
             else:
-                known = False
                 old_patterns = record.get("skip_patterns", {}).get(part.name)
                 if reusing and old_patterns is not None and old_patterns != skip.patterns:
                     folders, files = reuse.unskipped(str(new), old_patterns, skip)
@@ -169,23 +168,28 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
                                           fingerprints[part.name], logger)
                     if listed.old_snapshot and listed.old_snapshot not in (new.name, since.get(part.name)):
                         snaps.drop(listed.old_snapshot)
+                    needed += sum(size for _, size in listed.items)      # D50: known, so checked
+                else:
+                    known = False
                 work.append((part, skip, new, listed))
         settings = schedule.user_settings(linked_user())
         if settings["away.on"]:
             check.away_limit(away, anyway, needed if known else None, settings["away.limit_mb"])
-        if known:
-            check.make_room(gate, bid, needed, logger, may_delete=settings["thinning.on"])
 
-        # 2. Send. From here until the end, the record says "not finished".
-        save_record({**record, "finished": False, "started": int(time.time())})
-        # Every part's deletes first: the room they free is there before
-        # anything is copied (a full backup space failed on 7 MB of system
-        # files while home's skipped folders still waited to be cleared).
+        # 2. Clear, check the room, send. From the first change on the server
+        # until the end, the record says "not finished".
+        # Every part's deletes first: the room they free is there before the
+        # room is checked and before anything is copied (a full space failed
+        # on 7 MB of system files while home's skipped folders waited).
         for part, skip, new, plan in work:
             if isinstance(plan, full.FullList) and plan.ops:
+                save_record({**record, "finished": False, "started": int(time.time())})
                 progress("clear", part.name)
                 sender.remove(part.name, plan.ops)
                 plan.ops = []
+        if known:     # D50: won't fit -> said before anything is sent
+            check.make_room(gate, bid, needed, logger, may_delete=settings["thinning.on"])
+        save_record({**record, "finished": False, "started": int(time.time())})
         for number, (part, skip, new, plan) in enumerate(work, 1):
             progress("send", part.name, part_no=number, parts=len(work))
             sender.report = lambda fields, name=part.name, n=number: progress(

@@ -151,7 +151,12 @@ An automatic backup over the limit simply waits: `omabackups status` shows
 Before sending anything, OmaBackups checks the backup has room. If it
 doesn't, smart thinning removes the oldest restore points first (never kept
 ones, never the newest); with it off, nothing is deleted. Either way, if it
-won't fit, it stops before sending anything and says what to do.
+still won't fit, it stops before sending anything and says so: "This won't
+fit on your backup location", with how much it needs and how much is free.
+Then remove some files from what gets backed up (the line opens **Choose
+what gets backed up**), or pick a new disk for your backup (set up backups
+again). A full backup first clears what you've removed or skipped, so that
+room counts.
 
 ### The nightly health check
 
