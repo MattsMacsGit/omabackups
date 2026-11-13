@@ -93,3 +93,40 @@ def test_a_part_that_stays_busy_says_so_with_the_details(monkeypatch):
     with pytest.raises(OmaError) as caught:
         job_rescue._format("/dev/sdz3")
     assert caught.value.code == "rescue-usb" and "busy" in caught.value.details
+
+
+def _disk(path, size, transport, removable, labels=(), model="Disk"):
+    from omabackups.setup.disks import Disk
+    return Disk(path, size, model, transport, removable, labels=labels)
+
+
+def test_the_cursor_starts_on_the_likely_stick_not_the_first_disk():
+    """A 1 TB expansion card came first in the list, the cursor started on it,
+    and it was written instead of the stick."""
+    from omabackups.setup import rescue_usb
+    card = _disk("/dev/sda", 1_000_000_000_000, "usb", False, model="1TB Card")
+    stick = _disk("/dev/sdb", 64_000_000_000, "usb", True, model="Flash Drive")
+    old = _disk("/dev/sdc", 32_000_000_000, "usb", True, ("ARCHISO_EFI", "OMABACKUPS_RESCUE"))
+    assert rescue_usb.likely_stick([card, stick]) == 1
+    assert rescue_usb.likely_stick([card, stick, old]) == 2          # a Rescue USB already
+    assert rescue_usb.likely_stick([card]) == 0                      # still listed, still pickable
+    assert not rescue_usb.looks_like_a_stick(card) and rescue_usb.looks_like_a_stick(stick)
+
+
+def test_a_retired_stick_key_isnt_called_a_wrong_password(monkeypatch):
+    from omabackups.rescue import screens, wizard
+    said, tries = [], {"n": 0}
+
+    class Gate:
+        def call(self, verb, *args, data=b""):
+            tries["n"] += 1
+            if tries["n"] == 1:
+                raise OmaError("Your backup can't be reached.", code="unreachable",
+                               details="omabackups-gate@192.0.2.10: Permission denied (publickey).")
+            return {"hold": "h"}
+    monkeypatch.setattr(screens, "step", lambda *a: None)
+    monkeypatch.setattr(screens, "secret", lambda *a: "pw")
+    monkeypatch.setattr(screens, "confirm", lambda *a: True)
+    monkeypatch.setattr(wizard, "_problem", lambda what, todo="", details="": said.append(what))
+    assert wizard.unlock(Gate(), "b") == ("pw", "h")
+    assert said == ["This Rescue USB's key no longer works"]

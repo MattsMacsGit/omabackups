@@ -98,6 +98,16 @@ def unlock(gate, bid: str) -> tuple[str, str]:
             hold = gate.call("unlock", bid, data=password.encode())["hold"]
             return password, hold
         except OmaError as exc:
+            if exc.code == "unreachable" and "Permission denied" in (exc.details or ""):
+                # The server turned this stick's key away before the password was
+                # even tried: a newer Rescue USB switched it off (one at a time).
+                _problem("This Rescue USB's key no longer works",
+                         "A newer Rescue USB was made since, which switched this one off. Use the newest "
+                         "stick, or refresh this one from your computer (Settings › Refresh Rescue USB).",
+                         exc.details)
+                if not screens.confirm("Try again?", "Try again", "Shut down"):
+                    subprocess.run(["systemctl", "poweroff"])
+                continue
             _problem("That password didn't open your backup", "Try again.", exc.what)
             time.sleep(2)
 

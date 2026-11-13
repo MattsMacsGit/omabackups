@@ -10,8 +10,11 @@ On the panel: **Make Rescue USB** (the "No Rescue USB yet" line, or
 Settings). A window opens:
 
 1. **Which stick.** Every disk is listed with what's on it now; the one this
-   computer runs on is left out. Pick the USB stick: everything on it is
-   erased. Any stick of 4 GB or more.
+   computer runs on is left out. The cursor starts on the USB stick it
+   thinks you mean (a Rescue USB already, or any USB stick); check it's the
+   right one, since everything on it is erased. A disk that doesn't look
+   like a stick (a big or built-in one, like an expansion card) says so.
+   Any stick of 4 GB or more.
 2. **The rescue system.** Its size is shown first (about 1 GB). It's
    downloaded once and kept; if the download stops, it carries on where it
    stopped. It's checked against its published checksum before anything is
@@ -68,6 +71,10 @@ After a Quick Rescue, the panel says **Finish restore**:
    the restore, and the panel goes back to its everyday page.
 
 From a terminal: `omabackups restore-files <restore point> --pick`.
+
+If the stick says **This Rescue USB's key no longer works**, a newer Rescue
+USB was made since (one stick at a time): use the newest stick, or refresh
+this one from your computer (Settings › Refresh Rescue USB).
 
 ## Good to know
 

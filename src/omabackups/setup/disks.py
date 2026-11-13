@@ -24,6 +24,7 @@ class Disk:
     transport: str
     removable: bool
     warnings: list = field(default_factory=list)
+    labels: tuple = ()           # its partitions' names (a Rescue USB says OMABACKUPS_RESCUE)
 
     def line(self) -> str:
         kind = "USB" if self.transport == "usb" else self.transport or "internal"
@@ -92,6 +93,7 @@ def listing(tree: dict, skip: set[str]) -> list[Disk]:
         if disk.transport in ("nvme", "sata", "ata", "") and not disk.removable:
             disk.warnings.append("This is your computer's internal drive.")
         names = {c.get(k) for c in node.get("children") or [] for k in ("label", "partlabel")}
+        disk.labels = tuple(sorted(n for n in names if n))
         if names & OMABACKUPS_NAMES:
             disk.warnings.append("This looks like an OmaBackups backup disk: "
                                  "someone's backups may be on it.")

@@ -20,14 +20,36 @@ from omabackups.setup import disks, menu
 from omabackups.setup import rescue_image as image
 
 
+STICK_MAX = 512 * 10**9        # bigger than this, it's not what people call a USB stick
+
+
+def looks_like_a_stick(disk) -> bool:
+    return disk.removable and disk.transport == "usb" and disk.size <= STICK_MAX
+
+
+def likely_stick(found: list) -> int:
+    """Where the cursor starts: the stick most likely meant (a Rescue USB
+    already, else any USB stick), never a disk that's always there. Every
+    disk is still listed and can be picked (warn, never block). The cursor
+    started on the first disk, a 1 TB expansion card, and it was written."""
+    for test in (lambda d: looks_like_a_stick(d) and "OMABACKUPS_RESCUE" in d.labels, looks_like_a_stick):
+        for i, disk in enumerate(found):
+            if test(disk):
+                return i
+    return 0
+
+
 def _pick_stick(purpose: str):
     found = disks.disks()
     if not found:
         raise OmaError("No USB stick or other disk found.", "Plug in a USB stick (4 GB or more), then try again.",
                        code="no-disk")
     menu.title(f"Which stick {purpose}?", "Every disk is listed with what's on it now. Pick the USB stick.")
-    disk = found[menu.choose("Disks", [d.line() for d in found])]
+    disk = found[menu.choose("Disks", [d.line() for d in found], selected=likely_stick(found))]
     menu.title(f"{disk.line()}")
+    if not looks_like_a_stick(disk):
+        menu.say(f"  This doesn't look like a USB stick: it's a {human(disk.size)} "
+                 f"{'removable ' if disk.removable else ''}disk ({disk.model or disk.path}).")
     for warning in disk.warnings:
         menu.say(f"  {warning}")
     menu.say()
