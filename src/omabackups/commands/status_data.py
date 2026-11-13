@@ -115,17 +115,9 @@ def _migrate() -> dict | None:
         return None
     restored = _read(paths.system_run_dir() / "restore.json")
     finished_here = restored.get("done") and restored.get("point") == mine.get("point")
-    if mine.get("rescued") and mine.get("files"):
-        # D52: after a Quick Rescue, folders come back a few at a time, as
-        # often as you like; the page stays until a backup (core/flow).
-        if finished_here:
-            came = restored.get("only") or mine["files"]
-            brought = sorted(set(mine.get("brought") or []) | set(came))
-            if brought != sorted(mine.get("brought") or []):
-                mine = {**mine, "brought": brought,
-                        "files_restored": set(mine["files"]) <= set(brought)}
-                state.write(flow.MIGRATE, mine)
-    elif not mine.get("files_restored") and finished_here:
+    # (After a Quick Rescue the page stays until a backup, however often
+    # Restore my files runs: core/flow, D52.)
+    if not mine.get("files_restored") and finished_here:
         mine = {**mine, "files_restored": True}
         state.write(flow.MIGRATE, mine)
     if not mine.get("files_restored") and mine.get("files"):

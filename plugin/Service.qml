@@ -207,12 +207,9 @@ Item {
   // Opens it in the default file manager (the command does that, D37).
   function browse(point) { run(["browse", point], "browse", point) }
   function browseDone() { run(["browse", "done"]) }
-  // D52: just these folders (after a Quick Rescue); none = all of them.
-  function restoreFiles(point, only) {
-    var args = ["restore-files", point]
-    ;(only || []).forEach(function(f) { args.push("--only", f) })
-    run(args)
-  }
+  function restoreFiles(point) { run(["restore-files", point]) }
+  // D52: after a Quick Rescue, Choose what comes back first (the picker, the other way round).
+  function restorePick(point) { terminal("omabackups restore-files " + point + " --pick") }
   function restoreStop() { run(["restore-files", "stop"]) }
   function startOver() { run(["start-over"]) }
   function pick() { terminal("omabackups pick") }

@@ -32,15 +32,11 @@ def test_the_page_stays_until_a_backup_after_the_rescue(sandbox):
     assert flow.where() is not flow.Step.RESTORE_FILES
 
 
-def test_folders_come_back_a_few_at_a_time(sandbox):
+def test_a_finished_run_doesnt_end_the_page(sandbox):
     state.write(flow.MIGRATE, RESCUED)
     _record(last_finished=900_000)
-    _restored(["Music"])
-    mine = status_data._migrate()
-    assert mine["brought"] == ["Music"] and mine["files_restored"] is False
-    _restored(["Documents", "Pictures"])
-    mine = status_data._migrate()
-    assert mine["brought"] == ["Documents", "Music", "Pictures"] and mine["files_restored"] is True
+    _restored(None)
+    assert status_data._migrate()["files_restored"] is True
     assert flow.where() is flow.Step.RESTORE_FILES      # still here: back up to finish
 
 

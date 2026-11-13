@@ -53,18 +53,21 @@ on a Mac, hold Option). Pick **OmaBackups Rescue**. Then:
 Then Omarchy's logo fills as it works. At the end it says what to know,
 "It's now safe to remove the USB", and offers to restart.
 
-After a Quick Rescue, the panel says **Finish restore** and lists the folders
-still in your backup, each with a tick:
+After a Quick Rescue, the panel says **Finish restore**:
 
-1. Tick the ones you want, then **Bring back the ticked folders**. They come
-   back while you work; a file that's newer here is never overwritten.
-2. Do it again as often as you like: more folders, or the same ones again.
-   Folders already back say so.
+1. **Restore my files** opens **Choose what comes back**: the same picker as
+   Choose what gets backed up, the other way round. It shows your home
+   folder as it is in the restore point, with the same rows, sizes and keys.
+   A tick brings it back; the colours say what's here (**blue** comes back,
+   **green** already here, **grey** stays in your backup). Press **s** and
+   it comes back while you work; a file that's newer here is never
+   overwritten.
+2. Open it again as often as you like, to bring back more. It remembers your
+   last choices.
 3. When everything you want is back, press **Back up now**. That finishes
    the restore, and the panel goes back to its everyday page.
 
-From a terminal: `omabackups restore-files <restore point> --only Documents
---only Music`.
+From a terminal: `omabackups restore-files <restore point> --pick`.
 
 ## Good to know
 

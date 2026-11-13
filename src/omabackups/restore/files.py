@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from omabackups.backup import run
+from omabackups.backup.skips import Skips
 from omabackups.core import log, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
@@ -76,12 +77,26 @@ def start_job(request: dict) -> dict:
     if only is not None:
         only = [str(p).removeprefix("~/") for p in only if isinstance(p, str)]
         only = [p for p in only if p and ".." not in p.split("/") and not p.startswith("/")]
+    leave_out = clean_leave_out(request.get("leave_out"))
     stop_job({})
-    write_atomic(plan_file(), json.dumps({"point": point, "from_user": from_user, "only": only}).encode(), 0o600)
+    write_atomic(plan_file(), json.dumps({"point": point, "from_user": from_user, "only": only,
+                                          "leave_out": leave_out}).encode(), 0o600)
     subprocess.run(["systemd-run", f"--unit={UNIT}", "--collect", "--quiet",
                     "--property=KillMode=mixed", sys.executable, "-m", "omabackups",
                     "restore-run", point, run.linked_user()], check=False, capture_output=True)
     return {"started": point}
+
+
+def clean_leave_out(rules) -> list[str]:
+    """D52: Choose what comes back's "leave in the backup" list, as skip rules
+    relative to the home folder ("/Videos", ".cache", "!/Videos/keep")."""
+    out = []
+    for rule in rules if isinstance(rules, list) else []:
+        body = str(rule).removeprefix("!")
+        if isinstance(rule, str) and rule and len(rule) < 1000 and "\n" not in rule \
+                and not body.startswith("-") and ".." not in body.split("/"):
+            out.append(rule)
+    return out
 
 
 def stop_job(request: dict) -> dict:
@@ -90,11 +105,12 @@ def stop_job(request: dict) -> dict:
 
 
 def command(gate, bid: str, point: str, user: str, home: Path, from_user: str = "",
-            only: list[str] | None = None) -> list[str]:
+            only: list[str] | None = None, leave_out: list[str] | None = None) -> list[str]:
     """rsync from the restore point's copy of a home folder into this user's.
     --update: a file that's newer here is never overwritten. `from_user`: the
     name it had there (1.x lesson: never assume it's the same on a new install);
-    `only`: just these (relative paths), as Migrate's "Your files" picks them."""
+    `only`: just these (relative paths), as Migrate's "Your files" picks them;
+    `leave_out`: what Choose what comes back left in the backup (D52)."""
     owner = []
     if os.geteuid() == 0:                 # as root: the files become this user's
         entry = pwd.getpwnam(user)
@@ -103,15 +119,16 @@ def command(gate, bid: str, point: str, user: str, home: Path, from_user: str = 
             # --files-from switches off going into folders: -r puts it back
             # (stage 8 lesson: it made empty folders and said "done").
             *(["--files-from=-", "--from0", "-r"] if only is not None else []),
+            *Skips(leave_out or []).rsync_rules(),
             "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} home/{from_user or user}",
             f"{gate.rsync_target()}:home/", f"{home}/"]
 
 
 def still_missing(gate, bid: str, point: str, user: str, home: Path, from_user: str,
-                  only: list[str] | None) -> int:
+                  only: list[str] | None, leave_out: list[str] | None = None) -> int:
     """Check the result, not the exit code: rsync once more, as a dry run, and
     count the files it would still bring back (0 when everything's here)."""
-    check = [a for a in command(gate, bid, point, user, home, from_user, only)
+    check = [a for a in command(gate, bid, point, user, home, from_user, only, leave_out)
              if not a.startswith("--info=")]
     check[1:1] = ["-n", "--out-format=%i %n"]
     done = subprocess.run(check, input=(b"\0".join(p.encode() for p in only) + b"\0") if only is not None else None,
@@ -120,13 +137,12 @@ def still_missing(gate, bid: str, point: str, user: str, home: Path, from_user: 
 
 
 def restore(point: str, user: str, home: Path | None = None, stopping=lambda: False,
-            from_user: str = "", only: list[str] | None = None) -> dict:
+            from_user: str = "", only: list[str] | None = None, leave_out: list[str] | None = None) -> dict:
     """Bring `user`'s home back from `point` (from `from_user`'s folder there,
     or just the paths in `only`). Returns the final state."""
     logger = log.get("restore")
     home = home or Path(pwd.getpwnam(user).pw_dir)
-    state = {"point": point, "user": user, "percent": 0, "running": True, "since": int(time.time()),
-             "only": only}         # D52: which folders this run brings back
+    state = {"point": point, "user": user, "percent": 0, "running": True, "since": int(time.time())}
     _say(state)
     server = location.load()
     gate, _away = location.connect(server)
@@ -135,7 +151,7 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     keeper = run.HoldKeeper(gate, bid, hold, logger)
     try:
-        proc = subprocess.Popen(command(gate, bid, point, user, home, from_user, only),
+        proc = subprocess.Popen(command(gate, bid, point, user, home, from_user, only, leave_out),
                                 stdin=subprocess.PIPE if only is not None else subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=gate.rsync_env())
         if only is not None:
@@ -160,7 +176,7 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
                                error.strip()[-2000:] or f"rsync exit {code}", code="restore-failed")
             state.update(running=False, error=failure.as_dict())
         else:
-            missing = still_missing(gate, bid, point, user, home, from_user, only)
+            missing = still_missing(gate, bid, point, user, home, from_user, only, leave_out)
             if missing:
                 failure = OmaError(f"{missing} of your files didn't come back.",
                                    "Run Restore my files again: it brings back what's still missing.",
@@ -197,7 +213,8 @@ def serve(point: str, user: str) -> int:
         asked = {}
     try:
         state = restore(point, user, stopping=lambda: stop["now"],
-                        from_user=asked.get("from_user") or "", only=asked.get("only"))
+                        from_user=asked.get("from_user") or "", only=asked.get("only"),
+                        leave_out=clean_leave_out(asked.get("leave_out")))
     except OmaError as exc:
         _say({"point": point, "user": user, "running": False, "error": exc.as_dict(),
               "since": int(time.time())})

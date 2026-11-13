@@ -22,9 +22,36 @@ FIRST_NOTE = "Make your choices, then press s to save: your first backup starts 
 TITLE = "Choose what gets backed up"
 
 
+class BackupMode:
+    """What the picker says and does when saving: Choose what gets backed up.
+    Choose what comes back (tui/bring_back.py, D52) is the same screen the
+    other way round."""
+    title = TITLE
+    skipped_word = "skipped"
+    hidden_off = "Hidden files aren't shown (they're still backed up)."
+
+    def __init__(self, first: bool = False):
+        self.first = first
+        self.keys = FIRST_KEYS if first else KEYS
+        self.note = FIRST_NOTE if first else ""
+        self.question = "Save and start your first backup?" if first else "Save your changes and quit?"
+
+    def measured(self, model: Model) -> tuple:
+        return (model.home(), model.quick(), model.system())
+
+    def save(self, model: Model) -> str | None:
+        """None when saved, else what went wrong."""
+        try:
+            rootjob.run("set-skips", {"skips": model.to_save()})
+        except OmaError as exc:
+            return exc.what
+        return None              # (the root job paused automatic backups: D29)
+
+
 class Picker:
-    def __init__(self, scr, model: Model, first: bool = False):
+    def __init__(self, scr, model: Model, first: bool = False, mode=None):
         self.ui, self.model, self.first = kit.Screen(scr), model, first
+        self.mode = mode or BackupMode(first)
         self.stack, self.cursor, self.top = [model.home()], {model.home(): 0}, 0
         self.rows, self.running, self.saved = [], True, False
         threading.Thread(target=self._measure, daemon=True).start()
@@ -33,7 +60,7 @@ class Picker:
 
     def _measure(self) -> None:
         while self.running:
-            for node in (self.stack[-1], self.model.home(), self.model.quick(), self.model.system()):
+            for node in (self.stack[-1], *self.mode.measured(self.model)):
                 if self.running and self.model.size(node) is None:
                     self.model.measure(node, stop=lambda: not self.running)
             time.sleep(0.3)
@@ -50,7 +77,7 @@ class Picker:
         h, w = ui.size()
         node = self.stack[-1]
         self.rows = m.listing(node)
-        ui.header(TITLE, self.where())
+        ui.header(self.mode.title, self.where())
         height = max(1, h - 2 - kit.Screen.BOTTOM)
         pos = min(self.cursor.get(node, 0), max(0, len(self.rows) - 1))
         self.cursor[node] = pos
@@ -61,11 +88,12 @@ class Picker:
         for i, child in enumerate(self.rows[self.top:self.top + height]):
             size = m.size(child)
             skipped = m.skipped(child)
-            note = ("in older restore points" if m.colour(child) == "yellow" else "skipped") \
+            word = self.mode.skipped_word
+            note = ("in older restore points" if m.colour(child) == "yellow" else word) \
                 if skipped and child.rel else ""
             inside = m.inside_skipped(child)
             if not skipped and inside:
-                note = f"{inside} thing{'s' if inside > 1 else ''} skipped"
+                note = f"{inside} thing{'s' if inside > 1 else ''} {word}"
             menu = child == m.quick()                 # a page of switches, not a folder
             if menu:
                 note, size = "switches for big things", None
@@ -78,8 +106,7 @@ class Picker:
             ui.put(3, 4, "(empty, or can't be read)", ui.col(kit.GREY))
         current = self.rows[pos] if self.rows else None
         text, fits = m.bottom()
-        ui.bottom(m.explain(current) if current else "", text, fits,
-                  FIRST_KEYS if self.first else KEYS, FIRST_NOTE if self.first else "")
+        ui.bottom(m.explain(current) if current else "", text, fits, self.mode.keys, self.mode.note)
         ui.scr.refresh()
 
     # --- keys --------------------------------------------------------------------
@@ -106,12 +133,11 @@ class Picker:
             self.top = 0
 
     def save(self) -> bool:
-        try:
-            rootjob.run("set-skips", {"skips": self.model.to_save()})
-        except OmaError as exc:
-            self.ui.say(f"Not saved: {exc.what}", kit.RED)
+        problem = self.mode.save(self.model)
+        if problem:
+            self.ui.say(f"Not saved: {problem}", kit.RED)
             return False
-        self.saved = True       # (the root job paused automatic backups: D29)
+        self.saved = True
         return True
 
     def run(self) -> bool:
@@ -138,12 +164,10 @@ class Picker:
                 self.ui.say(problem or "")
             elif key in (ord("h"), ord("H")):
                 self.model.show_hidden = not self.model.show_hidden
-                self.ui.say("Showing hidden files too." if self.model.show_hidden
-                            else "Hidden files aren't shown (they're still backed up).")
+                self.ui.say("Showing hidden files too." if self.model.show_hidden else self.mode.hidden_off)
             elif key == ord("s"):
                 # Always asked first: easy to hit by accident.
-                question = "Save and start your first backup?" if self.first else "Save your changes and quit?"
-                if self.ui.ask(question) and self.save():
+                if self.ui.ask(self.mode.question) and self.save():
                     break
             elif key == ord("q"):
                 if self.ui.ask("Quit without saving your changes?" if self.model.dirty else "Quit?"):

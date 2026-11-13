@@ -18,23 +18,12 @@ Column {
   readonly property var m: service && service.status.migrate ? service.status.migrate : ({})
   readonly property var r: service ? service.restoring : null
   readonly property bool restoringNow: !!(r && r.running)
-  // D52: after a Quick Rescue, folders come back as you choose, as often as you
-  // like, until Back up now ends it.
+  // D52: after a Quick Rescue, Restore my files opens Choose what comes back
+  // (the picker, the other way round), as often as you like, until Back up now.
   readonly property bool rescuedFlow: !!(m.rescued && m.files && m.files.length)
   readonly property bool showRestore: step === "finish" && (rescuedFlow || !m.files_restored)
-  property var picks: ({})
-  function brought(name) { return (m.brought || []).indexOf(name) >= 0 }
-  function ticked(name) { return picks[name] !== undefined ? picks[name] : !brought(name) }
-  function tickedList() { return (m.files || []).filter(function(f) { return page.ticked(f) }) }
-  onRestoringNowChanged: if (!restoringNow) picks = ({})      // a run ended: ticks follow what's back
   readonly property var targets: step === "migrating" ? [carryOn]
-    : [restartButton].concat(folderRows(), [restoreButton, stopButton, backUp, again])
-        .filter(function(t) { return t && t.visible })
-  function folderRows() {
-    var out = []
-    for (var i = 0; i < folderRepeater.count; i++) out.push(folderRepeater.itemAt(i))
-    return out
-  }
+    : [restartButton, restoreButton, stopButton, backUp, again].filter(function(t) { return t && t.visible })
   function cursorOn(item) { return panel && panel.cursorTarget === item }
   function whenOf(name) {
     var p = /^(\d{3})-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})$/.exec(name || "")
@@ -88,31 +77,10 @@ Column {
     text: (page.r && page.r.error ? page.r.error.what + " " : "")
           + (page.rescuedFlow
              ? "Your folders are in the restore point from " + page.whenOf(page.m.point)
-               + ". Tick the ones to bring back. You can bring back more, or the same ones again, "
-               + "as often as you like; a file that's newer here is never overwritten."
+               + ". Restore my files lets you choose what comes back first; open it again as "
+               + "often as you like. A file that's newer here is never overwritten."
              : "Your files are still in the restore point from " + page.whenOf(page.m.point)
                + ". They come back while you work; a file that's newer here is never overwritten.")
-  }
-  Repeater {
-    id: folderRepeater
-    model: page.rescuedFlow && page.step === "finish" ? page.m.files : []
-    SwitchRow {
-      required property var modelData
-      width: parent.width
-      visible: !page.restoringNow
-      title: modelData
-      explainer: page.brought(modelData) ? "Back on this computer."
-                 : (page.m.files_here || []).indexOf(modelData) >= 0
-                   ? "Something's already here: the old files are added beside it."
-                   : "Still in your backup."
-      checked: page.ticked(modelData)
-      hasCursorHere: page.cursorOn(this)
-      onToggled: {
-        var p = Object.assign({}, page.picks)
-        p[modelData] = !page.ticked(modelData)
-        page.picks = p
-      }
-    }
   }
   Prose {
     visible: page.showRestore && !page.restoringNow && !page.rescuedFlow
@@ -126,11 +94,9 @@ Column {
     id: restoreButton
     visible: page.showRestore && !page.restoringNow
     width: parent.width
-    readonly property int count: page.tickedList().length
-    text: page.rescuedFlow ? "Bring back the ticked folders (" + count + ")" : "Restore my files"
-    enabled: !page.rescuedFlow || count > 0
+    text: "Restore my files"
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.rescuedFlow ? page.service.restoreFiles(page.m.point, page.tickedList())
+    onClicked: page.rescuedFlow ? page.service.restorePick(page.m.point)
                                 : page.service.restoreFiles(page.m.point)
   }
   ActionButton {

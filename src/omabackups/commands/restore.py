@@ -19,6 +19,8 @@ def add(sub) -> None:
     r.add_argument("point", help="the restore point, or stop")
     r.add_argument("--only", action="append", metavar="FOLDER",
                    help="bring back just this folder of your home (again for more)")
+    r.add_argument("--pick", action="store_true",
+                   help="choose what comes back first (the picker, the other way round)")
     r.set_defaults(run=run_restore)
     serve = sub.add_parser("browse-serve", help=argparse.SUPPRESS)
     serve.add_argument("point")
@@ -65,8 +67,11 @@ def run_restore(args, events: Events) -> int:
     migrated = state.read(flow.MIGRATE) or {}
     if migrated.get("point") == args.point:     # after Migrate: its old user name, its picks
         request.update(from_user=migrated.get("from_user") or "", only=migrated.get("files") or None)
-    if getattr(args, "only", None):              # D52: the folders ticked on the panel
+    if getattr(args, "only", None):
         request["only"] = list(dict.fromkeys(args.only))
+    if getattr(args, "pick", False):             # D52: Choose what comes back
+        from omabackups.tui import bring_back
+        return bring_back.run(args.point, request, events)
     answer = rootjob.run("restore-files-start", request)
     events.result(answer, "Bringing your files back. A file that's newer here is never "
                           "overwritten. The panel shows how it's going.")
