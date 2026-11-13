@@ -1,26 +1,45 @@
-"""One backup, start to end (as root; BUILD 6.1 D, D25).
+"""One backup, start to end (as root; BUILD 6.1 D, D25), as its steps:
 
-1. Unlock your backup on the server (a hold).
-2. For each part: a fresh read-only snapshot, then the everyday mix if the
-   last backup finished and the skip list hasn't changed, else a full check.
-3. A restore point on the server (point.json inside it).
-4. Only then: the new snapshots become the "since" point; the old ones go.
-Resume: the record says "not finished" from the start; a run that's cut off
-(network, power, crash) leaves it so, and the next run checks every file:
-rsync only sends what's still missing.
+1. open    unlock your backup on the server (a hold); the health verdict.
+2. check   for each part: a fresh read-only snapshot, then the everyday mix
+           if the last backup finished and the skip list hasn't changed,
+           else a full check. The size, and the away limit.
+3. clear   every part's deletes first, then the room is checked.
+4. send    each part.
+5. point   the restore point on the server (point.json inside it).
+6. tidy    thinning; only then the new snapshots become the "since" point
+           and the old ones go.
+Resume: the record says "not finished" from the first change on the server;
+a run that's cut off (network, power, crash) leaves it so, and the next run
+checks every file: rsync only sends what's still missing.
 """
 
 import json
 import subprocess
-import threading
 import time
+from collections.abc import Callable
 from contextlib import ExitStack
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from omabackups import __version__
 from omabackups.audit import scan as audit_scan
-from omabackups.backup import changes, check, full, health, reuse, schedule, skips, thinning, todo
+from omabackups.backup import (
+    after,
+    changes,
+    check,
+    full,
+    health,
+    reuse,
+    schedule,
+    skips,
+    thinning,  # noqa: F401  (run.thinning: other modules use it)
+    todo,
+)
+from omabackups.backup.handover import handover
+from omabackups.backup.hold import HoldKeeper
 from omabackups.backup.send import Sender
 from omabackups.backup.source import Snapshots, parts
 from omabackups.core import ids, log, paths
@@ -35,19 +54,6 @@ RECORD = "backup.json"
 
 def record_file() -> Path:
     return paths.system_state_dir() / RECORD
-
-
-def renamed_home(server: dict, part: str) -> tuple[str, str] | None:
-    """(this user, the name it had) when Migrate came from another user name:
-    reuse looks for files under the old name too (stage 10)."""
-    old = server.get("from_user", "")
-    if part != "home" or not old:
-        return None
-    try:
-        new = linked_user()
-    except Exception:  # noqa: BLE001  (no linked user: nothing to map)
-        return None
-    return (new, old) if new and new != old else None
 
 
 def load_record() -> dict:
@@ -68,6 +74,26 @@ def pause_automatic(why: str) -> None:
     log.get("backup").info("automatic backups wait for a Back up now (%s)", why)
 
 
+def linked_user() -> str:
+    try:
+        return json.loads(paths.linked_user_file().read_text())["user"]
+    except (OSError, ValueError, KeyError):
+        return ""
+
+
+def renamed_home(server: dict, part: str) -> tuple[str, str] | None:
+    """(this user, the name it had) when Migrate came from another user name:
+    reuse looks for files under the old name too (stage 10)."""
+    old = server.get("from_user", "")
+    if part != "home" or not old:
+        return None
+    try:
+        new = linked_user()
+    except Exception:  # noqa: BLE001  (no linked user: nothing to map)
+        return None
+    return (new, old) if new and new != old else None
+
+
 def omarchy_version() -> str:
     try:
         return subprocess.run(["omarchy-version"], capture_output=True, text=True,
@@ -85,285 +111,285 @@ def point_name(line: str, latest: str | None) -> str:
         time.sleep(5)   # a backup within the same minute as the last: wait for the next
 
 
+@dataclass
+class Job:
+    """One backup, handed from step to step."""
+    gate: Gate
+    server: dict
+    away: bool
+    gate_version: int
+    record: dict
+    progress: Callable
+    logger: Any
+    verdict: dict = field(default_factory=dict)
+    resend: bool = False          # damaged files go again, all of them
+    hold: str = ""
+    sender: Sender | None = None
+    settings: dict = field(default_factory=dict)
+    run: str = field(default_factory=lambda: datetime.now().strftime("%Y%m%dT%H%M%S"))
+    since: dict = field(default_factory=dict)       # each part's "since" snapshot
+    made: dict = field(default_factory=dict)        # this run's snapshots
+    opened: dict = field(default_factory=dict)      # each part's snapshots
+    work: list = field(default_factory=list)        # (part, skip, snapshot, plan)
+    how: dict = field(default_factory=dict)
+    fingerprints: dict = field(default_factory=dict)
+    manifests: dict = field(default_factory=dict)
+    left_out: list = field(default_factory=list)
+    needed: int = 0
+    known: bool = True            # the size is known (else the room isn't checked)
+
+    @property
+    def bid(self) -> str:
+        return self.server["backup"]
+
+    @property
+    def line(self) -> str:
+        return self.server.get("line", "001")
+
+    @property
+    def reusing(self) -> bool:
+        return self.gate_version >= reuse.NEEDS_GATE
+
+
 def backup(progress=lambda step, part="", **more: None, source=None, anyway: bool = False,
            manual: bool = True) -> dict:
     """Run one backup. `anyway`: the answer "Back up now" to the away limit.
     `source` (tests) stands in for this computer's parts and snapshots."""
-    logger = log.get("backup")
-    server = location.load()
-    gate, away = location.connect(server)
-    bid, line = server["backup"], server.get("line", "001")
-
-    progress("unlock")
-    gate_version = gate.check_version().get("gate", 0)
-    if server.get("kind") != "disk":
-        network.learn_addresses(gate, server)      # D48: at home or away, where it is now
-    record = load_record()
-    try:
-        # Not before a migrated computer's takeover: it can only read until then.
-        verdict = {} if server.get("migrating") else health.refresh(gate, bid)
-    except OmaError as exc:
-        logger.warning("health verdict: %s", exc.details)
-        verdict = {}
-    resend = health.resend_needed(verdict, record)    # damaged files go again, all of them
-    hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
-    keeper = HoldKeeper(gate, bid, hold, logger)        # still here, however long a part takes
-    if server.get("migrating"):
-        line = handover(gate, server, logger)
-    # D49: stuck for 3 minutes. The first full backup stays manual (D29).
-    first = not record.get("last_point") or record.get("automatic_paused")
-    sender = Sender(gate, bid, line, compress=away,     # D25: zstd only when away
-                    stuck_todo="Press Resume backup when you're connected again: it carries on from "
-                               "where it got to." if first else
-                               "It tries again at the next automatic backup, from where it got to.")
-    run = datetime.now().strftime("%Y%m%dT%H%M%S")
-    made, since, how, fingerprints, work, opened = {}, dict(record.get("since", {})), {}, {}, [], {}
+    job = open_backup(progress)
+    keeper = HoldKeeper(job.gate, job.bid, job.hold, job.logger)  # still here, however long a part takes
     stack = ExitStack()
     try:
-        # 1. Check first: snapshots and change lists for every part, and the size.
-        progress("check")
-        needed, known, left_out, manifests = 0, True, [], {}
-        for part in (source.parts() if source else parts()):
-            progress("check", part.name)
-            sender.report = lambda fields, name=part.name: progress("check", name, **fields)
-            skip = skips.for_part(part.name)
-            fingerprints[part.name] = skip.fingerprint()
-            if not part.btrfs:
-                work.append((part, skip, None, None))
-                size, manifests[part.name] = check.folder_changes(
-                    part.mount, record.get("manifests", {}).get(part.name, {}))
-                needed += size
-                continue
-            snaps = stack.enter_context(source.snapshots(part) if source else Snapshots(part.device))
-            opened[part.name] = snaps
-            # A stopped backup is killed, so it never tidies up: its snapshot
-            # stayed for good. Only the "since" one and an unfinished full
-            # backup's are needed (D49); this run's comes next.
-            still_used = {since.get(part.name), full.keep(part.name)}
-            for name in snaps.names():
-                if name.startswith(f"{part.name}-") and name not in still_used:
-                    snaps.drop(name)
-            new = snaps.take(part, run)
-            made[part.name] = new.name
-            left_out += [f"{part.mount.rstrip('/')}/{rel}" for rel in snaps.nested(part)
-                         if not skip.skipped(rel)]
-            old = since.get(part.name, "")
-            reusing = gate_version >= reuse.NEEDS_GATE
-            if (not resend and record.get("finished") and snaps.exists(old)
-                    and record.get("skips", {}).get(part.name) == fingerprints[part.name]):
-                plan = changes.plan(snaps.dump(old, new), new.name, str(new), skip)
-                needed += check.size_of(plan, str(new))
-                if reusing:   # never send the same data twice (D25)
-                    needed -= reuse.ask(gate, bid, line, part.name, [],
-                                        reuse.fresh_files(plan, str(new), renamed_home(server, part.name)))["bytes"]
-                work.append((part, skip, new, plan))
-            else:
-                old_patterns = record.get("skip_patterns", {}).get(part.name)
-                if reusing and old_patterns is not None and old_patterns != skip.patterns:
-                    folders, files = reuse.unskipped(str(new), old_patterns, skip)
-                    reuse.ask(gate, bid, line, part.name, folders, files)
-                listed = None
-                if not resend and gate_version >= full.NEEDS_GATE:     # D49 C: check once
-                    listed = full.prepare(part.name, skip, new, snaps, sender, record, bid, line,
-                                          fingerprints[part.name], logger)
-                    if listed.old_snapshot and listed.old_snapshot not in (new.name, since.get(part.name)):
-                        snaps.drop(listed.old_snapshot)
-                    needed += sum(size for _, size in listed.items)      # D50: known, so checked
-                else:
-                    known = False
-                work.append((part, skip, new, listed))
-        settings = schedule.user_settings(linked_user())
-        if settings["away.on"]:
-            check.away_limit(away, anyway, needed if known else None, settings["away.limit_mb"])
-
-        # 2. Clear, check the room, send. From the first change on the server
-        # until the end, the record says "not finished".
-        # Every part's deletes first: the room they free is there before the
-        # room is checked and before anything is copied (a full space failed
-        # on 7 MB of system files while home's skipped folders waited).
-        for part, skip, new, plan in work:
-            if isinstance(plan, full.FullList) and plan.ops:
-                save_record({**record, "finished": False, "started": int(time.time())})
-                progress("clear", part.name)
-                sender.remove(part.name, plan.ops)
-                plan.ops = []
-        if known:     # D50: won't fit -> said before anything is sent
-            check.make_room(gate, bid, needed, logger, may_delete=settings["thinning.on"])
-        save_record({**record, "finished": False, "started": int(time.time())})
-        for number, (part, skip, new, plan) in enumerate(work, 1):
-            progress("send", part.name, part_no=number, parts=len(work))
-            sender.report = lambda fields, name=part.name, n=number: progress(
-                "send", name, part_no=n, parts=len(work), **fields)
-            if new is None:
-                sender.full(part.name, part.mount, skip)
-                how[part.name] = "copied"
-            elif isinstance(plan, full.FullList):
-                sender.copy(part.name, str(new), plan.items, plan.already)
-                how[part.name] = "full, carried on" if plan.resumed else "full, checked once"
-            elif plan is not None:
-                sender.everyday(part.name, str(new), plan, check.size_of(plan, str(new)))
-                how[part.name] = f"changes ({len(plan.files)} files, {len(plan.ops)} moves/deletes)"
-            else:
-                sender.full(part.name, str(new), skip, checksum=resend)
-                how[part.name] = "full check, every file's contents" if resend else "full check"
-
-        # 3. The restore point, then thinning.
-        latest = changes_latest(gate, bid, line)
-        name = point_name(line, latest)
-        point = {"owner": ids.system_id(), "user": linked_user(), "omarchy": omarchy_version(),
-                 "omabackups": __version__, "follows": latest, "how": how, "away": away,
-                 "not_included": left_out,
-                 "skips": {p: skips.for_part(p).patterns for p in how}, "created": int(time.time())}
-        progress("audit")
-        changes_now = audit_scan.safely(linked_user() or None)     # Your changes to Omarchy (D9)
-        progress("point")
-        files = {"point.json": point}
-        if changes_now is not None and gate_version >= 9:
-            files["changes.json"] = changes_now
-        gate.call("snapshot", bid, line, name,
-                  data=json.dumps(files if gate_version >= 9 else point).encode())
-        if changes_now is not None:
-            write_atomic(paths.system_state_dir() / "changes.json",
-                         (json.dumps({**changes_now, "point": name}) + "\n").encode(), 0o644)
-        thinned, left = thin(gate, bid, logger, smart=settings["thinning.on"])
-        try:
-            space = gate.call("space", bid)      # for the picker's bottom line
-        except OmaError:
-            space = {}
-
-        # 4. Done: the new snapshots are the next "since" point; the old ones go.
-        old = {p: n for p, n in since.items() if made.get(p) and made[p] != n}
-        since.update(made)
-        save_record({"finished": True, "since": since, "skips": fingerprints, "last_point": name,
-                     "skip_patterns": {p: skips.for_part(p).patterns for p in fingerprints},
-                     "point_skips": point_skips(record, name,
-                                                {p: skips.for_part(p).patterns for p in fingerprints}, left),
-                     "last_finished": int(time.time()), "how": how, "thinned": thinned,
-                     "away": away, "not_included": left_out, "manifests": manifests,
-                     "sent": sender.stats,
-                     # D29: a manual backup ends the wait; an automatic one leaves it as it was.
-                     "automatic_paused": False if manual else record.get("automatic_paused", False),
-                     "kept": KEPT.get("kept", record.get("kept", [])),
-                     "return_point": KEPT.get("return_point", record.get("return_point")),
-                     "space": {k: space.get(k) for k in ("box", "used", "free")},
-                     # Every restore point in the backup, every line: after a Migrate the
-                     # old computer's (and the Return point) stay listed (stage 8 lesson).
-                     "all_points": left if left is not None else record.get("all_points", []),
-                     "resent_for_pass": verdict.get("pass_started") if resend
-                     else record.get("resent_for_pass")})
-        for part_name, snap_name in old.items():
-            opened[part_name].drop(snap_name)
-        for part_name in made:
-            todo.clear(part_name)          # finished: everyday backups carry on (D49)
+        take_over(job)
+        check_parts(job, source, stack)
+        job.settings = schedule.user_settings(linked_user())
+        if job.settings["away.on"]:
+            check.away_limit(job.away, anyway, job.needed if job.known else None,
+                             job.settings["away.limit_mb"])
+        clear(job)
+        room(job)
+        send(job)
+        name = make_point(job)
+        tidy(job, name, manual)
     except BaseException:
-        # Keep the old "since" snapshots; drop the new ones. If sending had
-        # started, the record says "not finished": the next backup checks every file.
-        # A full backup's to-do list keeps its snapshot: the next run carries on (D49).
-        for part_name, snap_name in made.items():
-            if since.get(part_name) != snap_name and full.keep(part_name) != snap_name:
-                opened[part_name].drop(snap_name)
+        drop_new(job)
         raise
     finally:
         keeper.stop()
         stack.close()
         try:
-            gate.call("lock", bid, hold)
+            job.gate.call("lock", job.bid, job.hold)
         except OmaError as exc:
-            logger.warning("lock after backup: %s", exc.details)
-    logger.info("backup %s done (%s): %s", name, "away" if away else "home", how)
-    return {"point": name, "how": how, "away": away}
+            job.logger.warning("lock after backup: %s", exc.details)
+    job.logger.info("backup %s done (%s): %s", name, "away" if job.away else "home", job.how)
+    return {"point": name, "how": job.how, "away": job.away}
 
 
-def handover(gate, server: dict, logger) -> str:
-    """D22: a migrated computer's first backup takes the backup over. A new
-    line starts from the restore point Migrate came from (only changes are
-    stored); the old one is read-only now, and that point is the Return point.
-    Recorded only once the server said yes."""
-    point = server.get("from_point")
-    if not point:
-        raise OmaError("Migrate isn't finished on this computer yet.",
-                       "Finish it first (the panel shows where it's up to).", code="migrate-unfinished")
-    answer = gate.call("handover", server["backup"], point)
-    # A new user name (testrig01 -> testrig02): the new line's copy of the home
-    # folder takes this user's name, so only real changes are sent (stage 8:
-    # 1.2 GB went again without this).
-    old, new = server.get("from_user", ""), linked_user()
-    if old and new and old != new:
-        gate.call("apply", server["backup"], answer["line"], "home",
-                  data=json.dumps([["rename", old, new]]).encode())
-        logger.info("handover: the home folder %s is %s now", old, new)
-    server = {**server, "line": answer["line"], "migrating": False,
-              "return_point": answer["return_point"], "handed_over": int(time.time())}
-    write_atomic(paths.server_file(), (json.dumps(server, indent=2) + "\n").encode(), 0o644)
-    logger.info("handover: this computer owns the backup now, line %s from %s", answer["line"], point)
-    return answer["line"]
+# --- 1. open ------------------------------------------------------------------
 
-
-class HoldKeeper:
-    """Says "still here" to the server every 2 minutes for the whole backup. A
-    hold nobody refreshes for 10 minutes counts as abandoned (1.x lesson: long
-    jobs say so as they go); one slow part once outlasted it (stage 3 test)."""
-
-    EVERY = 120
-
-    def __init__(self, gate, bid: str, hold: str, logger):
-        self.gate, self.bid, self.hold, self.logger = gate, bid, hold, logger
-        self.done = threading.Event()
-        self.thread = threading.Thread(target=self._run, daemon=True)
-        self.thread.start()
-
-    def _run(self) -> None:
-        while not self.done.wait(self.EVERY):
-            try:
-                self.gate.call("hold", self.bid, self.hold)
-            except OmaError as exc:
-                self.logger.warning("keeping the hold: %s", exc.details)
-
-    def stop(self) -> None:
-        self.done.set()
-        self.thread.join(timeout=5)
-
-
-KEPT = {}     # the kept restore points, as thinning last saw them
-
-
-def thin(gate: Gate, bid: str, logger, smart: bool = True) -> tuple[list[str], list[str] | None]:
-    """Smart thinning after each backup (D18); switched off (D35), every
-    restore point stays until the backup needs the room. A problem here never
-    fails the backup. Returns (the restore points removed, the ones left; None
-    if unknown)."""
-    gone, left = [], None
+def open_backup(progress) -> Job:
+    """Connect, unlock (a hold), and the health verdict."""
+    logger = log.get("backup")
+    server = location.load()
+    gate, away = location.connect(server)
+    progress("unlock")
+    gate_version = gate.check_version().get("gate", 0)
+    if server.get("kind") != "disk":
+        network.learn_addresses(gate, server)      # D48: at home or away, where it is now
+    record = load_record()
+    job = Job(gate=gate, server=server, away=away, gate_version=gate_version, record=record,
+              progress=progress, logger=logger, since=dict(record.get("since", {})))
     try:
-        info = gate.call("points", bid)
-        kept = set(info["kept"].get("kept", [])) | {info["kept"].get("return_point")}
-        for old in thinning.to_delete(info["points"], datetime.now(), kept) if smart else []:
-            gate.call("delete", bid, old)
-            gone.append(old)
-        left = [n for n in info["points"] if n not in gone]
-        KEPT.clear()
-        KEPT.update(info["kept"])
+        # Not before a migrated computer's takeover: it can only read until then.
+        job.verdict = {} if server.get("migrating") else health.refresh(gate, job.bid)
     except OmaError as exc:
-        logger.warning("thinning: %s | %s", exc.what, exc.details)
-    return gone, left
+        logger.warning("health verdict: %s", exc.details)
+    job.resend = health.resend_needed(job.verdict, record)
+    job.hold = gate.call("unlock", job.bid, data=keys.read_unlock_key())["hold"]
+    return job
 
 
-def point_skips(record: dict, name: str, made: dict, left: list[str] | None) -> dict:
-    """Each restore point with the skip list it was made with, for the picker's
-    colours (what the backup holds); points thinning removed drop out."""
-    out = dict(record.get("point_skips") or {})
-    out[name] = {"time": int(time.time()), "skips": made}
-    if left is not None:
-        out = {n: v for n, v in out.items() if n in set(left) | {name}}
-    return out
+def take_over(job: Job) -> None:
+    """A migrated computer takes the backup over (D22); then the sender."""
+    if job.server.get("migrating"):
+        job.server = {**job.server, "line": handover(job.gate, job.server, linked_user(), job.logger)}
+    # D49: stuck for 3 minutes. The first full backup stays manual (D29).
+    first = not job.record.get("last_point") or job.record.get("automatic_paused")
+    job.sender = Sender(job.gate, job.bid, job.line, compress=job.away,     # D25: zstd only when away
+                        stuck_todo="Press Resume backup when you're connected again: it carries on "
+                                   "from where it got to." if first else
+                                   "It tries again at the next automatic backup, from where it got to.")
 
 
-def changes_latest(gate: Gate, bid: str, line: str) -> str | None:
-    names = [n for n in gate.call("points", bid)["points"] if n.startswith(f"{line}-")]
-    return max(names) if names else None
+# --- 2. check -----------------------------------------------------------------
+
+def check_parts(job: Job, source, stack: ExitStack) -> None:
+    """Check first: snapshots and change lists for every part, and the size."""
+    job.progress("check")
+    for part in (source.parts() if source else parts()):
+        job.progress("check", part.name)
+        job.sender.report = lambda fields, name=part.name: job.progress("check", name, **fields)
+        skip = skips.for_part(part.name)
+        job.fingerprints[part.name] = skip.fingerprint()
+        if not part.btrfs:
+            job.work.append((part, skip, None, None))
+            size, job.manifests[part.name] = check.folder_changes(
+                part.mount, job.record.get("manifests", {}).get(part.name, {}))
+            job.needed += size
+            continue
+        snaps = stack.enter_context(source.snapshots(part) if source else Snapshots(part.device))
+        job.opened[part.name] = snaps
+        new = fresh_snapshot(job, part, skip, snaps)
+        plan = (everyday_plan(job, part, skip, snaps, new) if everyday(job, part.name, snaps)
+                else full_plan(job, part, skip, snaps, new))
+        job.work.append((part, skip, new, plan))
 
 
-def linked_user() -> str:
+def fresh_snapshot(job: Job, part, skip, snaps):
+    # A stopped backup is killed, so it never tidies up: its snapshot stayed
+    # for good. Only the "since" one and an unfinished full backup's are
+    # needed (D49); this run's comes next.
+    still_used = {job.since.get(part.name), full.keep(part.name)}
+    for name in snaps.names():
+        if name.startswith(f"{part.name}-") and name not in still_used:
+            snaps.drop(name)
+    new = snaps.take(part, job.run)
+    job.made[part.name] = new.name
+    job.left_out += [f"{part.mount.rstrip('/')}/{rel}" for rel in snaps.nested(part)
+                     if not skip.skipped(rel)]
+    return new
+
+
+def everyday(job: Job, name: str, snaps) -> bool:
+    """The everyday mix: the last backup finished, its snapshot is still
+    here, the skip list is the same, and nothing has to be sent again."""
+    return bool(not job.resend and job.record.get("finished") and snaps.exists(job.since.get(name, ""))
+                and job.record.get("skips", {}).get(name) == job.fingerprints[name])
+
+
+def everyday_plan(job: Job, part, skip, snaps, new):
+    plan = changes.plan(snaps.dump(job.since.get(part.name, ""), new), new.name, str(new), skip)
+    job.needed += check.size_of(plan, str(new))
+    if job.reusing:   # never send the same data twice (D25)
+        job.needed -= reuse.ask(job.gate, job.bid, job.line, part.name, [],
+                                reuse.fresh_files(plan, str(new), renamed_home(job.server, part.name)))["bytes"]
+    return plan
+
+
+def full_plan(job: Job, part, skip, snaps, new):
+    """A full check: once, as a to-do list (D49 C), when the server can;
+    None means rsync checks every file as it goes and the size isn't known."""
+    old_patterns = job.record.get("skip_patterns", {}).get(part.name)
+    if job.reusing and old_patterns is not None and old_patterns != skip.patterns:
+        folders, files = reuse.unskipped(str(new), old_patterns, skip)
+        reuse.ask(job.gate, job.bid, job.line, part.name, folders, files)
+    if job.resend or job.gate_version < full.NEEDS_GATE:
+        job.known = False
+        return None
+    listed = full.prepare(part.name, skip, new, snaps, job.sender, job.record, job.bid, job.line,
+                          job.fingerprints[part.name], job.logger)
+    if listed.old_snapshot and listed.old_snapshot not in (new.name, job.since.get(part.name)):
+        snaps.drop(listed.old_snapshot)
+    job.needed += sum(size for _, size in listed.items)      # D50: known, so checked
+    return listed
+
+
+# --- 3. clear, and the room ---------------------------------------------------
+
+def not_finished(job: Job) -> None:
+    """From the first change on the server until the end, the record says so."""
+    save_record({**job.record, "finished": False, "started": int(time.time())})
+
+
+def clear(job: Job) -> None:
+    """Every part's deletes first: the room they free is there before the
+    room is checked and before anything is copied (a full space failed on
+    7 MB of system files while home's skipped folders waited)."""
+    for part, _skip, _new, plan in job.work:
+        if isinstance(plan, full.FullList) and plan.ops:
+            not_finished(job)
+            job.progress("clear", part.name)
+            job.sender.remove(part.name, plan.ops)
+            plan.ops = []
+
+
+def room(job: Job) -> None:
+    if job.known:     # D50: won't fit -> said before anything is sent
+        check.make_room(job.gate, job.bid, job.needed, job.logger, may_delete=job.settings["thinning.on"])
+
+
+# --- 4. send ------------------------------------------------------------------
+
+def send(job: Job) -> None:
+    not_finished(job)
+    for number, (part, skip, new, plan) in enumerate(job.work, 1):
+        job.progress("send", part.name, part_no=number, parts=len(job.work))
+        job.sender.report = lambda fields, name=part.name, n=number: job.progress(
+            "send", name, part_no=n, parts=len(job.work), **fields)
+        job.how[part.name] = send_part(job, part, skip, new, plan)
+
+
+def send_part(job: Job, part, skip, new, plan) -> str:
+    """Send one part; says how it went."""
+    sender = job.sender
+    if new is None:
+        sender.full(part.name, part.mount, skip)
+        return "copied"
+    if isinstance(plan, full.FullList):
+        sender.copy(part.name, str(new), plan.items, plan.already)
+        return "full, carried on" if plan.resumed else "full, checked once"
+    if plan is not None:
+        sender.everyday(part.name, str(new), plan, check.size_of(plan, str(new)))
+        return f"changes ({len(plan.files)} files, {len(plan.ops)} moves/deletes)"
+    sender.full(part.name, str(new), skip, checksum=job.resend)
+    return "full check, every file's contents" if job.resend else "full check"
+
+
+# --- 5. the restore point -----------------------------------------------------
+
+def make_point(job: Job) -> str:
+    latest = after.changes_latest(job.gate, job.bid, job.line)
+    name = point_name(job.line, latest)
+    point = {"owner": ids.system_id(), "user": linked_user(), "omarchy": omarchy_version(),
+             "omabackups": __version__, "follows": latest, "how": job.how, "away": job.away,
+             "not_included": job.left_out,
+             "skips": {p: skips.for_part(p).patterns for p in job.how}, "created": int(time.time())}
+    job.progress("audit")
+    changes_now = audit_scan.safely(linked_user() or None)     # Your changes to Omarchy (D9)
+    job.progress("point")
+    files = {"point.json": point}
+    if changes_now is not None and job.gate_version >= 9:
+        files["changes.json"] = changes_now
+    job.gate.call("snapshot", job.bid, job.line, name,
+                  data=json.dumps(files if job.gate_version >= 9 else point).encode())
+    if changes_now is not None:
+        write_atomic(paths.system_state_dir() / "changes.json",
+                     (json.dumps({**changes_now, "point": name}) + "\n").encode(), 0o644)
+    return name
+
+
+# --- 6. tidy ------------------------------------------------------------------
+
+def tidy(job: Job, name: str, manual: bool) -> None:
+    """Thinning; then the new snapshots are the next "since" point; the old ones go."""
+    thinned, left = after.thin(job.gate, job.bid, job.logger, smart=job.settings["thinning.on"])
     try:
-        return json.loads(paths.linked_user_file().read_text())["user"]
-    except (OSError, ValueError, KeyError):
-        return ""
+        space = job.gate.call("space", job.bid)      # for the picker's bottom line
+    except OmaError:
+        space = {}
+    old = {p: n for p, n in job.since.items() if job.made.get(p) and job.made[p] != n}
+    job.since.update(job.made)
+    save_record(after.finished_record(job, name, thinned, left, space, manual))
+    for part_name, snap_name in old.items():
+        job.opened[part_name].drop(snap_name)
+    for part_name in job.made:
+        todo.clear(part_name)          # finished: everyday backups carry on (D49)
+
+
+def drop_new(job: Job) -> None:
+    """A backup that didn't finish keeps the old "since" snapshots and drops
+    the new ones. If sending had started, the record says "not finished": the
+    next backup checks every file. A full backup's to-do list keeps its
+    snapshot: the next run carries on (D49)."""
+    for part_name, snap_name in job.made.items():
+        if job.since.get(part_name) != snap_name and full.keep(part_name) != snap_name:
+            job.opened[part_name].drop(snap_name)
