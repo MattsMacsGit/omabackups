@@ -52,3 +52,12 @@ def test_partprobe_is_not_relied_on():
 def test_build_checks_the_list_against_the_image():
     build = (ROOT / "rescue" / "iso" / "build.sh").read_text()
     assert "programs.txt" in build
+
+
+def test_the_stick_joins_tailscale_only_for_the_rescue():
+    """Each rescue left a device behind in the Tailscale app: the stick's
+    tailscaled keeps its state in memory only (ephemeral), as 1.x did."""
+    drop_in = ROOT / "rescue/iso/airootfs/etc/systemd/system/tailscaled.service.d/rescue-memory-only.conf"
+    text = drop_in.read_text()
+    assert "ExecStart=\n" in text and "--state=mem:" in text
+    assert "--hostname=omabackups-rescue" in (SRC / "rescue/wizard.py").read_text()

@@ -83,7 +83,10 @@ def find_backup() -> tuple:
             if not screens.confirm("Log in to Tailscale?", "Log in", "Look again"):
                 continue
             screens.step("Log in to Tailscale", "Open the link (or scan the code) on your phone and log in.")
-            subprocess.run(["tailscale", "up", "--qr", "--accept-dns=true"])
+            # Named so it's clear in your Tailscale devices; it drops off by itself
+            # once the stick is switched off (state in memory only: the image's
+            # tailscaled drop-in, as 1.x did).
+            subprocess.run(["tailscale", "up", "--qr", "--accept-dns=true", "--hostname=omabackups-rescue"])
 
 
 def unlock(gate, bid: str) -> tuple[str, str]:

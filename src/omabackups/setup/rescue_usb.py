@@ -36,8 +36,11 @@ def _pick_stick(purpose: str):
     return disk
 
 
+KEEP_OPEN = "On a slow connection this can take a little while: please keep this window open."
+
+
 def _the_image() -> str:
-    menu.title("The rescue system", "Checking what's published...")
+    menu.title("The rescue system", "Checking online for the latest rescue system... " + KEEP_OPEN)
     want = image.published()
     if image.have(want):
         menu.say(f"  Already downloaded ({human(image.path().stat().st_size)}), checked.")
@@ -105,6 +108,9 @@ def make() -> dict:
 
 
 def refresh() -> dict:
+    # Words first: the check below asks online and said nothing meanwhile,
+    # so the window looked stuck and got closed.
+    menu.title("Refresh Rescue USB", "Checking online for a newer rescue system... " + KEEP_OPEN)
     want = None
     try:
         want = image.published()

@@ -39,11 +39,13 @@ def _unreachable(details: str) -> OmaError:
 
 def published() -> dict:
     """The published image: its checksum and version (small files)."""
-    sums = _curl("-s", BASE + NAME + ".sha256")
+    # Small files: never more than half a minute each, so a slow or missing
+    # connection doesn't leave the window silent for minutes.
+    sums = _curl("-s", "--max-time", "30", BASE + NAME + ".sha256")
     if sums.returncode != 0 or not sums.stdout.split():
         raise _unreachable(sums.stderr.strip() or f"no checksum at {BASE}")
-    version = _curl("-s", BASE + NAME.replace(".iso", ".version"))
-    head = _curl("-sI", BASE + NAME)
+    version = _curl("-s", "--max-time", "30", BASE + NAME.replace(".iso", ".version"))
+    head = _curl("-sI", "--max-time", "30", BASE + NAME)
     size = 0
     for line in head.stdout.splitlines():
         if line.lower().startswith("content-length:"):
