@@ -280,9 +280,14 @@ def v_space(call: Call) -> dict:
 # --- changes only an owner may make ------------------------------------------
 
 def v_delete(call: Call) -> dict:
-    """delete BACKUP POINT -- never the newest of its line, never a kept one."""
-    _argc(call, 2)
-    bid, point = call.args
+    """delete BACKUP POINT [any] -- never the newest of its line, never a kept
+    one; with "any" (the command line's delete, once it asked: audit 1.8)
+    those too, and a kept one stops being kept."""
+    _argc(call, 2, 3)
+    bid, point = call.args[:2]
+    anyway = len(call.args) == 3
+    if anyway and call.args[2] != "any":
+        raise Refused("the third word can only be: any")
     registry.the_backup(registry.load(), bid, call.kid, OWNER)
     if not conf.POINT.match(point):
         raise Refused("that is not a restore point name")
@@ -291,12 +296,17 @@ def v_delete(call: Call) -> dict:
         names = layout.points(inside)
         if point not in names:
             raise Refused("no such restore point")
-        if point == layout.newest_in_line(names, point[:3]):
+        if not anyway and point == layout.newest_in_line(names, point[:3]):
             raise Refused("the newest restore point is never deleted")
         kept = layout.kept(inside)
-        if point in kept["kept"] or point == kept["return_point"]:
+        was_kept = point in kept["kept"] or point == kept["return_point"]
+        if was_kept and not anyway:
             raise Refused("that restore point is kept; release it first")
         host().delete_subvolume(inside / "points" / point)
+        if was_kept:
+            layout.write_kept(inside, {**kept, "kept": [n for n in kept["kept"] if n != point],
+                                       "return_point": None if kept["return_point"] == point
+                                       else kept["return_point"]})
     return {"deleted": point}
 
 

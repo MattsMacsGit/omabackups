@@ -11,6 +11,9 @@ backup.
                    owner can still read (Browse, bring files back)
   newline B P      a line of its own beside the others (the old computer's
                    "Set up a new backup", D22a): nobody else is changed
+  rebuild B L P    line L's working copy rebuilt from restore point P (audit
+                   1.7, 1.x's rebuild-current): same line, restore points
+                   untouched
 """
 
 import base64
@@ -25,6 +28,7 @@ import registry
 from host import host
 from registry import Refused
 from verbs import Call, _argc, _box, _need_open
+from verbs_data import _my_line
 
 FAILED_WAIT = 2      # seconds after a password that opened nothing (slows guessing)
 
@@ -112,4 +116,30 @@ def v_newline(call: Call) -> dict:
     return _new_line(call, takeover=False)
 
 
-VERBS = {"join": v_join, "handover": v_handover, "newline": v_newline}
+def v_rebuild(call: Call) -> dict:
+    """A working copy that went wrong (a rescued system backed up over it,
+    13 Nov 2026) starts again from a restore point. The copy is made beside
+    it and swapped in, so the line is never without one."""
+    _argc(call, 3)
+    bid, line, point = call.args
+    if not conf.POINT.match(point):
+        raise Refused("that is not a restore point")
+    with holds.turn(bid):
+        current = _my_line(call, bid, line)
+        inside = current.parent.parent
+        if point not in layout.points(inside):
+            raise Refused("no such restore point")
+        new, old = current.with_name(f"{line}.new"), current.with_name(f"{line}.old")
+        for leftover in (new, old):              # an earlier rebuild that was cut off
+            if leftover.exists():
+                host().delete_subvolume(leftover)
+        host().writable_copy(inside / "points" / point, new)
+        if current.exists():
+            current.rename(old)
+        new.rename(current)
+        if old.exists():
+            host().delete_subvolume(old)
+    return {"rebuilt": line, "from": point}
+
+
+VERBS = {"join": v_join, "handover": v_handover, "newline": v_newline, "rebuild": v_rebuild}

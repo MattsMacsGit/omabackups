@@ -1,5 +1,6 @@
 """`omabackups points` (the restore points), `keep <point>`, `release <point>`,
-`delete <point>` (to make room), and `password change` (your backup's password)."""
+`delete <point>` (any one, after asking: audit 1.8), `rebuild-from <point>`
+(the working copy, audit 1.7), and `password change` (your backup's password)."""
 
 import getpass
 from datetime import datetime
@@ -17,9 +18,12 @@ def add(sub) -> None:
         p = sub.add_parser(verb, help=about)
         p.add_argument("point")
         p.set_defaults(run=run_keep, keep=verb == "keep")
-    d = sub.add_parser("delete", help="delete a restore point (to make room)")
+    d = sub.add_parser("delete", help="delete a restore point, any one (it asks first)")
     d.add_argument("point")
     d.set_defaults(run=run_delete)
+    r = sub.add_parser("rebuild-from", help="rebuild the backup's working copy from a restore point")
+    r.add_argument("point")
+    r.set_defaults(run=run_rebuild)
     pw = sub.add_parser("password", help="your backup's password")
     pw.add_subparsers(dest="verb", metavar="change", required=True).add_parser(
         "change", help="change your backup's password").set_defaults(run=run_password)
@@ -40,10 +44,26 @@ def run_keep(args, events: Events) -> int:
 
 
 def run_delete(args, events: Events) -> int:
-    answer = rootjob.run("delete-point", {"point": args.point})
+    from omabackups.setup import menu
+    record = status_data._read(status_data.paths.system_state_dir() / "backup.json")
+    if args.point in (record.get("kept") or []) or args.point == record.get("return_point"):
+        menu.title(f"{args.point} is a kept restore point.",
+                   "Deleting it deletes it anyway; it stops being kept.")
+    if not menu.confirm(f"Delete restore point {args.point}? This can't be undone."):
+        events.result({"deleted": None}, "Nothing was deleted.")
+        return 0
+    answer = rootjob.run("delete-point", {"point": args.point, "any": True})
     from omabackups.backup.check import human
     free = answer.get("space", {}).get("free")
     events.result(answer, f"{args.point} is deleted." + (f" Your backup has {human(free)} free." if free else ""))
+    return 0
+
+
+def run_rebuild(args, events: Events) -> int:
+    answer = rootjob.run("rebuild-from", {"point": args.point})
+    events.result(answer, f"The backup's working copy (line {answer.get('rebuilt', '')}) is rebuilt from "
+                          f"{args.point}. Your restore points are as they were. The next backup checks "
+                          "every file once and sends only what changed: run omabackups backup.")
     return 0
 
 

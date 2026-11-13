@@ -283,17 +283,46 @@ ones and fewer old ones. Smart thinning keeps:
 
 About 100 restore points after a year, backing up hourly. Off (Settings ›
 **Restore points**), nothing is deleted by itself: a full backup stops and
-says so. To delete one: `omabackups delete <point>`.
+says so. To delete one yourself, see below.
 
 ### Kept restore points
 
-A **kept** restore point is never thinned or deleted. In the panel: Settings ›
-Restore points, and switch on the ones to keep. Or:
+A **kept** restore point is never thinned, and nothing deletes it by itself.
+In the panel: Settings › Restore points, and switch on the ones to keep. Or:
 
 ```
 omabackups keep 001-2026-11-07-1400
 omabackups release 001-2026-11-07-1400
 ```
+
+### Deleting a restore point
+
+Any restore point can be deleted from a terminal, the newest and kept ones
+too. It asks first, and it can't be undone:
+
+```
+omabackups delete 001-2026-11-07-1400
+```
+
+The panel never deletes a restore point you didn't choose to lose.
+
+### Rebuilding the working copy
+
+Your backup holds one **working copy** of your computer, which each backup
+brings up to date, and the restore points, which never change. If the
+working copy ever goes wrong (say a backup ran from a system that wasn't
+whole yet, and removed folders from it), rebuild it from a restore point
+you trust:
+
+```
+omabackups rebuild-from 001-2026-11-07-1400
+omabackups backup
+```
+
+Your restore points stay as they are. The next backup checks every file
+once and sends only what changed since that restore point. If a bad backup
+also made a restore point, delete that one afterwards with
+`omabackups delete`.
 
 ### Your backup's password
 

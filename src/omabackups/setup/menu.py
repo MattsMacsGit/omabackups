@@ -65,6 +65,13 @@ def ask(prompt: str, default: str = "", placeholder: str = "") -> str:
     return input(shown).strip() or default
 
 
+def confirm(prompt: str) -> bool:
+    """Yes or no; no unless the answer is yes."""
+    if _gum():
+        return subprocess.run(["gum", "confirm", "--default=false", prompt]).returncode == 0
+    return input(f"{prompt} [y/N]: ").strip().lower() in ("y", "yes")
+
+
 def secret(prompt: str) -> str:
     if _gum():
         return _run(["input", "--password", "--prompt", f"{prompt}> "])

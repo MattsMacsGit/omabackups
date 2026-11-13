@@ -141,18 +141,16 @@ def test_the_point_a_rescue_came_from_is_kept(owned):  # noqa: F811
     assert server.call(kid, f"delete {bid} 001-2026-11-01-1000")[0] == 1   # thinning can't either
 
 
-@to_build("§8 (audit 1.8): delete any restore point, the newest too")
 def test_deleting_the_newest_point_works(world, monkeypatch):
     srv, kid, bid, src, box = world
     names = iter(["001-2099-01-01-0000", "001-2099-01-02-0000"])
     monkeypatch.setattr(run, "point_name", lambda line, latest: next(names))
     run.backup(source=src)
     newest = run.backup(source=src)["point"]
-    jobs._jobs()["delete-point"]({"point": newest})
+    jobs._jobs()["delete-point"]({"point": newest, "any": True})      # the command line, once it asked
     assert points(box) == ["001-2099-01-01-0000"]
 
 
-@to_build("§8 (audit 1.8): delete asks first")
 def test_delete_asks_first(sandbox, monkeypatch):
     asked = []
     monkeypatch.setattr(rootjob, "run", lambda job, request: asked.append(job) or {})
@@ -164,7 +162,6 @@ def test_delete_asks_first(sandbox, monkeypatch):
     assert asked == ["delete-point"]
 
 
-@to_build("§8 (audit 1.7): rebuild-from repairs a damaged working copy")
 def test_rebuild_from_repairs_a_damaged_working_copy(world, monkeypatch):
     srv, kid, bid, src, box = world
     names = iter(["001-2099-01-01-0000", "001-2099-01-02-0000", "001-2099-01-03-0000"])
