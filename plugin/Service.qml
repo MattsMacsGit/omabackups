@@ -184,17 +184,24 @@ Item {
     Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", command])
   }
 
+  // SPEC §9: folders of a rescue or a Migrate still on the backup: backups wait
+  // (the Finish restore page says why and offers Back up anyway).
+  readonly property bool waitingForFiles: !!(status.migrate && status.migrate.still_to_come
+                                             && status.migrate.still_to_come.length)
   function backupNow() {
+    if (waitingForFiles) return
     // D29: the very first backup opens the picker first; saving starts it.
     if (!firstBackupDone) terminal("omabackups pick --then-backup")
     else { startAsked = Date.now(); start(["backup"]) }
   }
+  // Ctrl + click, then Back up anyway: keeps the restore point it came from.
+  function backupAnyway() { startAsked = Date.now(); start(["backup", "--force-after-restore"]) }
   // D50: won't fit -> choose again; saving starts the backup when it's the first one.
   function pickAgain() { terminal(firstBackupDone ? "omabackups pick" : "omabackups pick --then-backup") }
   // A line's button: carry on an unfinished backup, else start one.
   function backupOrResume() { if (status.unfinished) resume(); else backupNow() }
   // D49: an unfinished backup carries on from its list: no picker first, even the first time.
-  function resume() { startAsked = Date.now(); start(["backup"]) }
+  function resume() { if (waitingForFiles) return; startAsked = Date.now(); start(["backup"]) }
   function stop() { stopAsked = true; run(["stop"]) }
   function awayAnswer(now) { if (now) start(["away", "answer", "now"]); else run(["away", "answer", "wait"]) }
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }

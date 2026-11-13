@@ -95,3 +95,14 @@ def test_a_rescue_leaves_automatic_backups_waiting(sandbox, tmp_path):
     assert record["automatic_paused"] is True and "forced_past" not in record
     assert record["last_point"] == POINT
     assert not (old / "restored.json").exists()
+
+
+def test_the_panel_stays_on_finish_restore_while_it_waits(sandbox):
+    rescued()
+    record = paths.system_state_dir() / "backup.json"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps({"last_point": POINT, "last_finished": 2}))   # a backup since (13 Nov)
+    assert flow.where() is flow.Step.RESTORE_FILES
+    for folder in ("Documents", "Music", "Pictures"):
+        partial.note_restored(POINT, [folder], [])
+    assert flow.where() is not flow.Step.RESTORE_FILES

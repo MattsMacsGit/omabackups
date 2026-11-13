@@ -67,10 +67,24 @@ After a Quick Rescue, the panel says **Finish restore**:
    overwritten.
 2. Open it again as often as you like, to bring back more. It remembers your
    last choices.
-3. When everything you want is back, press **Back up now**. That finishes
-   the restore, and the panel goes back to its everyday page.
+3. Once every folder is back, press **Back up now**. That finishes the
+   restore, and the panel goes back to its everyday page.
 
 From a terminal: `omabackups restore-files <restore point> --pick`.
+
+### Backups wait for your folders
+
+Until every folder is back, backups are paused: automatic ones, the nightly
+health check, and Back up now (it reads **Paused until your files are
+back**). A backup now would keep only what's on this computer, and the
+folders still on the backup would leave its working copy.
+
+To leave some folders behind on purpose, hold **Ctrl** and click **Paused
+until your files are back**, then **Back up anyway**. The restore point you
+came from stays kept, with everything on it, so you can bring the rest back
+from it any time. From a terminal: `omabackups backup --force-after-restore`.
+
+After a rescue, automatic backups also wait for your first Back up now.
 
 If the stick says **This Rescue USB's key no longer works**, a newer Rescue
 USB was made since (one stick at a time): use the newest stick, or refresh

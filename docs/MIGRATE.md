@@ -114,7 +114,11 @@ The panel then shows what's left, only while it's true:
   names it first: old files would be added beside what's there, so move a
   working copy aside before bringing it back. Migrate asks the same before
   bringing your files back in the same run.
-- **Back up now**: the first backup on the new computer.
+- **Back up now**: the first backup on the new computer. While folders you
+  chose are still on the backup, it waits (**Paused until your files are
+  back**), as after a Quick Rescue: hold **Ctrl** and click it to back up
+  anyway ([the Rescue USB guide](RESCUE.md#backups-wait-for-your-folders)
+  says what that means).
 
 ## The handover
 

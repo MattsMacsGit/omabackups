@@ -22,9 +22,20 @@ Column {
   // (the picker, the other way round), as often as you like, until Back up now.
   readonly property bool rescuedFlow: !!(m.rescued && m.files && m.files.length)
   readonly property bool showRestore: step === "finish" && (rescuedFlow || !m.files_restored)
+  // SPEC §9: backups wait until every folder is back, or a deliberate Back up anyway.
+  readonly property var stillToCome: m.still_to_come || []
+  readonly property bool paused: step === "finish" && stillToCome.length > 0
+  readonly property bool backingUpNow: !!(service && service.running)
+  property bool anywayOpen: false
+  property bool hintShown: false
   readonly property var targets: step === "migrating" ? [carryOn]
-    : [restartButton, restoreButton, stopButton, backUp, again].filter(function(t) { return t && t.visible })
+    : [restartButton, restoreButton, stopButton, backUp, pausedButton, anywayButton, cancelButton, again]
+        .filter(function(t) { return t && t.visible })
   function cursorOn(item) { return panel && panel.cursorTarget === item }
+  function folderList(names) {
+    return names.length <= 4 ? names.slice(0, -1).join(", ") + (names.length > 1 ? " and " : "") + names[names.length - 1]
+                             : names.slice(0, 3).join(", ") + " and " + (names.length - 3) + " more"
+  }
   function whenOf(name) {
     var p = /^(\d{3})-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})$/.exec(name || "")
     return p ? Model.capital(Model.when(new Date(+p[2], +p[3] - 1, +p[4], +p[5], +p[6]).getTime() / 1000)) : name
@@ -116,7 +127,7 @@ Column {
   }
 
   // D52: a backup ends the restore; the panel then goes to its everyday page.
-  PanelSeparator { visible: backUp.visible || backingUp.visible }
+  PanelSeparator { visible: backUp.visible || backingUp.visible || pausedButton.visible || page.anywayOpen }
   Prose {
     visible: backUp.visible
     width: parent.width
@@ -126,16 +137,78 @@ Column {
   }
   ActionButton {
     id: backUp
-    visible: page.step === "finish" && page.rescuedFlow && !page.restoringNow
-             && !(page.service && page.service.running)
+    visible: page.step === "finish" && page.rescuedFlow && !page.paused && !page.restoringNow
+             && !page.backingUpNow
     width: parent.width
     text: "Back up now"
     hasCursorHere: page.cursorOn(this)
     onClicked: page.service.backupNow()
   }
+
+  // SPEC §9: paused until the folders are back; Ctrl + click: Back up anyway.
+  Prose {
+    visible: pausedButton.visible
+    width: parent.width
+    dim: true
+    text: "Backups wait until your folders are back: " + page.folderList(page.stillToCome)
+          + (page.stillToCome.length === 1 ? " is" : " are") + " still on the backup."
+  }
+  ActionButton {
+    id: pausedButton
+    visible: page.paused && !page.restoringNow && !page.anywayOpen && !page.backingUpNow
+    width: parent.width
+    opacity: 0.55
+    text: "Paused until your files are back"
+    hasCursorHere: page.cursorOn(this)
+    onClicked: page.hintShown = true
+    // Only Ctrl + click opens Back up anyway; any other press goes on to the button.
+    MouseArea {
+      anchors.fill: parent
+      onPressed: function(mouse) {
+        if (mouse.modifiers & Qt.ControlModifier) { page.anywayOpen = true; mouse.accepted = true }
+        else mouse.accepted = false
+      }
+    }
+  }
+  Prose {
+    visible: pausedButton.visible && page.hintShown
+    width: parent.width
+    dim: true
+    text: "Hold Ctrl and click to back up anyway."
+  }
+  Prose {
+    visible: page.anywayOpen && page.paused && !page.backingUpNow
+    width: parent.width
+    color: page.service ? page.service.colour("blue") : Commons.Color.foreground
+    text: "Back up anyway?"
+  }
+  Prose {
+    visible: page.anywayOpen && page.paused && !page.backingUpNow
+    width: parent.width
+    dim: true
+    text: "This backs up only what's on this computer now. The folders still on the backup leave "
+          + "its working copy, but the restore point you came from (" + page.whenOf(page.m.point)
+          + ") stays kept, with everything on it, so you can bring them back from there any time."
+  }
+  ActionButton {
+    id: anywayButton
+    visible: page.anywayOpen && page.paused && !page.backingUpNow
+    width: parent.width
+    text: "Back up anyway"
+    hasCursorHere: page.cursorOn(this)
+    onClicked: { page.anywayOpen = false; page.service.backupAnyway() }
+  }
+  ActionButton {
+    id: cancelButton
+    visible: anywayButton.visible
+    width: parent.width
+    text: "Cancel"
+    hasCursorHere: page.cursorOn(this)
+    onClicked: page.anywayOpen = false
+  }
   BackupProgress {
     id: backingUp
-    visible: page.step === "finish" && page.rescuedFlow && !!(page.service && page.service.running)
+    visible: page.step === "finish" && (page.rescuedFlow || page.paused) && page.backingUpNow
     width: parent.width
     running: page.service ? page.service.running : null
     barColour: page.service ? page.service.colour("blue") : Commons.Color.accent

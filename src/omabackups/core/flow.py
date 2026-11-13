@@ -29,6 +29,9 @@ def where() -> Step:
     if migrate is not None:
         if not migrate.get("done"):
             return Step.MIGRATING
+        from omabackups.core import partial
+        if partial.waiting():
+            return Step.RESTORE_FILES        # backups wait for the folders (SPEC §9)
         # D52: after a Quick Rescue the folders come back as often as you like,
         # until a backup ends it (and takes the panel to its everyday page).
         if migrate.get("rescued") and migrate.get("files"):
