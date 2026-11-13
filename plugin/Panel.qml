@@ -24,6 +24,7 @@ Panel {
   property int cursorIndex: 0
   property bool migrateMode: false         // the Where and server screens, for Migrate
   property bool cursorActive: false
+  property bool ctrlHeld: false            // Ctrl down (Back up anyway lights up while it is)
 
   readonly property string defaultPage: !svc.loaded ? "loading"
                                        : !svc.installed ? "missing"
@@ -195,7 +196,10 @@ Panel {
                                       settings: settingsPage, details: detailsPage, migrate: migratePage })
       anchors.fill: parent
       implicitHeight: column.implicitHeight
-      HoverHandler { onHoveredChanged: root.pointerOnCard(hovered) }
+      HoverHandler { onHoveredChanged: { if (!hovered) root.ctrlHeld = false; root.pointerOnCard(hovered) } }
+      // Ctrl on its own reaches no signal of the key catcher: watch it here too.
+      Keys.onPressed: function(event) { if (event.key === Qt.Key_Control) root.ctrlHeld = true }
+      Keys.onReleased: function(event) { if (event.key === Qt.Key_Control) root.ctrlHeld = false }
       onMoveRequested: function(dx, dy) {
         if (dx < 0) { root.back(); return }
         if (dx > 0) { if (root.cursorTarget && root.cursorTarget.openOptions) root.cursorTarget.openOptions(); return }

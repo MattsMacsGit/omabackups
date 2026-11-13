@@ -27,7 +27,6 @@ Column {
   readonly property bool paused: step === "finish" && stillToCome.length > 0
   readonly property bool backingUpNow: !!(service && service.running)
   property bool anywayOpen: false
-  property bool hintShown: false
   readonly property var targets: step === "migrating" ? [carryOn]
     : [restartButton, restoreButton, stopButton, backUp, pausedButton, anywayButton, cancelButton, again]
         .filter(function(t) { return t && t.visible })
@@ -157,10 +156,9 @@ Column {
     id: pausedButton
     visible: page.paused && !page.restoringNow && !page.anywayOpen && !page.backingUpNow
     width: parent.width
-    opacity: 0.55
-    text: "Paused until your files are back"
+    opacity: page.panel && page.panel.ctrlHeld ? 1 : 0.55     // Ctrl held: it can be clicked
+    text: "Back up now"
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.hintShown = true
     // Only Ctrl + click opens Back up anyway; any other press goes on to the button.
     MouseArea {
       anchors.fill: parent
@@ -171,10 +169,10 @@ Column {
     }
   }
   Prose {
-    visible: pausedButton.visible && page.hintShown
+    visible: pausedButton.visible
     width: parent.width
     dim: true
-    text: "Hold Ctrl and click to back up anyway."
+    text: "Backups paused until your files are back, hold Ctrl to back up anyway."
   }
   Prose {
     visible: page.anywayOpen && page.paused && !page.backingUpNow
