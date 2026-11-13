@@ -39,20 +39,32 @@ on a Mac, hold Option). Pick **OmaBackups Rescue**. Then:
    away, it offers to log in to Tailscale (open the link or scan the code on
    your phone).
 3. **Your backup's password.**
-4. **Which restore point**: each shows the computer it's from and when.
+4. **Which restore point**: each shows the computer's name and its backup
+   line (`omarchy-001`), and when. An older line, from a computer you
+   migrated from, says `earlier-001`.
 5. **Quick or Full Rescue.** Quick brings your system and settings now and
    leaves your folders for later (it's much faster). Full brings everything in
    one go.
-6. **Which disk**: every disk, with what's on it. Everything on it is
-   replaced.
+6. **Which disk**: every disk, with what's on it, except the stick itself.
+   Everything on the one you pick is replaced.
 7. **A password for the restored disk**: the one you'll type every time it
    starts. The same as before, if you like.
 
 Then Omarchy's logo fills as it works. At the end it says what to know,
 "It's now safe to remove the USB", and offers to restart.
 
-After a Quick Rescue, the panel says **Finish restore**: **Restore my files**
-brings your folders back while you work.
+After a Quick Rescue, the panel says **Finish restore** and lists the folders
+still in your backup, each with a tick:
+
+1. Tick the ones you want, then **Bring back the ticked folders**. They come
+   back while you work; a file that's newer here is never overwritten.
+2. Do it again as often as you like: more folders, or the same ones again.
+   Folders already back say so.
+3. When everything you want is back, press **Back up now**. That finishes
+   the restore, and the panel goes back to its everyday page.
+
+From a terminal: `omabackups restore-files <restore point> --only Documents
+--only Music`.
 
 ## Good to know
 

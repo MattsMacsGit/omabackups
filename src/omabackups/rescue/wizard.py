@@ -105,10 +105,13 @@ def pick_point(gate, bid: str, hold: str, mine: dict) -> tuple[str, list[str]]:
     if not names:
         raise OmaError("Your backup has no restore points yet.", "Back up from the computer first.", code="no-points")
     kept = listed.get("kept") or {}
-    computer, line = mine.get("computer", "this computer"), mine.get("line")
+    # A computer's first line is 001 and isn't written down until it changes: every
+    # point said "an earlier computer (line 001)". Shown as the computer's name and
+    # its line, "omarchy-001"; an older line from before a Migrate as "earlier-002".
+    computer, line = mine.get("computer") or "this computer", mine.get("line") or "001"
 
     def label(name: str) -> str:
-        who = computer if line and name.startswith(f"{line}-") else f"an earlier computer (line {name[:3]})"
+        who = f"{computer}-{name[:3]}" if name.startswith(f"{line}-") else f"earlier-{name[:3]}"
         notes = (["newest"] if name == names[0] else []) + \
                 (["Return point"] if name == kept.get("return_point") else []) + \
                 (["kept"] if name in kept.get("kept", []) else [])

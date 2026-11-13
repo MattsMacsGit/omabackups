@@ -124,6 +124,23 @@ Panel {
     // Opened by a click, the pointer is on the bar icon, not the card: the
     // keyboard stays with your window until the pointer comes onto the card.
     if (opened) { panel.pointerAway = root.pressedOpen; root.pressedOpen = false }
+    if (opened) idleReset.stop(); else idleReset.restart()
+  }
+
+  // Closed for 30 seconds, it opens on its first page again (it opened on
+  // whatever page was left, Settings say). Pages in the middle of setting up
+  // keep their place, so nothing typed there is lost.
+  Timer {
+    id: idleReset
+    interval: 30000
+    onTriggered: {
+      if (root.opened || ["settings", "kept", "yourBackup"].indexOf(root.shown) < 0) return
+      root.placeOn = ({})
+      root.page = ""
+      root.cursorActive = false
+      root.cursorIndex = root.firstIndex
+      if (panel.loadedContent) panel.loadedContent.flick.contentY = 0
+    }
   }
 
   // The keyboard follows the pointer: away from the card it goes back to the

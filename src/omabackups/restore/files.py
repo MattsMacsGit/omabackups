@@ -125,7 +125,8 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
     or just the paths in `only`). Returns the final state."""
     logger = log.get("restore")
     home = home or Path(pwd.getpwnam(user).pw_dir)
-    state = {"point": point, "user": user, "percent": 0, "running": True, "since": int(time.time())}
+    state = {"point": point, "user": user, "percent": 0, "running": True, "since": int(time.time()),
+             "only": only}         # D52: which folders this run brings back
     _say(state)
     server = location.load()
     gate, _away = location.connect(server)

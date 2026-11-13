@@ -29,7 +29,12 @@ def where() -> Step:
     if migrate is not None:
         if not migrate.get("done"):
             return Step.MIGRATING
-        if not migrate.get("files_restored"):
+        # D52: after a Quick Rescue the folders come back as often as you like,
+        # until a backup ends it (and takes the panel to its everyday page).
+        if migrate.get("rescued") and migrate.get("files"):
+            if not _a_backup_since(migrate.get("at", 0)):
+                return Step.RESTORE_FILES
+        elif not migrate.get("files_restored"):
             return Step.RESTORE_FILES
 
     if migrate is None and _joined():
@@ -55,6 +60,17 @@ def _joined() -> bool:
         return bool(json.loads(paths.server_file().read_text()).get("migrating"))
     except (OSError, ValueError):
         return False
+
+
+def _a_backup_since(when: int) -> bool:
+    """A backup finished after `when` (the rescue's own record keeps the old time)."""
+    import json
+    from omabackups.core import paths
+    try:
+        record = json.loads((paths.system_state_dir() / "backup.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return int(record.get("last_finished") or 0) > int(when or 0)
 
 
 def _a_backup_finished() -> bool:
