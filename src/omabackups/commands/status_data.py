@@ -113,13 +113,16 @@ def _migrate() -> dict | None:
     mine = state.read(flow.MIGRATE)
     if not mine:
         return None
-    restored = _read(paths.system_run_dir() / "restore.json")
-    finished_here = restored.get("done") and restored.get("point") == mine.get("point")
-    # (After a Quick Rescue the page stays until a backup, however often
+    # Every folder back, or a backup forced past it (SPEC §9): the files are
+    # done. (After a Quick Rescue the page stays until a backup, however often
     # Restore my files runs: core/flow, D52.)
-    if not mine.get("files_restored") and finished_here:
+    from omabackups.core import partial
+    left = partial.waiting()
+    if mine.get("done") and not mine.get("files_restored") and left is None:
         mine = {**mine, "files_restored": True}
         state.write(flow.MIGRATE, mine)
+    if left:
+        mine = {**mine, "still_to_come": left["folders"]}
     if not mine.get("files_restored") and mine.get("files"):
         from pathlib import Path
         from omabackups.restore.files import already_here

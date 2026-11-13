@@ -73,7 +73,6 @@ def still_in_working_copy(box) -> bool:
 
 # --- §9: the guards after a Quick Rescue or a Migrate -------------------------
 
-@to_build("§9 (audit 1.2): automatic backups paused after a Quick Rescue")
 def test_a_quick_rescued_system_never_backs_up_on_its_own(world, sandbox, monkeypatch):
     srv, kid, bid, src, box = world
     first = run.backup(source=src)["point"]
@@ -87,7 +86,6 @@ def test_a_quick_rescued_system_never_backs_up_on_its_own(world, sandbox, monkey
     assert still_in_working_copy(box)
 
 
-@to_build("§9 (audit 1.3): Back up now refused after a Quick Rescue, with what to do")
 def test_a_quick_rescued_system_refuses_back_up_now(world, sandbox):
     srv, kid, bid, src, box = world
     first = run.backup(source=src)["point"]
@@ -100,7 +98,6 @@ def test_a_quick_rescued_system_refuses_back_up_now(world, sandbox):
     assert still_in_working_copy(box)          # nothing deleted from the backup
 
 
-@to_build("§9 + §8 (audit 1.5, 9.2): the deliberate override keeps the rescue's point")
 def test_a_forced_backup_after_a_rescue_keeps_its_point(world, sandbox):
     srv, kid, bid, src, box = world
     first = run.backup(source=src)["point"]
@@ -111,7 +108,6 @@ def test_a_forced_backup_after_a_rescue_keeps_its_point(world, sandbox):
     assert not still_in_working_copy(box)      # the override did what it says
 
 
-@to_build("§9 (audit 6.1): the same guard after a Migrate")
 def test_a_migrate_refuses_a_backup_until_its_folders_are_back(world):
     srv, kid, bid, src, box = world
     first = run.backup(source=src)["point"]

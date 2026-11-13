@@ -66,4 +66,19 @@ def finished_record(job, name: str, thinned: list, left: list | None, space: dic
             # old computer's (and the Return point) stay listed (stage 8 lesson).
             "all_points": left if left is not None else record.get("all_points", []),
             "resent_for_pass": job.verdict.get("pass_started") if job.resend
-            else record.get("resent_for_pass")}
+            else record.get("resent_for_pass"),
+            # SPEC §9: past this partial restore for good (Back up anyway).
+            "forced_past": job.forced_past or record.get("forced_past")}
+
+
+def keep_forced_point(job) -> None:
+    """A forced backup ends the wait, not the restore point's job: what never
+    came back is still on it, and nowhere else (1.x keep_forced_point).
+    Kept before thinning runs."""
+    if not job.forced_past:
+        return
+    try:
+        job.gate.call("keep", job.bid, job.forced_past)
+        job.logger.info("forced backup: restore point %s kept", job.forced_past)
+    except OmaError as exc:
+        job.logger.warning("couldn't keep %s: %s | %s", job.forced_past, exc.what, exc.details)

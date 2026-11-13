@@ -185,6 +185,8 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
                 state.update(running=False, error=failure.as_dict())
             else:
                 state.update(running=False, done=True, percent=100)
+                from omabackups.core import partial      # the guard counts what's back (SPEC §9)
+                partial.note_restored(point, only, leave_out)
                 from omabackups.migrate import rename      # sync apps' folders (Migrate, 8b)
                 if again := rename.later(user):
                     state["note"] = (f"{' and '.join(again)} now uses your folders here: "

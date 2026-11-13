@@ -1,5 +1,7 @@
 """One backup, start to end (as root; BUILD 6.1 D, D25), as its steps:
 
+0. guard   not while this system waits for its folders (a Quick Rescue or a
+           Migrate, SPEC §9), unless forced; a forced one keeps that point.
 1. open    unlock your backup on the server (a hold); the health verdict.
 2. check   for each part: a fresh read-only snapshot, then the everyday mix
            if the last backup finished and the skip list hasn't changed,
@@ -17,12 +19,9 @@ checks every file: rsync only sends what's still missing.
 import json
 import subprocess
 import time
-from collections.abc import Callable
 from contextlib import ExitStack
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from omabackups import __version__
 from omabackups.audit import scan as audit_scan
@@ -40,14 +39,14 @@ from omabackups.backup import (
 )
 from omabackups.backup.handover import handover
 from omabackups.backup.hold import HoldKeeper
+from omabackups.backup.job import Job
 from omabackups.backup.send import Sender
 from omabackups.backup.source import Snapshots, parts
-from omabackups.core import ids, log, paths
+from omabackups.core import ids, log, partial, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
 from omabackups.root import keys
 from omabackups.where import location, network
-from omabackups.where.server import Gate
 
 RECORD = "backup.json"
 
@@ -111,51 +110,20 @@ def point_name(line: str, latest: str | None) -> str:
         time.sleep(5)   # a backup within the same minute as the last: wait for the next
 
 
-@dataclass
-class Job:
-    """One backup, handed from step to step."""
-    gate: Gate
-    server: dict
-    away: bool
-    gate_version: int
-    record: dict
-    progress: Callable
-    logger: Any
-    verdict: dict = field(default_factory=dict)
-    resend: bool = False          # damaged files go again, all of them
-    hold: str = ""
-    sender: Sender | None = None
-    settings: dict = field(default_factory=dict)
-    run: str = field(default_factory=lambda: datetime.now().strftime("%Y%m%dT%H%M%S"))
-    since: dict = field(default_factory=dict)       # each part's "since" snapshot
-    made: dict = field(default_factory=dict)        # this run's snapshots
-    opened: dict = field(default_factory=dict)      # each part's snapshots
-    work: list = field(default_factory=list)        # (part, skip, snapshot, plan)
-    how: dict = field(default_factory=dict)
-    fingerprints: dict = field(default_factory=dict)
-    manifests: dict = field(default_factory=dict)
-    left_out: list = field(default_factory=list)
-    needed: int = 0
-    known: bool = True            # the size is known (else the room isn't checked)
-
-    @property
-    def bid(self) -> str:
-        return self.server["backup"]
-
-    @property
-    def line(self) -> str:
-        return self.server.get("line", "001")
-
-    @property
-    def reusing(self) -> bool:
-        return self.gate_version >= reuse.NEEDS_GATE
-
-
 def backup(progress=lambda step, part="", **more: None, source=None, anyway: bool = False,
-           manual: bool = True) -> dict:
+           manual: bool = True, force_after_restore: bool = False) -> dict:
     """Run one backup. `anyway`: the answer "Back up now" to the away limit.
+    `force_after_restore`: Back up anyway, while the folders of a partial
+    restore are still on the backup (SPEC §9).
     `source` (tests) stands in for this computer's parts and snapshots."""
+    left = partial.waiting()
+    if left and not force_after_restore:
+        raise partial.refusal(left)
     job = open_backup(progress)
+    if left:
+        job.forced_past = left["point"]
+        job.logger.warning("backing up anyway after a partial restore from %s (still on the backup: %s)",
+                           left["point"], ", ".join(left["folders"]))
     keeper = HoldKeeper(job.gate, job.bid, job.hold, job.logger)  # still here, however long a part takes
     stack = ExitStack()
     try:
@@ -169,6 +137,7 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
         room(job)
         send(job)
         name = make_point(job)
+        after.keep_forced_point(job)
         tidy(job, name, manual)
     except BaseException:
         drop_new(job)

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from omabackups.commands import restore as restore_cmd
 from omabackups.commands import status_data
-from omabackups.core import flow, paths, rootjob, state
+from omabackups.core import flow, partial, paths, rootjob, state
 
 RESCUED = {"done": True, "files_restored": False, "rescued": True, "point": "001-2026-11-12-1955",
            "from_user": "u", "files": ["Documents", "Music", "Pictures"], "at": 1_000_000}
@@ -21,7 +21,8 @@ def _record(last_finished: int) -> None:
 def _restored(only) -> None:
     paths.system_run_dir().mkdir(parents=True, exist_ok=True)
     (paths.system_run_dir() / "restore.json").write_text(json.dumps(
-        {"point": RESCUED["point"], "done": True, "running": False, "only": only}))
+        {"point": RESCUED["point"], "done": True, "running": False}))
+    partial.note_restored(RESCUED["point"], only, [])      # what the root job records as it ends
 
 
 def test_the_page_stays_until_a_backup_after_the_rescue(sandbox):

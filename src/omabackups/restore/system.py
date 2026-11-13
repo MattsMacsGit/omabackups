@@ -133,6 +133,16 @@ def _record(root: Path, point: str, full: bool) -> None:
     state = root / "var/lib/omabackups"
     state.mkdir(parents=True, exist_ok=True)
     (state / "rescued.json").write_text(json.dumps({"point": point, "full": full, "at": int(time.time())}) + "\n")
+    # Automatic backups wait for a Back up now (D29; audit 1.2: on 13 Nov a
+    # rescued system backed up two minutes after it started). The record came
+    # back with the system: what it knew about earlier restores doesn't apply.
+    try:
+        record = json.loads((state / "backup.json").read_text())
+    except (OSError, ValueError):
+        record = {}
+    record = {k: v for k, v in record.items() if k != "forced_past"}
+    (state / "backup.json").write_text(json.dumps({**record, "automatic_paused": True}, indent=2) + "\n")
+    (state / "restored.json").unlink(missing_ok=True)
     for home in sorted((root / "home").iterdir()) if (root / "home").is_dir() else []:
         if not home.is_dir() or home.name.startswith("."):
             continue

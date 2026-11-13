@@ -13,11 +13,16 @@ from omabackups.core.errors import OmaError
 from omabackups.core.events import Events
 
 UNIT = "omabackups-backup@{}.service"
-KINDS = ("now", "scheduled", "anyway")       # every backup service there is
+KINDS = ("now", "scheduled", "anyway", "forced")   # every backup service there is
+# forced: Back up anyway after a partial restore (SPEC §9); never automatic.
 
 
 def add(sub) -> None:
-    sub.add_parser("backup", help="back up now").set_defaults(run=run_now)
+    now = sub.add_parser("backup", help="back up now")
+    now.add_argument("--force-after-restore", action="store_true",
+                     help="back up anyway while folders of a rescue or Migrate are still on the backup "
+                          "(keeps only what's here; that restore point stays kept)")
+    now.set_defaults(run=run_now)
     sub.add_parser("stop", help="stop the backup that's running").set_defaults(run=run_stop)
     away = sub.add_parser("away", help="answer the away-from-home question")
     answer = away.add_subparsers(dest="verb", metavar="answer", required=True)
@@ -44,7 +49,11 @@ def run_away(args, events: Events) -> int:
 
 
 def run_now(args, events: Events) -> int:
-    return _start_and_follow("now", events)
+    from omabackups.core import partial
+    left = partial.waiting()
+    if left and not getattr(args, "force_after_restore", False):
+        raise partial.refusal(left)          # said here, before any service starts
+    return _start_and_follow("forced" if left else "now", events)
 
 
 def start(kind: str) -> float:
@@ -124,6 +133,12 @@ def run_root(args, events: Events) -> int:
         if args.kind == "scheduled":
             if not paths.server_file().exists():
                 return 0
+            from omabackups.core import partial
+            if left := partial.waiting():
+                # Never on its own: it would push the gap over the backup (SPEC §9, audit 1.2).
+                logger.info("automatic backup skipped: this system isn't whole yet "
+                            "(restored from %s; still on the backup: %s)", left["point"], ", ".join(left["folders"]))
+                return 0
             if run.load_record().get("automatic_paused"):
                 logger.info("automatic backup skipped: waiting for a Back up now (D29)")
                 return 0
@@ -134,7 +149,7 @@ def run_root(args, events: Events) -> int:
                 return 0
         try:
             result = run.backup(progress.reporter(args.kind), anyway=args.kind == "anyway",
-                                manual=args.kind != "scheduled")
+                                manual=args.kind != "scheduled", force_after_restore=args.kind == "forced")
         except check.AwayWait as exc:
             # Not a failure: it waits for your answer, or for a known network (D17).
             progress.write({"running": False, "ok": False, "waiting": "away", "size": exc.size,
@@ -163,6 +178,10 @@ def run_health(args, events: Events) -> int:
     if os.geteuid() != 0 and not os.environ.get("OMABACKUPS_SYSROOT"):
         raise OmaError("This part of OmaBackups only runs as its health service.", code="not-root")
     if not paths.server_file().exists():
+        return 0
+    from omabackups.core import partial
+    if partial.waiting():          # waits until the folders are back (audit 1.12)
+        log.get("health").info("health check skipped: this system isn't whole yet")
         return 0
     settings = schedule.user_settings(run.linked_user())
     if not health.due(settings, health.load().get("started")):
