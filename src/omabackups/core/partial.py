@@ -101,8 +101,7 @@ def refusal(left: dict) -> OmaError:
         "This system isn't whole yet, so backups are paused.",
         f"Your folders still on the backup ({names}) aren't on this system yet: backing up now would "
         "delete them from the backup's working copy. Bring them back first with Restore my files. "
-        "To back up anyway and keep only what's here, hold Ctrl and click Paused until your files "
-        "are back in the panel, or run: "
+        "To back up anyway and keep only what's here, hold Ctrl and press Back up now, or run: "
         f"omabackups backup --force-after-restore (restore point {left['point']} stays kept, "
         "with everything on it).",
         f"restored from {left['point']}; still on the backup: {', '.join(folders)}",
