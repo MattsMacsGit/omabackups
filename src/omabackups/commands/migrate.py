@@ -212,6 +212,12 @@ def preview(events: Events) -> int:
 
 
 def run(args, events: Events) -> int:
+    from omabackups.core import onewindow
+    with onewindow.only_one("Migrate"):
+        return _run(args, events)
+
+
+def _run(args, events: Events) -> int:
     if args.preview and os.isatty(0) and os.isatty(1):
         return preview(events)
     if not (os.isatty(0) and os.isatty(1)):

@@ -8,7 +8,7 @@ import json
 import os
 
 
-from omabackups.core import flow, paths
+from omabackups.core import flow, onewindow, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.events import Events
 from omabackups.backup.check import human
@@ -147,6 +147,11 @@ def _way(place) -> str:
 
 
 def run_server(args, events: Events) -> int:
+    with onewindow.only_one("Setting up backups"):
+        return _run_server(args, events)
+
+
+def _run_server(args, events: Events) -> int:
     if args.update:
         return run_update(args, events)
     if flow.where() is not flow.Step.NOT_SET_UP:
@@ -191,6 +196,11 @@ def run_server(args, events: Events) -> int:
 
 
 def run_disk(args, events: Events) -> int:
+    with onewindow.only_one("Setting up backups"):
+        return _run_disk(args, events)
+
+
+def _run_disk(args, events: Events) -> int:
     """6.1 C, a backup disk: pick it (every disk listed, its contents warned),
     choose your backup's password, then it's erased and set up."""
     from omabackups.core import rootjob, state

@@ -94,3 +94,19 @@ def test_a_stopped_backup_isnt_shown_as_running(sandbox):
     fake_state(sandbox, active=[])
     assert not progress.alive(data)
     assert not progress.alive({"running": False, "kind": "now"})
+
+
+def test_a_second_window_says_its_already_open(sandbox):
+    """Setup ran twice side by side when the panel's button was pressed twice
+    (demo film, 14 Nov): the second now says so and stops."""
+    import pytest
+
+    from omabackups.core import onewindow
+    from omabackups.core.errors import OmaError
+    with onewindow.only_one("Setting up backups"):
+        with pytest.raises(OmaError) as second:
+            with onewindow.only_one("Setting up backups"):
+                pass
+    assert second.value.code == "already-open" and "another window" in second.value.what
+    with onewindow.only_one("Setting up backups"):         # free again once the first closed
+        pass

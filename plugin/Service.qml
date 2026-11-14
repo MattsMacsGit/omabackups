@@ -180,6 +180,15 @@ Item {
 
   // A terminal window for the picker and for typing passwords (Omarchy's launcher
   // joins its arguments, so it gets one command string: 1.x lesson).
+  // A second press while its window is still opening does nothing: setup once
+  // ran twice side by side (demo film, 14 Nov). The command itself also
+  // refuses a second copy (core/onewindow.py).
+  property real windowAsked: 0
+  function terminalOnce(command) {
+    if (Date.now() - windowAsked < 15000) return
+    windowAsked = Date.now()
+    terminal(command)
+  }
   function terminal(command) {
     Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", command])
   }
@@ -209,8 +218,8 @@ Item {
   function rescueLater() { run(["rescue-usb", "later"]) }
   // Make / Refresh Rescue USB (9c): a terminal window, like setup (it asks which
   // stick, downloads the rescue system and writes it).
-  function rescueMake() { terminal("omabackups rescue-usb make") }
-  function rescueRefresh() { terminal("omabackups rescue-usb refresh") }
+  function rescueMake() { terminalOnce("omabackups rescue-usb make") }
+  function rescueRefresh() { terminalOnce("omabackups rescue-usb refresh") }
   // Opens it in the default file manager (the command does that, D37).
   function browse(point) { run(["browse", point], "browse", point) }
   function browseDone() { run(["browse", "done"]) }
@@ -224,14 +233,14 @@ Item {
   function pick() { terminal("omabackups pick") }
   function changePassword() { terminal("omabackups password change") }
   function setupServer(address, login) {
-    terminal("omabackups setup server " + shellWord(address) + " --login " + shellWord(login))
+    terminalOnce("omabackups setup server " + shellWord(address) + " --login " + shellWord(login))
   }
-  function setupDisk() { terminal("omabackups setup disk") }
+  function setupDisk() { terminalOnce("omabackups setup disk") }
   // Migrate (6.1 F) and Run Migrate again (D38), in a terminal window.
   function migrate(address, login) {
-    terminal("omabackups migrate " + shellWord(address) + " --login " + shellWord(login))
+    terminalOnce("omabackups migrate " + shellWord(address) + " --login " + shellWord(login))
   }
-  function migrateContinue() { terminal("omabackups migrate") }
+  function migrateContinue() { terminalOnce("omabackups migrate") }
   function restartNow() { Quickshell.execDetached(["systemctl", "reboot"]) }
   function installPackage() { terminal("omarchy-pkg-aur-add omabackups") }
 

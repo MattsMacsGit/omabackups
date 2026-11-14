@@ -35,9 +35,11 @@ def run_make(args, events: Events) -> int:
         raise OmaError("Making a Rescue USB needs a terminal window.",
                        "Start it from the panel (it opens one), or run omabackups rescue-usb make in a terminal.",
                        code="no-terminal")
+    from omabackups.core import onewindow
     from omabackups.setup import menu, rescue_usb
     try:
-        done = rescue_usb.make() if args.verb == "make" else rescue_usb.refresh()
+        with onewindow.only_one("Making the Rescue USB"):
+            done = rescue_usb.make() if args.verb == "make" else rescue_usb.refresh()
     except OmaError as exc:
         # Said BEFORE "Press Enter to close": printed after, it vanished with the
         # window, and a failure looked like nothing at all (demo film, 14 Nov).
