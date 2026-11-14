@@ -94,9 +94,11 @@ def places(q: Quick, user: str, roots: dict) -> list[str]:
         root = str(roots[part])
         for rule in items:
             if rule.startswith("/"):
-                found += glob.glob(os.path.join(root, rule.lstrip("/")))
+                found += glob.glob(os.path.join(root, rule.lstrip("/")), include_hidden=True)
             else:   # any depth: look in the user's home
-                found += glob.glob(os.path.join(root, user, "**", rule.removeprefix("**/")), recursive=True)
+                # include_hidden: Steam's games live under .local (hidden), and ** skipped them (0 bytes).
+                found += glob.glob(os.path.join(root, user, "**", rule.removeprefix("**/")), recursive=True,
+                                   include_hidden=True)
     # A match inside another match (a .cache inside a .cache) is counted once.
     tops = []
     for path in sorted(set(found)):

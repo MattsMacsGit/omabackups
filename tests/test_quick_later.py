@@ -79,3 +79,16 @@ def test_a_switch_that_was_on_stays_on_with_the_narrower_rules(sandbox):
     assert all(r in rules for r in quick.STEAM)
     assert "/u/.local/share/bottles/runners" in rules and "/u/.local/share/bottles" not in rules
     assert "/u/.steam" not in rules and "/u/.local/share/Steam" not in rules
+
+
+def test_game_libraries_are_measured_under_hidden_folders(tmp_path):
+    """Steam's games live under .local (hidden): a ** search skipped them, so
+    Game libraries said 0 bytes (seen in the first GIF, 14 Nov)."""
+    games = tmp_path / "home/u/.local/share/Steam/steamapps/common/Hades"
+    games.mkdir(parents=True)
+    (games / "hades.pak").write_bytes(b"x" * 5000)
+    (tmp_path / "home/u/.local/share/Steam/config").mkdir(parents=True)
+    (tmp_path / "home/u/.local/share/Steam/config/loginusers.vdf").write_bytes(b"x" * 70)
+    item = next(q for q in quick.QUICK if q.id == "games")
+    found = quick.places(item, "u", {"home": tmp_path / "home", "system": tmp_path / "sys"})
+    assert quick.size(found) == 5000                     # the games, not Steam's login
