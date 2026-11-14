@@ -107,7 +107,9 @@ def settings_files(root: Path, partuuid: str, luks_uuid: str, btrfs_uuid: str, e
         if (root / rel).is_file():
             (root / rel).write_text(crypttab((root / rel).read_text(errors="replace"), luks_uuid, partuuid))
             done.append(rel)
-    for rel in ["etc/default/limine", *(str(p.relative_to(root)) for p in
+    # etc/kernel/cmdline: what a UKI build falls back to (Omarchy 4.5 writes
+    # it); 1.x left it naming the old disk (seen after a rescue, 14 Nov 2026).
+    for rel in ["etc/default/limine", "etc/kernel/cmdline", *(str(p.relative_to(root)) for p in
                                         sorted((root / "etc/limine-entry-tool.d").glob("*.conf")))]:
         p = root / rel
         if p.is_file():

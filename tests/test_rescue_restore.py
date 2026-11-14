@@ -65,12 +65,13 @@ def test_the_restored_systems_files_all_get_fixed(tmp_path):
     root = tmp_path / "@"
     for rel, text in {"etc/fstab": FSTAB, "etc/default/limine": LIMINE,
                       "etc/limine-entry-tool.d/resume.conf": f"KERNEL_CMDLINE[default]+=\"resume_offset=1\"\n",
-                      "etc/crypttab.initramfs": f"root PARTUUID={OLD_PART} none\n"}.items():
+                      "etc/crypttab.initramfs": f"root PARTUUID={OLD_PART} none\n",
+                      "etc/kernel/cmdline": f"cryptdevice=PARTUUID={OLD_PART}:root rd.luks.name={OLD_LUKS}=root\n"}.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text)
     done = bootfix.settings_files(root, NEW["partuuid"], NEW["luks"], NEW["btrfs"], NEW["esp"])
     assert set(done) == {"etc/fstab", "etc/default/limine", "etc/limine-entry-tool.d/resume.conf",
-                         "etc/crypttab.initramfs"}
+                         "etc/crypttab.initramfs", "etc/kernel/cmdline"}
     for rel in done:
         text = (root / rel).read_text()
         assert OLD_PART not in text and OLD_LUKS not in text and OLD_BTRFS not in text
