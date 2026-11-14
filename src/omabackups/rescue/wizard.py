@@ -124,7 +124,10 @@ def unlock(gate, bid: str, known: str | None = None) -> tuple[str, str]:
                 if not screens.confirm("Try again?", "Try again", "Shut down"):
                     subprocess.run(["systemctl", "poweroff"])
                 continue
-            _problem("That password didn't open your backup", "Try again.", exc.what)
+            if exc.code == "gate-refused" and "doesn't open" in exc.what:
+                _problem("That password didn't open your backup", "Try again.", exc.what)
+            else:      # the network, the server...: said as it is, never "wrong password" (demo film, 14 Nov)
+                _problem(exc.what, exc.todo or "Check the network, then try again.", exc.details)
             time.sleep(2)
 
 

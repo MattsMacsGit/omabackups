@@ -55,3 +55,25 @@ def test_a_failure_is_shown_before_the_window_closes(monkeypatch, capsys):
     monkeypatch.setattr(menu, "ask", lambda prompt, *a, **k: seen.update(on_screen=capsys.readouterr().err) or "")
     assert rescue.run_make(SimpleNamespace(verb="make"), Events()) == 1
     assert "The stick broke." in seen["on_screen"]          # already there when it asks to close
+
+
+def test_on_the_stick_only_a_real_refusal_is_a_wrong_password(monkeypatch):
+    """The demo film's rescue: the backup couldn't be reached (the stick talked
+    to itself), and the stick said the password was wrong."""
+    said = []
+    monkeypatch.setattr(wizard, "_problem", lambda what, *a, **k: said.append(what))
+    monkeypatch.setattr(wizard.screens, "step", lambda *a: None)
+    monkeypatch.setattr(wizard.screens, "secret", lambda *a: "pw")
+    monkeypatch.setattr(wizard.time, "sleep", lambda s: None)
+    answers = iter([OmaError("Your backup server can't be reached.", "Check it.", code="unreachable"),
+                    OmaError("The backup server said no: that password doesn't open this backup.",
+                             code="gate-refused"), {"hold": "h"}])
+
+    class Gate:
+        def call(self, verb, bid, data=b""):
+            a = next(answers)
+            if isinstance(a, OmaError):
+                raise a
+            return a
+    assert wizard.unlock(Gate(), "b", "pw") == ("pw", "h")
+    assert said == ["Your backup server can't be reached.", "That password didn't open your backup"]
