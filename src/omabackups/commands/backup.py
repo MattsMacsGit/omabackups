@@ -8,7 +8,7 @@ import sys
 import time
 
 from omabackups.backup import check, health, progress, run, schedule
-from omabackups.core import log, paths
+from omabackups.core import log, notify, paths, power
 from omabackups.core.errors import OmaError
 from omabackups.core.events import Events
 
@@ -162,14 +162,20 @@ def run_root(args, events: Events) -> int:
                 # Never on its own: it would push the gap over the backup (SPEC §9, audit 1.2).
                 logger.info("automatic backup skipped: this system isn't whole yet "
                             "(restored from %s; still on the backup: %s)", left["point"], ", ".join(left["folders"]))
+                notify.send(*notify.PAUSED, "partial-restore")
                 return 0
             if run.load_record().get("automatic_paused"):
                 logger.info("automatic backup skipped: waiting for a Back up now (D29)")
                 return 0
             settings = schedule.user_settings(run.linked_user())
-            go, why = schedule.due(settings, run.load_record().get("last_finished"))
+            last = run.load_record().get("last_finished")
+            go, why = schedule.due(settings, last)
             if not go:
                 logger.info("automatic backup skipped: %s", why)
+                return 0
+            if power.low_battery():          # SPEC §7: a backup you start yourself always runs
+                logger.info("automatic backup skipped: %s", notify.BATTERY)
+                notify.overdue(notify.BATTERY, schedule.INTERVAL[settings["automatic.every"]], last)
                 return 0
         try:
             result = run.backup(progress.reporter(args.kind), anyway=args.kind == "anyway",
@@ -185,6 +191,13 @@ def run_root(args, events: Events) -> int:
             raise
         except OmaError as exc:
             progress.write({"running": False, "ok": False, "error": exc.as_dict(), "kind": args.kind})
+            if args.kind == "scheduled":
+                interval = schedule.INTERVAL[settings["automatic.every"]]
+                if exc.code == "unreachable":     # quietly: it tries again next time (audit 3.6)
+                    logger.info("automatic backup skipped: %s", exc.what)
+                    notify.overdue(notify.UNREACHABLE, interval, last)
+                    return 0
+                notify.overdue(notify.FAILED, interval, last)
             raise
         except BaseException as exc:
             progress.write({"running": False, "ok": False, "kind": args.kind,
@@ -193,8 +206,19 @@ def run_root(args, events: Events) -> int:
             raise
         progress.write({"running": False, "ok": True, "kind": args.kind, "finished": int(time.time()),
                         **result})
+        after_backup()
     events.result(result, f"Backed up: restore point {result['point']}.")
     return 0
+
+
+def after_backup() -> None:
+    """What a finished backup may need to say (SPEC §7): nearly full, damage."""
+    space = run.load_record().get("space") or {}
+    used, free = space.get("used") or 0, space.get("free")
+    if free is not None and used + free and free / (used + free) < 0.10:
+        notify.send(*notify.FULL, "nearly-full")
+    if health.load().get("state") == "damaged":
+        notify.send(*notify.DAMAGE, "damage")
 
 
 def run_health(args, events: Events) -> int:
@@ -206,6 +230,9 @@ def run_health(args, events: Events) -> int:
     from omabackups.core import partial
     if partial.waiting():          # waits until the folders are back (audit 1.12)
         log.get("health").info("health check skipped: this system isn't whole yet")
+        return 0
+    if power.low_battery():
+        log.get("health").info("health check skipped: %s", notify.BATTERY)
         return 0
     settings = schedule.user_settings(run.linked_user())
     if not health.due(settings, health.load().get("started")):

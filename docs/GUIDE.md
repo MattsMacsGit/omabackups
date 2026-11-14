@@ -130,6 +130,13 @@ wait until you press **Back up now** (the panel says "Automatic backups are
 off" until then). Your first manual backup switches them on. If you turn
 them off yourself, they stay off until your next manual backup.
 
+On battery under 20% (not plugged in), automatic backups and the health
+check wait; one you start yourself always runs. When your backup can't be
+reached, they skip quietly and try again next time. A notification (at most
+once a day) says when backups are paused after a rescue, when there's been
+no backup for three of their times in a row, when your backup is nearly
+full, and when the health check finds damage.
+
 ### Away from home
 
 Backups run wherever you are. OmaBackups finds out by itself whether you're
@@ -337,16 +344,8 @@ rebuilds it from a restore point you trust: see
 
 ### Your backup's password
 
-To change it: Settings › Your backup › **Change its password** (a terminal
-window opens), or:
-
-```
-omabackups password change
-```
-
-It asks for the current password, then the new one twice. Everyday backups
-aren't affected (this computer has its own key), but from then on the Rescue
-USB and Migrate need the new password.
+Settings › Your backup › **Change its password**, or see
+[the command page](COMMANDS.md#your-backups-password).
 
 ## Your changes to Omarchy
 

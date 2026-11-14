@@ -71,3 +71,16 @@ The full log is in `~/.local/state/omabackups/logs/omabackups.log`.
 
 Add `--json` before the command (`omabackups --json status`) and every answer
 comes back as one line of JSON.
+
+### Your backup's password
+
+To change it: Settings › Your backup › **Change its password** (a terminal
+window opens), or:
+
+```
+omabackups password change
+```
+
+It asks for the current password, then the new one twice. Everyday backups
+aren't affected (this computer has its own key), but from then on the Rescue
+USB and Migrate need the new password.
