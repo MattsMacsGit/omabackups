@@ -284,7 +284,29 @@ def v_snapshot(call):
         elif fname == "changes.json":
             (current / fname).unlink(missing_ok=True)   # never an older day's list in a new point
     host().snapshot(current, inside / "points" / name)
+    # Every folder's size, built in the background (audit 5.4); never fails the backup.
+    try:
+        import sizes
+        sizes.start(bid, inside, name, given.get("dirty") if isinstance(given, dict) else None)
+    except Exception as exc:  # noqa: BLE001
+        sys.stderr.write(f"omabackups-gate: the size list for {name} wasn't started: {exc}\n")
     return {"point": name}
+
+
+def v_sizes(call):
+    """sizes BACKUP POINT -- every folder's size and file count in a restore
+    point (read only); ready: false until the background walk has made it."""
+    if len(call.args) != 2:
+        raise Refused("wrong number of arguments")
+    bid, name = call.args
+    registry.the_backup(registry.load(), bid, call.kid, conf.ROLES)
+    if not conf.POINT.match(name):
+        raise Refused("that is not a restore point name")
+    if not host().is_mounted(bid):
+        raise Refused("this backup is locked (unlock it first)")
+    import sizes
+    data = sizes.load(mountpoint(bid), name)
+    return {"ready": data is not None, "parts": (data or {}).get("parts", {})}
 
 
 def v_info(call):
@@ -346,4 +368,5 @@ def _kept(call, keep: bool):
 
 
 VERBS = {"send": v_send, "fetch": v_fetch, "browse": v_browse, "apply": v_apply, "reuse": v_reuse, "info": v_info, "ranges": v_ranges, "snapshot": v_snapshot,
-         "keep": lambda call: _kept(call, True), "release": lambda call: _kept(call, False)}
+         "keep": lambda call: _kept(call, True), "release": lambda call: _kept(call, False),
+         "sizes": v_sizes}

@@ -145,6 +145,10 @@ def run(point: str, request: dict, events) -> int:
                        "Run omabackups restore-files <restore point> --pick in a terminal "
                        "(the panel opens one for it).", code="no-terminal")
     events.message("Opening the restore point (read-only)...")
+    try:          # every folder's size from the Pi's list: the sizes show at once (audit 5.4)
+        listed = rootjob.run("point-sizes", {"point": point})
+    except OmaError:
+        listed = {}
     opened = rootjob.run("browse-open", {"point": point})
     path = Path(opened["path"])
     try:
@@ -152,6 +156,8 @@ def run(point: str, request: dict, events) -> int:
         mine = last.get("point") == point
         model = BringBack(path.name, path.parent, Path.home(), last.get("rules") if mine else None,
                           last.get("system_rules") if mine else None)
+        if listed.get("ready"):
+            model.known = listed.get("parts") or None
         saved = curses.wrapper(lambda scr: Picker(scr, model, mode=BringBackMode(point, request)).run())
     finally:
         rootjob.run("browse-close", {})

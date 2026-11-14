@@ -110,7 +110,8 @@ def _jobs() -> dict:
             "restore-files-start": files.start_job, "restore-files-stop": files.stop_job,
             "create-backup": job_server.create_backup, "create-disk": job_disk.create_disk,
             "start-over": job_disk.start_over, "set-skips": job_skips.set_skips,
-            "keep": job_points.keep, "delete-point": job_points.delete, "rebuild-from": job_points.rebuild, "change-password": job_points.change_password,
+            "keep": job_points.keep, "delete-point": job_points.delete, "rebuild-from": job_points.rebuild,
+            "point-sizes": job_points.point_sizes, "change-password": job_points.change_password,
             "rescue-key": job_points.rescue_key, "backup-dry-run": job_backup.dry_run,
             "rescue-usb-write": job_rescue.write, "rescue-usb-refresh": job_rescue.refresh}
 

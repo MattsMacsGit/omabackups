@@ -30,6 +30,19 @@ nothing: no restore point, nothing sent, nothing on this computer kept from
 the check. Choose what gets backed up shows the same numbers live as you
 tick and untick.
 
+### Getting one thing out, from a terminal
+
+```
+omabackups points
+omabackups files 001-2026-11-14-0900 Documents
+omabackups copy 001-2026-11-14-0900 Documents/letter.odt ~/Desktop
+```
+
+`files` lists what's in a folder of your home in a restore point; `copy`
+copies a file or folder out (never over something that's already there).
+Both are read-only, and work over SSH too: handy when the panel isn't to
+hand.
+
 ### Settings
 
 ```

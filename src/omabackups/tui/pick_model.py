@@ -14,7 +14,7 @@ from pathlib import Path
 
 from omabackups.backup import skips
 from omabackups.backup.check import human
-from omabackups.tui import quick
+from omabackups.tui import quick, sizes
 from omabackups.tui.quick import QUICK
 
 HIDDEN_IN_SYSTEM = {"home", "boot", "proc", "sys", "dev", "run", "tmp", "mnt", "media", "lost+found"}
@@ -57,6 +57,7 @@ class Model:
         self.dirty = False
         self.show_hidden = False    # hidden files: Migrate's business; H shows them
         self._sizes, self._inside, self._lock, self._held = {}, {}, threading.Lock(), {}
+        self.known = None          # {part: {folder: [bytes, files]}}: the Pi's size list (sizes.py)
         # The size on the computer, skipped or not: the rows' order. Ticking
         # never changes it, so rows don't jump about (they sorted by the
         # backed-up size, which drops to 0 when a row is skipped).
@@ -310,7 +311,8 @@ class Model:
             for item in [i for i in items if i.part == "quick"]:     # Your files is measured on its own
                 if stop():
                     return 0
-                got = quick.size(quick.places(self._quick(item), self.user, self.roots))
+                got = (sizes.quick_size(self.known, quick.rules(self._quick(item), self.user), self.user)
+                       if self.known else quick.size(quick.places(self._quick(item), self.user, self.roots)))
                 with self._lock:
                     self._sizes[item] = got
             return 0
@@ -323,6 +325,13 @@ class Model:
             with self._lock:
                 self._disk[node] = total
                 self._sizes[node] = 0 if skipped else total
+            return 0 if skipped else total
+        if self.known and node.rel in self.known.get(node.part, {}):     # from the Pi's list, at once
+            total, disk, inside = sizes.from_list(self.known[node.part], node.rel, self.skips[node.part],
+                                                  lambda rel: self.quietly_skipped(Node(node.part, rel, "", True)))
+            with self._lock:
+                self._sizes[node], self._inside[node] = (0 if skipped else total), inside
+                self._disk[node] = disk
             return 0 if skipped else total
         total, disk, inside = 0, 0, 0
         for child in self.children(node) if node != self.home() else self.children_plain(node):

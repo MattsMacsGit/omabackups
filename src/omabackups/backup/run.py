@@ -343,6 +343,9 @@ def make_point(job: Job) -> str:
     files = {"point.json": point}
     if changes_now is not None and job.gate_version >= 9:
         files["changes.json"] = changes_now
+    # What changed, so the Pi only measures those folders again (None: all of the part).
+    files["dirty"] = {part.name: changes.changed_folders(plan) if isinstance(plan, changes.Plan) else None
+                      for part, _skip, _new, plan in job.work}
     job.gate.call("snapshot", job.bid, job.line, name,
                   data=json.dumps(files if job.gate_version >= 9 else point).encode())
     if changes_now is not None:

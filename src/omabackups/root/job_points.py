@@ -121,3 +121,20 @@ def rescue_key(request: dict) -> dict:
                        "Set up backups to a server first (a disk rescue comes later).", code="no-server")
     gate, _bid = _open()
     return {"settings": settings.make(gate, server)}
+
+
+def point_sizes(request: dict) -> dict:
+    """Every folder's size in a restore point, from the Pi's list (audit
+    5.4): {"ready": False} on an older server or before the list is made."""
+    point = str(request.get("point", ""))
+    if not POINT.match(point):
+        raise OmaError("That isn't a restore point.", code="bad-request")
+    gate, bid = _open()
+    if gate.call("version").get("gate", 0) < 18:
+        return {"ready": False, "parts": {}}
+    hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
+    try:
+        return gate.call("sizes", bid, point)
+    finally:
+        gate.call("lock", bid, hold)
+

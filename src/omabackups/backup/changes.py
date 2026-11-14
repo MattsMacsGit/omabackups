@@ -210,3 +210,17 @@ def _merge(spans: list) -> list:
         else:
             out.append((offset, length))
     return out
+
+
+def changed_folders(plan: Plan) -> list[str]:
+    """The folders an everyday backup changed, for the Pi's size list
+    (audit 5.4): each sent file's folder, and both ends of every move or
+    delete. The Pi measures those (and the folders above them) again."""
+    out = set()
+    for path in list(plan.files) + list(plan.ranges):
+        out.add(path.rpartition("/")[0])
+    for op in plan.ops:
+        for path in op[1:]:
+            out.add(path.rpartition("/")[0])
+    return sorted(out)
+

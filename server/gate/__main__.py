@@ -149,6 +149,15 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["sftp"] and len(argv) == 2:     # run by the browse verb (D37)
         import sftp
         return sftp.serve(argv[1])
+    if argv[:1] == ["sizes"] and len(argv) == 3:     # started by the snapshot verb, as root
+        import sizes
+        from host import host, mountpoint
+        try:
+            if host().is_mounted(argv[1]):
+                sizes.build(mountpoint(argv[1]), argv[2])
+        finally:
+            sizes.running_file(argv[1]).unlink(missing_ok=True)
+        return 0
     if argv[:1] == ["sweep"]:
         for bid in verbs.sweep():
             log(f"locked {bid[:12]}: nobody holding it, and quiet")

@@ -380,7 +380,8 @@ def sweep() -> list[str]:
             if not h.is_open(bid):
                 continue
             # The check first: it also wakes up after a backup that died without saying so.
-            if verbs_health.keep_open(bid) or holds.live(bid):
+            import sizes
+            if verbs_health.keep_open(bid) or holds.live(bid) or sizes.busy(bid):
                 holds.reset_quiet(bid)
                 continue
             if holds.quiet_long_enough(bid, h.activity(bid)):
