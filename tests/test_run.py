@@ -237,23 +237,6 @@ def test_health_is_due_once_a_night_at_its_hour():
     assert not health.due({**s, "health.on": False}, None, night)
 
 
-def test_damage_found_means_one_full_checksum_backup(world, monkeypatch):
-    srv, kid, bid, src, box = world
-    run.backup(source=src)
-    from omabackups.root import keys
-    hold = srv.ok(kid, f"unlock {bid}", keys.read_unlock_key())["hold"]     # this computer's real key
-    srv.ok(kid, f"health-start {bid} 60")
-    scrub = srv.root / "run/omabackups-gate" / f"fake-scrub-{bid}.json"
-    scrub.write_text(json.dumps({"status": "finished", "csum_errors": 1}))
-    srv.ok(kid, f"lock {bid} {hold}")
-    names = iter(f"001-2099-01-0{i}-0000" for i in range(1, 9))
-    monkeypatch.setattr(run, "point_name", lambda line, latest: next(names))
-    second = run.backup(source=src)
-    assert second["how"]["home"] == "full check, every file's contents"
-    third = run.backup(source=src)
-    assert third["how"]["home"].startswith("changes (")      # answered once, then quick again
-
-
 def test_boot_counts_only_what_changed(world):
     srv, kid, bid, src, box = world
     from omabackups.backup import check

@@ -212,6 +212,14 @@ def v_reuse(call):
         raise Refused("the list to reuse is damaged") from None
     sources = [inside / "points" / name / part for name in reversed(layout.points(inside))]
     done = {"dirs": 0, "files": 0, "bytes": 0}
+    # Never put a damaged copy back (audit 4.3; 1.x drop-damaged): the health
+    # check names them from the box's top (points/<point>/<part>/...).
+    import health
+    damaged = set(health.load(bid).get("files") or [])
+
+    def bad(src: Path) -> bool:
+        rel = os.path.relpath(src, inside)
+        return rel in damaged or any(d.startswith(rel + "/") for d in damaged)
 
     def found_in(src_root: Path, rel: str) -> Path | None:
         try:
@@ -225,7 +233,7 @@ def v_reuse(call):
             continue
         for src_root in sources:
             src = found_in(src_root, str(rel))
-            if src and src.is_dir() and not src.is_symlink():
+            if src and src.is_dir() and not src.is_symlink() and not bad(src):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 host().clone(src, target)
                 done["dirs"] += 1
@@ -248,7 +256,8 @@ def v_reuse(call):
                     info = os.lstat(src) if src else None
                 except OSError:
                     continue
-                if info and stat.S_ISREG(info.st_mode) and info.st_size == size and info.st_mtime_ns == mtime:
+                if info and stat.S_ISREG(info.st_mode) and info.st_size == size and info.st_mtime_ns == mtime \
+                        and not bad(src):
                     target.parent.mkdir(parents=True, exist_ok=True)
                     host().clone(src, target)
                     done["files"] += 1

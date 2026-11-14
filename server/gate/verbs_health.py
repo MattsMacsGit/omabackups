@@ -47,6 +47,7 @@ def _shown(record: dict) -> dict:
             "done_bytes": record.get("done_bytes", 0), "checked_at": record.get("checked_at"),
             "full_pass_at": record.get("full_pass_at"), "pass_started": record.get("pass_started"),
             "damaged": len(record.get("files") or []), "files": (record.get("files") or [])[:20],
+            "paths": record.get("files") or [],      # every one, for sending them again (gate 19)
             "problem": record.get("problem")}
 
 

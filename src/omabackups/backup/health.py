@@ -67,9 +67,3 @@ def start_tonight(gate, bid: str, minutes: int, unlock_key: bytes, wait: bool = 
     save({**load(), **verdict, "started": int(time.time())})
     logger.info("health check started for %s minutes", minutes)
     return verdict
-
-
-def resend_needed(verdict: dict, record: dict) -> bool:
-    """Damage found that no full checksum backup has answered yet."""
-    return (verdict.get("state") == "damaged"
-            and record.get("resent_for_pass") != verdict.get("pass_started"))

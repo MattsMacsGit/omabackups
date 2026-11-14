@@ -31,6 +31,8 @@ from omabackups.backup import (
     after,
     changes,
     check,
+    damaged,
+    dryrun,
     full,
     health,
     reuse,
@@ -134,7 +136,7 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
         take_over(job)
         check_parts(job, source, stack)
         if dry_run:
-            summary = dry_summary(job)
+            summary = dryrun.summary(job)
             drop_new(job)
             return {"dry_run": summary}
         job.settings = schedule.user_settings(linked_user())
@@ -144,6 +146,7 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
         clear(job)
         room(job)
         send(job)
+        damaged.resend(job)
         name = make_point(job)
         after.keep_forced_point(job)
         after.settle_rescue_keep(job)
@@ -181,7 +184,7 @@ def open_backup(progress) -> Job:
         job.verdict = {} if server.get("migrating") else health.refresh(gate, job.bid)
     except OmaError as exc:
         logger.warning("health verdict: %s", exc.details)
-    job.resend = health.resend_needed(job.verdict, record)
+    # Damaged files go again by name (backup/damaged.py), not every file's contents.
     job.hold = gate.call("unlock", job.bid, data=keys.read_unlock_key())["hold"]
     return job
 
@@ -380,21 +383,3 @@ def drop_new(job: Job) -> None:
     for part_name, snap_name in job.made.items():
         if job.since.get(part_name) != snap_name and full.keep(part_name) != snap_name:
             job.opened[part_name].drop(snap_name)
-
-
-def dry_summary(job: Job) -> list[dict]:
-    """Per part: what a backup now would send and delete (audit 2.8)."""
-    out = []
-    for part, _skip, new, plan in job.work:
-        row = {"part": part.name, "files": None, "bytes": None, "deletes": 0, "moves": 0}
-        if new is None:
-            row["bytes"] = job.folder_sizes.get(part.name)
-        elif isinstance(plan, full.FullList):
-            row.update(files=len(plan.items), bytes=sum(size for _, size in plan.items))
-            row["deletes"] = sum(op[0] == "delete" for op in plan.ops)
-        elif plan is not None:
-            row.update(files=len(plan.files), bytes=check.size_of(plan, str(new)))
-            row["deletes"] = sum(op[0] == "delete" for op in plan.ops)
-            row["moves"] = sum(op[0] == "rename" for op in plan.ops)
-        out.append(row)
-    return out

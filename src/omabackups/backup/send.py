@@ -168,6 +168,14 @@ class Sender:
         meter.update(sent=meter.total)
         self.report({**meter.snapshot(), "percent": 100})
 
+    def resend(self, part: str, source: str, paths: list[str]) -> None:
+        """Damaged files again, by name, whole (-I: even though size and date
+        still match; -W: no deltas against the damaged copy). Audit 4.2."""
+        with tempfile.NamedTemporaryFile("wb", prefix="omabackups-damaged-") as listing:
+            listing.write(b"\0".join(p.encode("utf-8", "surrogateescape") for p in paths) + b"\0")
+            listing.flush()
+            self._rsync(part, source, [f"--files-from={listing.name}", "--from0", "-I", "-W"])
+
     def full(self, part: str, source: str, skips: Skips, checksum: bool = False) -> None:
         """checksum: compare every file's contents, not just size and date
         (after the health check found damaged files: they're sent again)."""

@@ -183,8 +183,10 @@ and carries on afterwards, so neither slows the other down.
 
 You only hear about it when something's wrong. `omabackups status` then says
 either that the disk reported read or write errors (a loose cable or a tired
-disk: worth a look), or that damaged files were found. Those are sent again
-at the next backup, which compares the contents of every file to do it.
+disk: worth a look), or that damaged files were found. The next backup sends
+each damaged file again, whole, from this computer (one that's no longer
+here is noted), and never reuses a damaged copy. Damage found twice within
+three months means the disk itself may be failing.
 
 ### Choose what gets backed up
 

@@ -172,7 +172,6 @@ def test_rebuild_from_repairs_a_damaged_working_copy(world, monkeypatch):
 
 # --- §6 + §10: damaged files ----------------------------------------------------
 
-@to_build("§6 + §10 (audit 4.3): a damaged file is never reused")
 def test_a_damaged_file_is_not_reused(world, monkeypatch):
     srv, kid, bid, src, box = world
     names = iter(f"001-2099-01-0{i}-0000" for i in range(1, 9))
@@ -186,7 +185,7 @@ def test_a_damaged_file_is_not_reused(world, monkeypatch):
     health = next(srv.root.rglob("registry.json")).parent / "health" / f"{bid}.json"
     health.parent.mkdir(parents=True, exist_ok=True)
     health.write_text(json.dumps({"state": "damaged",
-                                  "files": [f"inside/points/{first}/home/u/manual.pdf"]}))
+                                  "files": [f"points/{first}/home/u/manual.pdf"]}))
     answers = []
     real = run.reuse.ask
     monkeypatch.setattr(run.reuse, "ask", lambda *a: answers.append(real(*a)) or answers[-1])

@@ -62,6 +62,8 @@ def text(data: dict) -> str:
         return f"Checking {part}..."
     if step == "clear" and part:
         return f"Clearing removed and skipped files from {part}..."
+    if step == "damaged":                         # 1.x's words
+        return f"Sending fresh copies of damaged files ({part})..."
     out = f"{STEPS.get(step, step)} {part}".strip() + "..."
     if step == "send" and data.get("total"):
         bits = [f"{data.get('percent', 0)}%", f"{size(data.get('sent', 0))} of {size(data['total'])}"]
