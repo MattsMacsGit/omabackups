@@ -41,6 +41,9 @@ rsync -a --delete --exclude '*.pyc' "$repo/manifest.json" "$repo/LICENSE" "$repo
 # enable fails with "plugin 'omabackups' is not known" and the widget never
 # appears on the bar. Don't hide enable's errors.
 omarchy-shell shell rescanPlugins >/dev/null
+# udiskie leaves OmaBackups' disks and the Rescue USB alone when they're plugged in (audit 7.4).
+omabackups desktop-rules install || true
+
 if ! omarchy-plugin-enable omabackups --section right; then
   echo "Couldn't put OmaBackups on the bar. Try: omarchy-plugin-enable omabackups --section right" >&2
   exit 1

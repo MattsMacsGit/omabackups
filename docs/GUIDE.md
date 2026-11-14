@@ -26,6 +26,10 @@ OmaBackups comes in two parts:
 - **The `omabackups` package**: the part that does the work. The first time
   you open the panel, it offers to install the package for you.
 
+Plugged in, OmaBackups' backup disks and the Rescue USB are listed in your
+file manager but never opened on their own: OmaBackups opens them when it
+needs them.
+
 **Remove OmaBackups** in Settings comes with a later version. Until then,
 to remove the package by hand:
 

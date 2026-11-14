@@ -1,7 +1,22 @@
-# OmaBackups (1.x idea, kept): its backup disks stay out of the file manager.
-# OmaBackups opens and closes them itself; a pop-up for each is clutter.
+# OmaBackups (1.x idea, kept; audit 7.4): its own disks stay out of the
+# desktop's way. Plugged in, they're listed but never opened on their own:
+# OmaBackups opens and closes them itself.
+#
+#   UDISKS_AUTO=0    don't open it on its own (still listed if you go looking)
+#   UDISKS_IGNORE=1  hide it (plumbing nobody should be opening)
+#
+# udiskie (Omarchy's auto-mounter) honours UDISKS_AUTO=0 only with the block
+# `omabackups desktop-rules install` adds to its settings.
 ACTION=="remove", GOTO="omabackups_end"
 SUBSYSTEM!="block", GOTO="omabackups_end"
-ENV{ID_PART_ENTRY_NAME}=="OmaBackups", ENV{UDISKS_IGNORE}="1"
+
+# A backup disk: listed, never opened on its own; inside, while OmaBackups has it open: hidden.
+ENV{ID_PART_ENTRY_NAME}=="OmaBackups", ENV{UDISKS_AUTO}="0"
 ENV{ID_FS_LABEL}=="omabackups", ENV{ID_FS_TYPE}=="btrfs", ENV{UDISKS_IGNORE}="1"
+
+# The Rescue USB: the rescue system listed; its boot part and its settings
+# part (the stick's key to your backup) hidden.
+ENV{ID_FS_LABEL}=="OMABACKUPS_RESCUE", ENV{UDISKS_AUTO}="0"
+ENV{ID_FS_LABEL}=="ARCHISO_EFI", ENV{UDISKS_IGNORE}="1"
+ENV{ID_FS_LABEL}=="OMABACKUPS", ENV{ID_FS_TYPE}=="vfat", ENV{UDISKS_IGNORE}="1"
 LABEL="omabackups_end"

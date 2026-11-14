@@ -34,6 +34,11 @@ def link() -> str:
     if done.returncode in (126, 127):
         raise OmaError("This computer's password wasn't given, so nothing was set up.",
                        "Run setup again when you're ready.", code="cancelled")
+    if done.returncode == 0:
+        from omabackups.setup import udiskie
+        if note := udiskie.install():          # audit 7.4: our disks are just listed when plugged in
+            from omabackups.core import log
+            log.get("setup").info(note)
     try:
         return json.loads(done.stdout.splitlines()[-1])["public_key"]
     except (ValueError, IndexError, KeyError):

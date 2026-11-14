@@ -3,6 +3,7 @@ they're hidden from --help.
 
   omabackups link            (pkexec, during setup: D27)
   omabackups root-job NAME   (omabackups-root@NAME.service: 5.2)
+  omabackups desktop-rules install|remove   (udiskie leaves our disks alone: audit 7.4)
 """
 
 import argparse
@@ -17,6 +18,20 @@ def add(sub) -> None:
     job = sub.add_parser("root-job", help=argparse.SUPPRESS)
     job.add_argument("job")
     job.set_defaults(run=_root_job)
+    rules = sub.add_parser("desktop-rules", help=argparse.SUPPRESS)
+    rules.add_argument("verb", choices=("install", "remove"))
+    rules.set_defaults(run=_desktop_rules)
+
+
+def _desktop_rules(args, events: Events) -> int:
+    from omabackups.setup import udiskie
+    if args.verb == "remove":
+        udiskie.remove()
+        events.result({"removed": True}, "udiskie opens every disk on its own again.")
+        return 0
+    note = udiskie.install()
+    events.result({"note": note}, note or "udiskie leaves OmaBackups' disks alone when they're plugged in.")
+    return 0
 
 
 def _need_root() -> None:
