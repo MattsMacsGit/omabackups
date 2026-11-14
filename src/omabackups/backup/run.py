@@ -138,6 +138,7 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
         send(job)
         name = make_point(job)
         after.keep_forced_point(job)
+        after.settle_rescue_keep(job)
         tidy(job, name, manual)
     except BaseException:
         drop_new(job)

@@ -133,6 +133,18 @@ def pick_point(gate, bid: str, hold: str, mine: dict) -> tuple[str, list[str]]:
     return names[screens.choose("Restore points", [label(n) for n in names])], names
 
 
+def keep_picked(gate, bid: str, point: str) -> None:
+    """The point a rescue restores from is kept the moment it's picked
+    (audit 1.4): nothing but a command-line delete removes it while the
+    restore is unfinished. Never stops a rescue: an older server says so."""
+    try:
+        gate.call("keep", bid, point)
+    except OmaError as exc:
+        screens.say(f"This restore point couldn't be marked kept ({exc.what}). The rescue carries on; "
+                    "update OmaBackups on your backup server afterwards.", screens.GREY)
+        time.sleep(3)
+
+
 def pick_disk():
     from omabackups.rescue.disks import targets
     while True:
@@ -184,6 +196,7 @@ def run(events) -> int:
     password, hold = unlock(gate, bid)
     try:
         point, names = pick_point(gate, bid, hold, {**mine, "line": server.get("line")})
+        keep_picked(gate, bid, point)
     finally:
         gate.call("lock", bid, hold)
     while True:          # "Change" comes back here: the backup stays found and opened once

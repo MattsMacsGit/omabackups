@@ -174,7 +174,7 @@ Column {
       title: Model.capital(Model.when(modelData.when))
       tag: page.service && page.service.opening === modelData.name ? "Opening…"
            : page.service && page.service.browsing && page.service.browsing.point === modelData.name ? "Open"
-           : modelData.return_point ? "Return point" : (modelData.kept ? "★ kept" : "")
+           : modelData.kept_by ? "★ kept " + modelData.kept_by : (modelData.kept ? "★ kept" : "")
       hasCursorHere: page.cursorOn(this)
       onActivated: page.service.browse(modelData.name)
     }

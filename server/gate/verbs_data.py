@@ -310,20 +310,38 @@ def v_info(call):
 
 
 def _kept(call, keep: bool):
-    if len(call.args) != 2:
+    """keep BACKUP POINT / release BACKUP POINT [rescue-done].
+
+    A Rescue USB keeps the point it restores from the moment it's picked
+    (audit 1.4): its key may keep, never release; the point is marked as
+    kept by a rescue (R). Releasing one is refused, except by the computer's
+    own backup once everything came back ("rescue-done", audit 9.3); only
+    `delete ... any` removes it otherwise."""
+    if len(call.args) not in (2, 3) or (len(call.args) == 3 and (keep or call.args[2] != "rescue-done")):
         raise Refused("wrong number of arguments")
-    bid, name = call.args
-    registry.the_backup(registry.load(), bid, call.kid, OWNER)
+    bid, name = call.args[:2]
+    data = registry.load()
+    registry.the_backup(data, bid, call.kid, OWNER + (("rescue",) if keep else ()))
+    by_rescue = data["backups"][bid]["roles"].get(call.kid) == "rescue"
     if not host().is_mounted(bid):
         raise Refused("this backup is locked (unlock it first)")
     inside = mountpoint(bid)
     if name not in layout.points(inside):
         raise Refused("no such restore point")
     kept = layout.kept(inside)
+    by = dict(kept.get("by") or {})
+    if not keep and by.get(name) == "rescue" and len(call.args) != 3:
+        raise Refused("a rescue keeps that restore point; only omabackups delete removes it")
+    if len(call.args) == 3 and by.get(name) != "rescue":
+        return {"kept": kept["kept"]}              # only ever lets go of a rescue's keep
     names = [n for n in kept["kept"] if n != name] + ([name] if keep else [])
+    if keep and by_rescue:
+        by[name] = "rescue"
+    elif not keep:
+        by.pop(name, None)
     if not keep and name == kept.get("return_point"):
         kept["return_point"] = None
-    layout.write_kept(inside, {**kept, "kept": sorted(names)})
+    layout.write_kept(inside, {**kept, "kept": sorted(names), "by": by})
     return {"kept": sorted(names)}
 
 

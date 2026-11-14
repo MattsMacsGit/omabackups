@@ -305,6 +305,7 @@ def v_delete(call: Call) -> dict:
         host().delete_subvolume(inside / "points" / point)
         if was_kept:
             layout.write_kept(inside, {**kept, "kept": [n for n in kept["kept"] if n != point],
+                                       "by": {n: w for n, w in (kept.get("by") or {}).items() if n != point},
                                        "return_point": None if kept["return_point"] == point
                                        else kept["return_point"]})
     return {"deleted": point}

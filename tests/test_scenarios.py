@@ -122,7 +122,6 @@ def test_a_migrate_refuses_a_backup_until_its_folders_are_back(world):
 
 # --- §8: keeping, deleting, rebuilding ------------------------------------------
 
-@to_build("§8 (audit 1.4): the rescue keeps its point the moment it's picked")
 def test_the_point_a_rescue_came_from_is_kept(owned):  # noqa: F811
     server, kid, bid = owned
     rescue = server.ok(kid, f"add-key {bid} stick", make_pubkey(9).encode())["key"]

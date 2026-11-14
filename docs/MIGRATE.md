@@ -115,9 +115,8 @@ The panel then shows what's left, only while it's true:
   working copy aside before bringing it back. Migrate asks the same before
   bringing your files back in the same run.
 - **Back up now**: the first backup on the new computer. While folders you
-  chose are still on the backup, it waits (**Paused until your files are
-  back**), as after a Quick Rescue: hold **Ctrl** and click it to back up
-  anyway ([the Rescue USB guide](RESCUE.md#backups-wait-for-your-folders)
+  chose are still on the backup, it's greyed out and waits, as after a
+  Quick Rescue: hold **Ctrl** and click it to back up anyway ([the Rescue USB guide](RESCUE.md#backups-wait-for-your-folders)
   says what that means).
 
 ## The handover

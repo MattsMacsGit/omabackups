@@ -107,15 +107,24 @@ def test_a_boot_entry_that_still_names_the_old_disk_stops_the_rescue(tmp_path):
 
 def test_quick_rescue_leaves_the_folders_and_what_can_be_fetched_again(tmp_path):
     src, dest = tmp_path / "home", tmp_path / "restored"
+    steam = "u/.local/share/Steam"
     for rel in ("u/.config/app/conf", "u/.local/bin/claude", "u/.cache/big", "u/.ollama/models/m",
-                "u/.steam/game", "u/Documents/letter.txt", "u/Projects/x/main.py", "u/.bashrc"):
+                "u/.ollama/id_ed25519", f"{steam}/config/loginusers.vdf", f"{steam}/steamapps/compatdata/1/save",
+                f"{steam}/steamapps/common/Game/game.bin", f"{steam}/steamapps/appmanifest_1.acf",
+                "u/.local/share/bottles/bottles/b/drive_c/save", "u/.local/share/bottles/runners/wine/bin",
+                "u/Documents/letter.txt", "u/Projects/x/main.py", "u/.bashrc"):
         (src / rel).parent.mkdir(parents=True, exist_ok=True)
         (src / rel).write_text("x")
     subprocess.run(["rsync", "-a", *system.home_filter(False), f"{src}/", f"{dest}/"], check=True)
     have = {str(p.relative_to(dest)) for p in dest.rglob("*")}
-    assert {"u/.config/app/conf", "u/.local/bin/claude", "u/.bashrc", "u/Documents", "u/Projects"} <= have
-    assert not {"u/.cache/big", "u/.ollama/models/m", "u/.steam/game", "u/Documents/letter.txt",
-                "u/Projects/x"} & have
+    # A program's settings, logins and saves come back now: Steam opens logged in.
+    assert {"u/.config/app/conf", "u/.local/bin/claude", "u/.bashrc", "u/Documents", "u/Projects",
+            "u/.ollama/id_ed25519", f"{steam}/config/loginusers.vdf", f"{steam}/steamapps/compatdata/1/save",
+            "u/.local/share/bottles/bottles/b/drive_c/save"} <= have
+    # The big part you can get again waits for Restore my files.
+    assert not {"u/.cache/big", "u/.ollama/models/m", f"{steam}/steamapps/common",
+                f"{steam}/steamapps/appmanifest_1.acf", "u/.local/share/bottles/runners",
+                "u/Documents/letter.txt", "u/Projects/x"} & have
     assert system.home_filter(True) == []
 
 
@@ -126,6 +135,7 @@ def test_each_home_is_told_to_offer_restore_my_files(tmp_path):
     system._record(root, "004-2026-11-10-1753", full=False)
     mine = json.loads((root / "home/u/.local/state/omabackups/migrate.json").read_text())
     assert mine["files"] == ["Documents", "Music"] and mine["files_restored"] is False
+    assert mine["later"] == ["models", "games", "flatpak", "vms"]      # the Quick skips, later
     assert mine["from_user"] == "u" and mine["point"] == "004-2026-11-10-1753"
     assert json.loads((root / "var/lib/omabackups/rescued.json").read_text())["point"] == "004-2026-11-10-1753"
 

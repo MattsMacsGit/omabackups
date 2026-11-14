@@ -52,7 +52,8 @@ class Picker:
     def __init__(self, scr, model: Model, first: bool = False, mode=None):
         self.ui, self.model, self.first = kit.Screen(scr), model, first
         self.mode = mode or BackupMode(first)
-        self.stack, self.cursor, self.top = [model.home()], {model.home(): 0}, 0
+        # Opens on Quick skips; Your files is its last row.
+        self.stack, self.cursor, self.top = [model.quick()], {model.quick(): 0}, 0
         self.rows, self.running, self.saved = [], True, False
         threading.Thread(target=self._measure, daemon=True).start()
 

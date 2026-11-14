@@ -93,8 +93,9 @@ def patterns_for(part: str) -> list[str]:
     """The whole list for a part. Once the picker has saved (format 2) it holds
     the complete list, defaults included, so a default can be ticked back on;
     before that, the defaults (plus any extras of the older format)."""
+    from omabackups.tui.quick import upgrade
     data = saved()
-    mine = [p for p in data.get(part, []) if isinstance(p, str)]
+    mine = upgrade([p for p in data.get(part, []) if isinstance(p, str)])
     if data.get("format") == 2 and part in data:
         return mine
     return DEFAULTS.get(part, []) + mine

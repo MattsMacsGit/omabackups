@@ -32,7 +32,8 @@ def add(sub) -> None:
 def run_points(args, events: Events) -> int:
     pts = status_data.points(status_data._read(status_data.paths.system_state_dir() / "backup.json"))
     lines = [f"{p['name']}  {datetime.fromtimestamp(p['when']):%a %-d %b %Y %-I:%M %p}"
-             + ("  (kept)" if p["kept"] else "") for p in pts if p["when"]]
+             + (f"  ★ kept {p['kept_by']}" if p["kept_by"] else "  ★ kept" if p["kept"] else "")
+             for p in pts if p["when"]]
     events.result({"points": pts}, "\n".join(lines) or "No restore points yet.")
     return 0
 

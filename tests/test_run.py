@@ -307,7 +307,7 @@ def test_keep_release_and_the_password(world, sandbox, monkeypatch):
     from omabackups.core import rootjob
     rootjob.run("keep", {"point": point, "keep": True})
     assert run.load_record()["kept"] == [point]
-    assert "(kept)" in sandbox.run("points").stdout
+    assert "★ kept" in sandbox.run("points").stdout
     rootjob.run("keep", {"point": point, "keep": False})
     assert run.load_record()["kept"] == []
     import pytest as _pytest

@@ -22,7 +22,8 @@ def _world(tmp_path):
 def test_the_same_rows_the_other_way_round(tmp_path):
     m, point, here = _world(tmp_path)
     m.measure(m.home())
-    assert [n.name for n in m.listing(m.home())] == ["Videos", "Music", "Documents", "Quick skips"]
+    assert [n.name for n in m.listing(m.home())] == ["Videos", "Music", "Documents"]
+    assert m.listing(m.quick())[-1].name == "Your files"          # opens on Quick skips
     docs, music = Node("home", "u/Documents", "Documents", True), Node("home", "u/Music", "Music", True)
     assert m.colour(docs) == "green" and "already here" in m.explain(docs)
     assert m.colour(music) == "blue" and m.explain(music) == "Music: comes back."
@@ -41,7 +42,8 @@ def test_what_stays_is_left_out_of_restore_my_files(tmp_path, monkeypatch):
     monkeypatch.setattr(rootjob, "run", lambda job, request: calls.append((job, request)) or {})
     monkeypatch.setattr("omabackups.tui.bring_back.state.write", lambda *a: None)
     assert BringBackMode("001-2026-11-12-1955", {"point": "001-2026-11-12-1955"}).save(m) is None
-    assert calls[-1] == ("restore-files-start", {"point": "001-2026-11-12-1955", "leave_out": ["/Videos"]})
+    assert calls[-1] == ("restore-files-start", {"point": "001-2026-11-12-1955", "leave_out": ["/Videos"],
+                                                 "leave_out_system": []})
 
 
 def test_restore_my_files_leaves_out_what_stays(tmp_path):

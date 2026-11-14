@@ -30,11 +30,12 @@ STATE = "bring-back"          # the last choices, per restore point
 
 
 class BringBack(Model):
-    def __init__(self, user: str, point_home: Path, here: Path, rules: list[str] | None = None):
+    def __init__(self, user: str, point_home: Path, here: Path, rules: list[str] | None = None,
+                 system_rules: list[str] | None = None):
         """user: the home folder's name in the restore point; point_home: the
         restore point's /home, opened read-only; here: this computer's home."""
         super().__init__(user, {}, roots={"home": point_home, "system": point_home.parent / "system"},
-                         rules={"home": list(rules or []), "system": []})
+                         rules={"home": list(rules or []), "system": list(system_rules or [])})
         self.here = here
 
     def _local(self, node: Node) -> Path:
@@ -125,10 +126,13 @@ class BringBackMode:
         return (model.home(), model.quick())
 
     def save(self, model: BringBack) -> str | None:
-        state.write(STATE, {"point": self.point, "rules": model.rules["home"]})
+        state.write(STATE, {"point": self.point, "rules": model.rules["home"],
+                            "system_rules": model.rules["system"]})
         rootjob.run("browse-close", {})
         try:
-            rootjob.run("restore-files-start", {**self.request, "leave_out": model.leave_out()})
+            # Quick skips in the system area (AI models and the like, audit 8.4) left in the backup too.
+            rootjob.run("restore-files-start", {**self.request, "leave_out": model.leave_out(),
+                                                "leave_out_system": model.rules["system"]})
         except OmaError as exc:
             return exc.what
         return None
@@ -145,8 +149,9 @@ def run(point: str, request: dict, events) -> int:
     path = Path(opened["path"])
     try:
         last = state.read(STATE) or {}
-        model = BringBack(path.name, path.parent, Path.home(),
-                          last.get("rules") if last.get("point") == point else None)
+        mine = last.get("point") == point
+        model = BringBack(path.name, path.parent, Path.home(), last.get("rules") if mine else None,
+                          last.get("system_rules") if mine else None)
         saved = curses.wrapper(lambda scr: Picker(scr, model, mode=BringBackMode(point, request)).run())
     finally:
         rootjob.run("browse-close", {})

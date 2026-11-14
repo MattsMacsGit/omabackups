@@ -34,11 +34,14 @@ def names(model, node):
 
 def test_first_page(world):
     world.measure(world.home())
+    # It opens on Quick skips: the switches, then Your files last.
+    first = [n.name for n in world.listing(world.quick())]
+    assert first[:3] == ["Downloads", "Caches", "Trash"] and first[-1] == "Your files"
     shown = [n.name for n in world.listing(world.home())]
-    assert shown == ["Downloads", "Videos", "Projects", "Quick skips"]     # hidden ones aren't shown...
+    assert shown == ["Downloads", "Videos", "Projects"]                    # hidden ones aren't shown...
     world.show_hidden = True                                               # ...until h
     assert [n.name for n in world.listing(world.home())] == ["Downloads", "Videos", "Projects",
-                                                             ".cache", ".config", "Quick skips"]
+                                                             ".cache", ".config"]
 
 
 def test_marks_colours_and_lines(world):
@@ -156,7 +159,7 @@ def test_folders_come_before_files(world, tmp_path):
     (tmp_path / "home/u/huge-file.bin").write_bytes(b"x" * 50_000)
     world.measure(world.home())
     shown = [n.name for n in world.listing(world.home())]
-    assert shown == ["Downloads", "Videos", "Projects", "huge-file.bin", "Quick skips"]
+    assert shown == ["Downloads", "Videos", "Projects", "huge-file.bin"]
 
 
 def test_ticking_never_moves_a_row(world):

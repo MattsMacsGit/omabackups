@@ -37,6 +37,7 @@ class Job:
     needed: int = 0
     known: bool = True            # the size is known (else the room isn't checked)
     forced_past: str = ""         # a forced backup after a partial restore: its point
+    rescue_settled: str = ""      # the rescue's point, let go once everything came back
 
     @property
     def bid(self) -> str:

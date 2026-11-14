@@ -41,11 +41,13 @@ def _read(path: Path) -> dict:
         return {}
 
 
-def note_restored(point: str, only: list[str] | None, leave_out: list[str] | None) -> None:
-    """A Restore my files run finished (as root): what it brought back."""
+def note_restored(point: str, only: list[str] | None, leave_out: list[str] | None,
+                  later: list[str] | None = None) -> None:
+    """A Restore my files run finished (as root): what it brought back;
+    `later`: the Quick skips items it brought (restore/later.py)."""
     data = _read(restored_file())
     runs = list(data.get(point) or [])[-(MAX_RUNS - 1):]
-    runs.append({"only": only, "leave_out": list(leave_out or [])})
+    runs.append({"only": only, "leave_out": list(leave_out or []), "later": list(later or [])})
     write_atomic(restored_file(), (json.dumps({**data, point: runs}, indent=1) + "\n").encode(), 0o644)
 
 
@@ -80,7 +82,9 @@ def waiting(record: dict | None = None) -> dict | None:
     """The partial restore still waiting for its folders, or None when this
     system is whole: {"point", "folders" (still on the backup), "rescued"}."""
     mine = migrate_record()
-    if not mine or not mine.get("done") or not mine.get("files") or mine.get("files_restored"):
+    if not mine or not mine.get("done") or mine.get("files_restored"):
+        return None
+    if not mine.get("files") and not mine.get("later"):
         return None
     point = mine.get("point") or ""
     if record is None:
@@ -88,7 +92,11 @@ def waiting(record: dict | None = None) -> dict | None:
     if record.get("forced_past") == point:
         return None
     runs = _read(restored_file()).get(point) or []
-    left = [f for f in mine["files"] if not is_back(f, runs)]
+    left = [f for f in mine.get("files") or [] if not is_back(f, runs)]
+    if mine.get("later"):
+        from omabackups.restore.later import label
+        came = {i for run in runs for i in run.get("later") or []}
+        left += [label(i) for i in mine["later"] if i not in came]
     if not left:
         return None
     return {"point": point, "folders": left, "rescued": bool(mine.get("rescued"))}

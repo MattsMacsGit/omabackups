@@ -28,16 +28,23 @@ from pathlib import Path
 from omabackups.core import log
 from omabackups.core.errors import OmaError
 from omabackups.restore import bootfix, newdisk
+from omabackups.restore.later import LATER
+from omabackups.restore.later import system_paths as later_paths
 
 PERCENT = re.compile(rb"(\d+)%")
 SYSTEM_SKIP = ("/swap", "/swapfile", "/tmp", "/var/tmp")
 # What a Quick Rescue leaves for Restore my files: things that can be fetched
-# or made again, whatever they weigh (1.x: a size limit broke installed tools).
-HOME_LATER = (".cache", ".thumbnails", ".var/app/*/cache", ".local/share/Trash", ".Trash", "lost+found",
-              ".local/share/flatpak", ".local/share/containers", ".local/share/docker",
-              ".local/share/libvirt", ".local/share/gnome-boxes", ".local/share/bottles",
-              ".lmstudio/models", ".ollama/models", ".local/share/nomic.ai", ".local/share/Jan",
-              ".steam", ".local/share/Steam")
+# or made again, whatever they weigh (1.x: a size limit broke installed tools):
+# caches and trash, and the big part of the Quick skips items (restore/later.py;
+# a program's settings, logins and saves come back now).
+HOME_JUNK = (".cache", ".thumbnails", ".var/app/*/cache", ".local/share/Trash", ".Trash", "lost+found")
+
+
+def home_later_excludes() -> list[str]:
+    """rsync excludes, relative to the home part (/<user>/...)."""
+    from omabackups.restore.later import home_rules
+    rules = list(HOME_JUNK) + [r for rs in home_rules("").values() for r in rs]
+    return [f"--exclude={r}" if r.startswith("**/") else f"--exclude=/*/{r.lstrip('/')}" for r in rules]
 PHASES = (("connect", 3), ("disk", 4), ("system", 45), ("settings", 25), ("boot", 3), ("start", 10))
 FULL_PHASES = (("connect", 2), ("disk", 3), ("system", 30), ("settings", 55), ("boot", 2), ("start", 8))
 
@@ -45,7 +52,7 @@ FULL_PHASES = (("connect", 2), ("disk", 3), ("system", 30), ("settings", 55), ("
 def home_filter(full: bool) -> list[str]:
     if full:
         return []
-    out = [f"--exclude=/*/{rel}" for rel in HOME_LATER]          # excludes first: rsync takes the first match
+    out = home_later_excludes()          # excludes first: rsync takes the first match
     return out + ["--include=/*/", "--include=/*/.*", "--include=/*/.*/**", "--include=/*/*/", "--exclude=/*/**"]
 
 
@@ -151,7 +158,8 @@ def _record(root: Path, point: str, full: bool) -> None:
         mine.mkdir(parents=True, exist_ok=True)
         (mine / "migrate.json").write_text(json.dumps(
             {"done": True, "files_restored": full, "point": point, "from_user": home.name,
-             "files": [] if full else folders, "restart": False, "rescued": True,
+             "files": [] if full else folders, "later": [] if full else list(LATER),
+             "restart": False, "rescued": True,
              "at": int(time.time()), "version": 1}, indent=2) + "\n")
         owner = home.stat()
         for p in (home / ".local", home / ".local/state", mine, mine / "migrate.json"):
@@ -172,7 +180,9 @@ def rescue(gate, bid: str, password: str, point: str, full: bool, disk: str, dis
         started = True
         new = newdisk.prepare(disk, disk_password)
         show("disk", 1, "Preparing the disk")
-        fetch(gate, bid, point, "system", newdisk.ROOT / "@", [f"--exclude={p}" for p in SYSTEM_SKIP] + ["--delete"],
+        later = [] if full else later_paths()            # AI models and the like: later (audit 8.4)
+        fetch(gate, bid, point, "system", newdisk.ROOT / "@",
+              [f"--exclude={p}" for p in (*SYSTEM_SKIP, *later)] + ["--delete"],
               lambda f: show("system", f, "Bringing back your system"))
         what = "Bringing back your files" if full else "Bringing back your settings"
         fetch(gate, bid, point, "home", newdisk.ROOT / "@home", home_filter(full) + ["--delete"],

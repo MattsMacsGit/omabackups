@@ -182,9 +182,11 @@ omabackups pick
 ```
 
 opens the picker in the terminal (the panel opens it for you from Settings).
-It starts with your home folders (folders first, then files, each biggest
-on your computer first, so nothing moves when you tick or untick it), and
-**☰ Quick skips** at the bottom:
+It opens on **Quick skips**: switches for big things, each with its size.
+Most people switch off one or two (Downloads, say) and save. The last row,
+**Your files**, opens your home folders, all ticked (folders first, then
+files, each biggest on your computer first, so nothing moves when you tick
+or untick it), to skip anything else:
 
 - The **tick** says what's backed up from the next backup on: **✓** all of
   it, **•** part of it (open it to see what's skipped), no mark: skipped.
@@ -218,6 +220,13 @@ cache, Flatpak apps, Virtual machines & containers, AI models and Game
 libraries. Caches, Trash and the Package cache start skipped. The rest of
 the system is always backed up: the Rescue USB needs it to bring your
 computer back.
+
+A switch only covers the big part you can get again, never a program's
+settings, logins or saves: Game libraries skips Steam's installed games
+(Steam itself, your login and your Proton saves stay backed up), and
+Virtual machines & containers skips disk images, container storage and
+Bottles' downloadable runners (each bottle, with your Windows apps and
+their saves, stays backed up).
 
 After you save, the next backup follows your choices. Anything newly
 skipped leaves your backup's working copy, but stays in your older restore
@@ -295,6 +304,16 @@ omabackups keep 001-2026-11-07-1400
 omabackups release 001-2026-11-07-1400
 ```
 
+Each kept restore point says why:
+
+- **★ kept**: you kept it.
+- **★ kept restore**: a Rescue USB restored from it. It's kept from the
+  moment you pick it on the stick. Once everything came back and a backup
+  ran, it lets go by itself; after a **Back up anyway** it stays kept,
+  because it holds what didn't come back. Only `omabackups delete` removes
+  it before then.
+- **★ kept migrate**: the Return point, where a Migrate's handover started.
+
 ### Deleting a restore point
 
 Any restore point can be deleted from a terminal, the newest and kept ones
@@ -308,21 +327,9 @@ The panel never deletes a restore point you didn't choose to lose.
 
 ### Rebuilding the working copy
 
-Your backup holds one **working copy** of your computer, which each backup
-brings up to date, and the restore points, which never change. If the
-working copy ever goes wrong (say a backup ran from a system that wasn't
-whole yet, and removed folders from it), rebuild it from a restore point
-you trust:
-
-```
-omabackups rebuild-from 001-2026-11-07-1400
-omabackups backup
-```
-
-Your restore points stay as they are. The next backup checks every file
-once and sends only what changed since that restore point. If a bad backup
-also made a restore point, delete that one afterwards with
-`omabackups delete`.
+If your backup's working copy ever goes wrong, `omabackups rebuild-from`
+rebuilds it from a restore point you trust: see
+[Getting things back](RESTORING.md#rebuilding-the-working-copy).
 
 ### Your backup's password
 

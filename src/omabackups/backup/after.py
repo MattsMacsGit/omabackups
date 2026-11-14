@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 
 from omabackups.backup import skips, thinning
+from omabackups.core import partial
 from omabackups.core.errors import OmaError
 from omabackups.where.server import Gate
 
@@ -68,7 +69,9 @@ def finished_record(job, name: str, thinned: list, left: list | None, space: dic
             "resent_for_pass": job.verdict.get("pass_started") if job.resend
             else record.get("resent_for_pass"),
             # SPEC §9: past this partial restore for good (Back up anyway).
-            "forced_past": job.forced_past or record.get("forced_past")}
+            "forced_past": job.forced_past or record.get("forced_past"),
+            "kept_by": KEPT.get("by", record.get("kept_by") or {}),
+            "rescue_settled": job.rescue_settled or record.get("rescue_settled")}
 
 
 def keep_forced_point(job) -> None:
@@ -82,3 +85,23 @@ def keep_forced_point(job) -> None:
         job.logger.info("forced backup: restore point %s kept", job.forced_past)
     except OmaError as exc:
         job.logger.warning("couldn't keep %s: %s | %s", job.forced_past, exc.what, exc.details)
+
+
+def settle_rescue_keep(job) -> None:
+    """Audit 9.3: the stick keeps the point it restores from (R). Once
+    everything came back and a normal backup ran, that keep has done its
+    job and lets go (thinning may take the point in time). After a forced
+    backup it stays (keep_forced_point)."""
+    if job.forced_past:
+        return
+    mine = partial.migrate_record() or {}
+    point = mine.get("point")
+    if (not mine.get("rescued") or not point or point == job.record.get("rescue_settled")
+            or point == job.record.get("forced_past")):
+        return
+    try:
+        job.gate.call("release", job.bid, point, "rescue-done")
+        job.rescue_settled = point
+        job.logger.info("everything came back from %s: the rescue's keep lets go", point)
+    except OmaError as exc:
+        job.logger.warning("letting go of the rescue's keep on %s: %s | %s", point, exc.what, exc.details)

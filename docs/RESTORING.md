@@ -46,3 +46,21 @@ From a terminal:
 omabackups restore-files 001-2026-11-07-2102
 omabackups restore-files stop
 ```
+
+## Rebuilding the working copy
+
+Your backup holds one **working copy** of your computer, which each backup
+brings up to date, and the restore points, which never change. If the
+working copy ever goes wrong (say a backup ran from a system that wasn't
+whole yet, and removed folders from it), rebuild it from a restore point
+you trust:
+
+```
+omabackups rebuild-from 001-2026-11-07-1400
+omabackups backup
+```
+
+Your restore points stay as they are. The next backup checks every file
+once and sends only what changed since that restore point. If a bad backup
+also made a restore point, delete that one afterwards with
+`omabackups delete`.

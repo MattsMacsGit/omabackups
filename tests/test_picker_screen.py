@@ -42,7 +42,8 @@ def drive(sandbox, keys: list[bytes]) -> tuple[int, str]:
 
 
 def test_the_picker_opens_moves_and_quits(sandbox):
-    code, screen = drive(sandbox, [b"j", b"\x1b", b"q", b"y"])     # Esc doesn't quit; q asks
+    # It opens on Quick skips; Your files is the last row (8 switches above it).
+    code, screen = drive(sandbox, [b"j"] * 8 + [b"\r", b"j", b"\x1b", b"q", b"y"])  # Esc doesn't quit; q asks
     assert "Quit?" in screen                     # still open after Esc: q asked
     assert code == 0
     assert "Choose what gets backed up" in screen
@@ -85,5 +86,5 @@ def test_a_skipped_folder_can_be_opened(sandbox):
     (paths.system_config_dir() / "skips.json").write_text(json.dumps(
         {"format": 2, "home": [f"/{sandbox.home.name}/Downloads"], "system": [], "boot": []}))
     # Downloads is the smallest visible folder here: move to it, open it, quit.
-    code, screen = drive(sandbox, [b"j", b"j", b"\r", b"q", b"y"])
+    code, screen = drive(sandbox, [b"j"] * 8 + [b"\r", b"j", b"j", b"\r", b"q", b"y"])
     assert code == 0 and "inside.iso" in screen and "Tick Downloads to back it up" in screen

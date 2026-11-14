@@ -78,9 +78,13 @@ def start_job(request: dict) -> dict:
         only = [str(p).removeprefix("~/") for p in only if isinstance(p, str)]
         only = [p for p in only if p and ".." not in p.split("/") and not p.startswith("/")]
     leave_out = clean_leave_out(request.get("leave_out"))
+    from omabackups.restore import later
+    known = set(later.system_paths())
+    leave_out_system = [p for p in request.get("leave_out_system") or [] if p in known]
     stop_job({})
     write_atomic(plan_file(), json.dumps({"point": point, "from_user": from_user, "only": only,
-                                          "leave_out": leave_out}).encode(), 0o600)
+                                          "leave_out": leave_out,
+                                          "leave_out_system": leave_out_system}).encode(), 0o600)
     subprocess.run(["systemd-run", f"--unit={UNIT}", "--collect", "--quiet",
                     "--property=KillMode=mixed", sys.executable, "-m", "omabackups",
                     "restore-run", point, run.linked_user()], check=False, capture_output=True)
@@ -107,7 +111,7 @@ def stop_job(request: dict) -> dict:
 def command(gate, bid: str, point: str, user: str, home: Path, from_user: str = "",
             only: list[str] | None = None, leave_out: list[str] | None = None) -> list[str]:
     """rsync from the restore point's copy of a home folder into this user's.
-    --update: a file that's newer here is never overwritten. `from_user`: the
+    --ignore-existing: a file that's here is never touched (1.x, audit 1.9). `from_user`: the
     name it had there (1.x lesson: never assume it's the same on a new install);
     `only`: just these (relative paths), as Migrate's "Your files" picks them;
     `leave_out`: what Choose what comes back left in the backup (D52)."""
@@ -115,7 +119,7 @@ def command(gate, bid: str, point: str, user: str, home: Path, from_user: str = 
     if os.geteuid() == 0:                 # as root: the files become this user's
         entry = pwd.getpwnam(user)
         owner = [f"--chown={entry.pw_uid}:{entry.pw_gid}", "--numeric-ids"]
-    return ["rsync", "-aHAX", "--update", "--info=progress2", "--no-inc-recursive", *owner,
+    return ["rsync", "-aHAX", "--ignore-existing", "--info=progress2", "--no-inc-recursive", *owner,
             # --files-from switches off going into folders: -r puts it back
             # (stage 8 lesson: it made empty folders and said "done").
             *(["--files-from=-", "--from0", "-r"] if only is not None else []),
@@ -136,8 +140,31 @@ def still_missing(gate, bid: str, point: str, user: str, home: Path, from_user: 
     return sum(1 for row in done.stdout.decode("utf-8", "replace").splitlines() if row.startswith(">f"))
 
 
+def bring_later_system(gate, bid: str, point: str, leave_out_system: list[str]) -> None:
+    """What a Quick Rescue left in the system area (AI models and the like,
+    restore/later.py), as root; a place the restore point doesn't have is
+    fine (rsync 23). A file that's here is never touched."""
+    from omabackups.restore import later
+    wanted = [p for p in later.system_paths() if p not in leave_out_system]
+    if not wanted:
+        return
+    root = Path(os.environ.get("OMABACKUPS_SYSROOT") or "/")
+    done = subprocess.run(
+        ["rsync", "-aHAX", "--ignore-existing", "--numeric-ids", "--files-from=-", "--from0", "-r",
+         "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} system",
+         f"{gate.rsync_target()}:system/", f"{root}/"],
+        input=b"\0".join(p.lstrip("/").encode() for p in wanted) + b"\0",
+        capture_output=True, env=gate.rsync_env())
+    if done.returncode not in (0, 23, 24):
+        raise OmaError("Your AI models and the like couldn't all be brought back.",
+                       "Run Restore my files again: it carries on where it stopped.",
+                       done.stderr.decode("utf-8", "replace").strip()[-2000:] or f"rsync exit {done.returncode}",
+                       code="restore-failed")
+
+
 def restore(point: str, user: str, home: Path | None = None, stopping=lambda: False,
-            from_user: str = "", only: list[str] | None = None, leave_out: list[str] | None = None) -> dict:
+            from_user: str = "", only: list[str] | None = None, leave_out: list[str] | None = None,
+            leave_out_system: list[str] | None = None) -> dict:
     """Bring `user`'s home back from `point` (from `from_user`'s folder there,
     or just the paths in `only`). Returns the final state."""
     logger = log.get("restore")
@@ -184,9 +211,13 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
                                    code="restore-incomplete")
                 state.update(running=False, error=failure.as_dict())
             else:
-                state.update(running=False, done=True, percent=100)
                 from omabackups.core import partial      # the guard counts what's back (SPEC §9)
-                partial.note_restored(point, only, leave_out)
+                from omabackups.restore import later
+                if only is None:
+                    bring_later_system(gate, bid, point, leave_out_system or [])
+                state.update(running=False, done=True, percent=100)
+                partial.note_restored(point, only, leave_out,
+                                      later.brought(only, leave_out or [], leave_out_system or []))
                 from omabackups.migrate import rename      # sync apps' folders (Migrate, 8b)
                 if again := rename.later(user):
                     state["note"] = (f"{' and '.join(again)} now uses your folders here: "
@@ -216,7 +247,9 @@ def serve(point: str, user: str) -> int:
     try:
         state = restore(point, user, stopping=lambda: stop["now"],
                         from_user=asked.get("from_user") or "", only=asked.get("only"),
-                        leave_out=clean_leave_out(asked.get("leave_out")))
+                        leave_out=clean_leave_out(asked.get("leave_out")),
+                        leave_out_system=[p for p in asked.get("leave_out_system") or []
+                                          if isinstance(p, str)])
     except OmaError as exc:
         _say({"point": point, "user": user, "running": False, "error": exc.as_dict(),
               "since": int(time.time())})

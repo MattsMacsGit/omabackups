@@ -78,7 +78,7 @@ class Model:
     # --- the pages ---------------------------------------------------------
 
     def home(self) -> Node:
-        return Node("home", self.user, "Home", True)
+        return Node("home", self.user, "Your files", True)
 
     def system(self) -> Node:
         """Measured for the total only: the system isn't browsed (Quick skips instead)."""
@@ -108,7 +108,9 @@ class Model:
 
     def children(self, node: Node) -> list[Node]:
         if node == self.quick():
-            return [Node("quick", q.id, q.label, False) for q in QUICK]
+            # The first page: the switches, then Your files at
+            # the bottom, all ticked, to open and skip things in.
+            return [Node("quick", q.id, q.label, False) for q in QUICK] + [self.home()]
         out = []
         try:
             entries = list(os.scandir(node.path(self.roots)))
@@ -122,11 +124,9 @@ class Model:
             except OSError:
                 is_dir = False
             out.append(Node(node.part, f"{node.rel}/{e.name}".lstrip("/"), e.name, is_dir))
-        if node == self.home():
-            out.append(self.quick())
         # Folders before files, each biggest on the computer first (never by
-        # what's ticked); hidden ones after; Quick skips last.
-        key = lambda n: (n.part == "quick", n.name.startswith("."), not n.is_dir,  # noqa: E731
+        # what's ticked); hidden ones after.
+        key = lambda n: (n.name.startswith("."), not n.is_dir,  # noqa: E731
                          -(self.disk_size(n) or 0), n.name.lower())
         return sorted(out, key=key)
 
@@ -307,7 +307,7 @@ class Model:
         A Quick skip's size is what it holds, skipped or not (what skipping saves)."""
         if node.part == "quick":
             items = self.children(node) if node == self.quick() else [node]
-            for item in items:
+            for item in [i for i in items if i.part == "quick"]:     # Your files is measured on its own
                 if stop():
                     return 0
                 got = quick.size(quick.places(self._quick(item), self.user, self.roots))

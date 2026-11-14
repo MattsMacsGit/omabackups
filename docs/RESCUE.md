@@ -59,8 +59,10 @@ Then Omarchy's logo fills as it works. At the end it says what to know,
 After a Quick Rescue, the panel says **Finish restore**:
 
 1. **Restore my files** opens **Choose what comes back**: the same picker as
-   Choose what gets backed up, the other way round. It shows your home
-   folder as it is in the restore point, with the same rows, sizes and keys.
+   Choose what gets backed up, the other way round. It opens on **Quick
+   skips** (bring back your AI models and games now, or later), and **Your
+   files** at the bottom shows your home folder as it is in the restore
+   point, with the same rows, sizes and keys.
    A tick brings it back; the colours say what's here (**blue** comes back,
    **green** already here, **grey** stays in your backup). Press **s** and
    it comes back while you work; a file that's newer here is never
@@ -72,15 +74,23 @@ After a Quick Rescue, the panel says **Finish restore**:
 
 From a terminal: `omabackups restore-files <restore point> --pick`.
 
+A Quick Rescue gets you working fast: your system, apps, settings and
+logins come back first. Your folders, and the big things you can get again
+(AI models, including Ollama's; Steam's installed games; Flatpak apps;
+virtual machine disks), wait for Restore my files. Ollama runs but lists no
+models until they're back; Steam opens logged in but shows no games until
+Game libraries comes back (leave it closed until then if you can).
+
 ### Backups wait for your folders
 
 Until every folder is back, backups are paused: automatic ones, the nightly
-health check, and Back up now (it reads **Paused until your files are
-back**). A backup now would keep only what's on this computer, and the
-folders still on the backup would leave its working copy.
+health check, and Back up now (greyed out, with "Backups paused until your
+files are back, hold Ctrl to back up anyway." under it). A backup now would
+keep only what's on this computer, and the folders still on the backup would
+leave its working copy.
 
-To leave some folders behind on purpose, hold **Ctrl** and click **Paused
-until your files are back**, then **Back up anyway**. The restore point you
+To leave some folders behind on purpose, hold **Ctrl** (Back up now wakes
+up) and click it, then **Back up anyway**. The restore point you
 came from stays kept, with everything on it, so you can bring the rest back
 from it any time. From a terminal: `omabackups backup --force-after-restore`.
 

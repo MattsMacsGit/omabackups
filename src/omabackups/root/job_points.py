@@ -41,7 +41,8 @@ def keep(request: dict) -> dict:
     finally:
         gate.call("lock", bid, hold)
     record = run.load_record()          # written after the server said yes
-    run.save_record({**record, "kept": kept.get("kept", []), "return_point": kept.get("return_point")})
+    run.save_record({**record, "kept": kept.get("kept", []), "return_point": kept.get("return_point"),
+                     "kept_by": kept.get("by") or {}})
     return {"kept": kept.get("kept", [])}
 
 
@@ -65,7 +66,8 @@ def delete(request: dict) -> dict:
     record = run.load_record()          # written after the server said yes
     points = {n: v for n, v in (record.get("point_skips") or {}).items() if n != point}
     run.save_record({**record, "point_skips": points, "space": space, "all_points": info["points"],
-                     "kept": info["kept"].get("kept", []), "return_point": info["kept"].get("return_point")})
+                     "kept": info["kept"].get("kept", []), "return_point": info["kept"].get("return_point"),
+                     "kept_by": info["kept"].get("by") or {}})
     return {"deleted": point, "space": space}
 
 
