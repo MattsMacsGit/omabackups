@@ -57,3 +57,12 @@ def test_restore_my_files_leaves_out_what_stays(tmp_path):
     assert "--exclude=/Videos" in command and "--exclude=.cache" in command
     assert files.clean_leave_out(["/Videos", "--rsync-path=x", "/a/../b", "ok\nno", 7, "!/Music/keep"]) \
         == ["/Videos", "!/Music/keep"]
+
+
+def test_an_empty_folder_from_a_quick_rescue_still_comes_back(tmp_path):
+    """A Quick Rescue puts the folders back empty: they showed green "already
+    here" (found in the screenshot GIF, 14 Nov). Empty: blue, it comes back."""
+    m, point, here = _world(tmp_path)
+    (here / "Music").mkdir(exist_ok=True)
+    music = Node("home", "u/Music", "Music", True)
+    assert m.colour(music) == "blue" and m.explain(music) == "Music: comes back."

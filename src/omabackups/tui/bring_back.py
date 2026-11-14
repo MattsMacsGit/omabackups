@@ -46,7 +46,8 @@ class BringBack(Model):
         local = self._local(node)
         try:
             if node.is_dir:
-                return local.is_dir()
+                # A Quick Rescue puts the folders back empty: an empty one comes back (blue).
+                return local.is_dir() and not local.is_symlink() and any(local.iterdir())
             return os.lstat(local).st_size == os.lstat(node.path(self.roots)).st_size
         except OSError:
             return False
