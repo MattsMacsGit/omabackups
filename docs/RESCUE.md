@@ -21,9 +21,11 @@ Settings). A window opens:
    written: a download that doesn't match is never used.
 3. **Writing it.** The window shows how far it is.
 4. **Its settings.** A small part of the stick holds where your backup server
-   is and the stick's own key. That key can only read your backup: it can't
-   change or delete anything, and it can't open your backup by itself, so
-   every rescue asks for your backup's password.
+   is and the stick's own key, locked with your backup's password (making the
+   stick asks for it once). That key can only read your backup: it can't
+   change or delete anything, and it can't open your backup by itself.
+   After you change your backup's password, refresh the stick so it opens
+   with the new one (Settings › Refresh Rescue USB).
 
 One stick at a time: making a new one switches the last one's key off, so a
 lost stick can always be cut off.
@@ -37,11 +39,12 @@ its size.
 Start the computer from the stick (the boot menu key, often F12, Esc or F2;
 on a Mac, hold Option). Pick **OmaBackups Rescue**. Then:
 
-1. **Wi-Fi**, only if there's no network cable.
-2. **Finding your backup**: at home it goes straight to your backup server;
+1. **Unlock the Rescue USB** with your backup's password. That one password
+   opens your backup too: it isn't asked again.
+2. **Wi-Fi**, only if there's no network cable.
+3. **Finding your backup**: at home it goes straight to your backup server;
    away, it offers to log in to Tailscale (open the link or scan the code on
    your phone).
-3. **Your backup's password.**
 4. **Which restore point**: each shows the computer's name and its backup
    line (`omarchy-001`), and when. An older line, from a computer you
    migrated from, says `earlier-001`.

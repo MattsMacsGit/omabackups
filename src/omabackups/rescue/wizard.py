@@ -89,11 +89,27 @@ def find_backup() -> tuple:
             subprocess.run(["tailscale", "up", "--qr", "--accept-dns=true", "--hostname=omabackups-rescue"])
 
 
-def unlock(gate, bid: str) -> tuple[str, str]:
-    """Your backup's password: tried on the server, asked again if wrong."""
+def unlock_stick() -> str:
+    """A locked stick (audit 8.3): opened with the backup's password, first
+    thing, because its settings (where your backup is) are what's locked."""
     while True:
-        screens.step("Your backup's password", "The one you chose when you set up backups.")
+        screens.step("Unlock the Rescue USB", "With your backup's password.")
         password = screens.secret("Backup password", "your backup's password")
+        if settings.unlock(password):
+            return password
+        _problem("That password didn't open this Rescue USB", "Try again.")
+        time.sleep(2)
+
+
+def unlock(gate, bid: str, known: str | None = None) -> tuple[str, str]:
+    """Your backup's password: tried on the server, asked again if wrong.
+    `known`: the one that opened the stick, tried first (never asked twice)."""
+    while True:
+        if known:
+            password, known = known, None
+        else:
+            screens.step("Your backup's password", "The one you chose when you set up backups.")
+            password = screens.secret("Backup password", "your backup's password")
         try:
             hold = gate.call("unlock", bid, data=password.encode())["hold"]
             return password, hold
@@ -201,6 +217,7 @@ def run(events) -> int:
     if not screens.confirm("Ready to start?", "Start", "Shut down"):
         subprocess.run(["systemctl", "poweroff"])
         return 0
+    password = unlock_stick() if settings.locked() else None
     found = settings.find()
     if not found:
         raise OmaError("This stick has no settings.", "Make it again from your computer: Make Rescue USB.",
@@ -209,7 +226,7 @@ def run(events) -> int:
     network()
     server, gate, _away = find_backup()
     bid = server["backup"]
-    password, hold = unlock(gate, bid)
+    password, hold = unlock(gate, bid, password)
     try:
         point, names = pick_point(gate, bid, hold, {**mine, "line": server.get("line")})
         keep_picked(gate, bid, point)

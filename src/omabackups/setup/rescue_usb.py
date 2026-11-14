@@ -23,6 +23,9 @@ from omabackups.setup import rescue_image as image
 STICK_MAX = 512 * 10**9        # bigger than this, it's not what people call a USB stick
 
 
+# The stick is locked with the backup's own password (audit 8.3; wording agreed 14 Nov).
+LOCK = "Your backup's password: it locks this Rescue USB's key."
+
 def looks_like_a_stick(disk) -> bool:
     return disk.removable and disk.transport == "usb" and disk.size <= STICK_MAX
 
@@ -121,7 +124,9 @@ def make() -> dict:
                "It becomes your Rescue USB.")
     if menu.choose("Make the Rescue USB?", ["Make it", "No, stop here"], 1) != 0:
         raise OmaError(menu.CANCELLED, code="cancelled")
-    done = _with_progress("rescue-usb-write", {"disk": disk.path, "image": path}, "Starting...")
+    password = menu.secret(LOCK)
+    done = _with_progress("rescue-usb-write", {"disk": disk.path, "image": path, "password": password},
+                          "Starting...")
     _remember(done.get("made", {}), disk)
     menu.title("Your Rescue USB is ready",
                "Keep it somewhere safe. To bring this computer back, start it from the stick.\n"
@@ -144,7 +149,9 @@ def refresh() -> dict:
         if menu.choose("What now?", ["Make it again with the newer one", "Only the settings"]) == 0:
             return make()
     disk = _pick_stick("is your Rescue USB")
-    done = _with_progress("rescue-usb-refresh", {"disk": disk.path}, "Refreshing its settings...")
+    password = menu.secret(LOCK)
+    done = _with_progress("rescue-usb-refresh", {"disk": disk.path, "password": password},
+                          "Refreshing its settings...")
     _remember(done.get("made", {}), disk)
     menu.title("Your Rescue USB is up to date", "The last stick's key no longer opens anything.")
     return done

@@ -80,11 +80,31 @@ def write(bundle: dict, folder: Path) -> None:
         write_atomic(folder / name, bundle[name].encode(), 0o600)
 
 
+PART = Path("/dev/disk/by-label/OMABACKUPS")
+MAPPER = "omabackups-stick-settings"
+
+
+def locked() -> bool:
+    """The stick's settings part is encrypted (with the backup's password,
+    audit 8.3) and not opened yet. An older stick's is plain."""
+    if not PART.exists() or Path(f"/dev/mapper/{MAPPER}").exists():
+        return False
+    kind = subprocess.run(["blkid", "-o", "value", "-s", "TYPE", str(PART)], capture_output=True, text=True)
+    return kind.stdout.strip() == "crypto_LUKS"
+
+
+def unlock(password: str) -> bool:
+    """Opens the stick's settings part with the backup's password."""
+    return subprocess.run(["cryptsetup", "open", "--readonly", "--key-file=-", str(PART), MAPPER],
+                          input=password.encode(), capture_output=True).returncode == 0
+
+
 def _mount_settings_part() -> None:
-    """On the stick: its own small settings part (OMABACKUPS), read only."""
-    import subprocess
-    part = Path("/dev/disk/by-label/OMABACKUPS")
-    if part.exists() and not os.path.ismount(PLACES[0]):
+    """On the stick: its own small settings part (OMABACKUPS), read only:
+    opened first if it's locked."""
+    opened = Path(f"/dev/mapper/{MAPPER}")
+    part = opened if opened.exists() else PART
+    if part.exists() and not locked() and not os.path.ismount(PLACES[0]):
         PLACES[0].mkdir(parents=True, exist_ok=True)
         subprocess.run(["mount", "-o", "ro", str(part), str(PLACES[0])], capture_output=True)
 

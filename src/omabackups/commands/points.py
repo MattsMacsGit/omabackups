@@ -79,6 +79,11 @@ def run_password(args, events: Events) -> int:
             break
         events.message("Those two didn't match. Try again.")
     rootjob.run("change-password", {"old": old, "new": new})
-    events.result({"changed": True}, "Your backup's password is changed. Write the new one down: "
-                  "you need it for the Rescue USB and for Migrate.")
+    from omabackups.core import state
+    stick = bool((state.read("panel") or {}).get("rescue_usb"))     # it's locked with the old one (audit 8.3)
+    events.result({"changed": True, "refresh_stick": stick},
+                  "Your backup's password is changed. Write the new one down: "
+                  "you need it for the Rescue USB and for Migrate."
+                  + ("\nRefresh your Rescue USB so it opens with the new password: "
+                     "Settings › Refresh Rescue USB." if stick else ""))
     return 0

@@ -6,6 +6,10 @@ rescue-usb-write    the downloaded image onto the stick, then its small
                     stick's key is taken off the server)
 rescue-usb-refresh  only the settings part rewritten (a new key, the old cut off)
 
+The settings part is encrypted (LUKS2, labelled OMABACKUPS) with the backup's
+own password: one password opens the stick and the backup (audit 8.3, agreed
+14 Nov). It's checked against the backup first, so a typo never locks a stick.
+
 Every disk can be chosen (warn, never block), except the one this system
 runs on. Progress goes to /run/omabackups/rescue-usb.json for the window
 that started it.
@@ -23,6 +27,7 @@ from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
 
 LABEL = "OMABACKUPS"
+MAPPER = "omabackups-stick-settings"
 SETTINGS_SIZE = "64M"
 # Blanked just past the image, where the settings part goes (the size check
 # keeps this much room): an old stick's settings part found there again is
@@ -96,16 +101,43 @@ def _let_go(part: str) -> None:
         mounts.let_go(part)
 
 
-def _format(part: str) -> None:
-    """The settings part formatted. The desktop may open a stick's part as
-    soon as it appears: let go of it and try again before giving up."""
+def _format(part: str, password: str) -> str:
+    """The settings part locked with the backup's password (LUKS2), FAT
+    inside; returns the opened inside. The desktop may open a stick's part
+    as soon as it appears: let go of it and try again before giving up."""
+    subprocess.run(["cryptsetup", "close", MAPPER], capture_output=True)
+    command = ["cryptsetup", "luksFormat", "--type", "luks2", "--label", LABEL, "--batch-mode",
+               "--key-file=-", part]
     for _ in range(9):
         _let_go(part)
-        if subprocess.run(["mkfs.fat", "-n", LABEL, part], capture_output=True).returncode == 0:
-            return
+        if subprocess.run(command, input=password.encode(), capture_output=True).returncode == 0:
+            break
         time.sleep(1)
-    _let_go(part)
-    _run("mkfs.fat", "-n", LABEL, part)
+    else:
+        _let_go(part)
+        _run(*command, data=password.encode())
+    _run("cryptsetup", "open", "--key-file=-", part, MAPPER, data=password.encode())
+    inside = f"/dev/mapper/{MAPPER}"
+    _run("mkfs.fat", "-n", LABEL, inside)
+    return inside
+
+
+def check_password(request: dict) -> str:
+    """The backup's password, tried on the backup before anything is written."""
+    from omabackups.where import location
+    password = request.get("password")
+    if not isinstance(password, str) or not password:
+        raise OmaError("The Rescue USB is locked with your backup's password, and none was given.",
+                       "Make or refresh it again and type your backup's password.", code="bad-request")
+    server = location.load()
+    gate, _away = location.connect(server)
+    try:
+        hold = gate.call("unlock", server["backup"], data=password.encode())["hold"]
+    except OmaError as exc:
+        raise OmaError("That password didn't open your backup, so the stick wasn't touched.",
+                       "Try again with your backup's password.", exc.details, code="wrong-password") from None
+    gate.call("lock", server["backup"], hold)
+    return password
 
 
 def _settings_part(disk: str) -> str | None:
@@ -114,7 +146,7 @@ def _settings_part(disk: str) -> str | None:
                  if len(line.split()) > 1 and line.split()[1] == LABEL), None)
 
 
-def _write_settings(part: str) -> dict:
+def _write_settings(part: str, password: str) -> dict:
     """A new read-only key on the server (the last stick's taken off), its
     settings onto the stick's settings part."""
     from omabackups.rescue import settings
@@ -126,20 +158,25 @@ def _write_settings(part: str) -> dict:
     gate, _away = location.connect(server)
     gate.check_version()
     bundle = settings.make(gate, server)
-    with tempfile.TemporaryDirectory(prefix="omabackups-stick.") as mnt:
-        _run("mount", part, mnt)
-        try:
-            for name in settings.FILES:
-                Path(mnt, name).write_text(bundle[name])     # FAT: no owners or modes to keep
-        finally:
-            subprocess.run(["sync"])
-            _run("umount", mnt)
+    inside = _format(part, password)
+    try:
+        with tempfile.TemporaryDirectory(prefix="omabackups-stick.") as mnt:
+            _run("mount", inside, mnt)
+            try:
+                for name in settings.FILES:
+                    Path(mnt, name).write_text(bundle[name])     # FAT: no owners or modes to keep
+            finally:
+                subprocess.run(["sync"])
+                _run("umount", mnt)
+    finally:
+        subprocess.run(["cryptsetup", "close", MAPPER], capture_output=True)
     return json.loads(bundle["rescue.json"])
 
 
 def write(request: dict) -> dict:
     from omabackups.restore import newdisk
     disk, image = _disk(request), _image(request)
+    password = check_password(request)
     if image.stat().st_size > int(_run("blockdev", "--getsize64", disk)) - (80 << 20):
         raise OmaError("That stick is too small for the rescue system.", "Use a stick of 4 GB or more.",
                        code="rescue-usb-small")
@@ -150,15 +187,14 @@ def write(request: dict) -> dict:
     _reread(disk)
     # The image's own table is the old (MBR) kind with two parts: a third,
     # small, after them, holds the settings.
-    _run("sfdisk", "--append", "--no-reread", disk, data=f",{SETTINGS_SIZE},c\n".encode())
+    _run("sfdisk", "--append", "--no-reread", disk, data=f",{SETTINGS_SIZE},83\n".encode())
     _reread(disk)
     part = newdisk.partition(disk, 3)
     for _ in range(20):
         if os.path.exists(part):
             break
         time.sleep(0.5)
-    _format(part)
-    made = _write_settings(part)
+    made = _write_settings(part, password)
     _say("done", 100)
     return {"made": made, "disk": disk}
 
@@ -166,9 +202,10 @@ def write(request: dict) -> dict:
 def refresh(request: dict) -> dict:
     from omabackups.restore import newdisk
     disk = _disk(request)
+    password = check_password(request)
     part = _settings_part(disk)
     if not part:
         raise OmaError("That stick isn't a Rescue USB (it has no settings part).",
                        "Make Rescue USB writes a new one.", disk, code="rescue-usb-not-one")
     newdisk.free(disk)
-    return {"made": _write_settings(part), "disk": disk}
+    return {"made": _write_settings(part, password), "disk": disk}
