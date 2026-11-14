@@ -134,8 +134,10 @@ def check_password(request: dict) -> str:
     try:
         hold = gate.call("unlock", server["backup"], data=password.encode())["hold"]
     except OmaError as exc:
-        raise OmaError("That password didn't open your backup, so the stick wasn't touched.",
-                       "Try again with your backup's password.", exc.details, code="wrong-password") from None
+        if exc.code == "gate-refused" and "doesn't open" in exc.what:
+            raise OmaError("That password didn't open your backup, so the stick wasn't touched.",
+                           "Try again with your backup's password.", exc.details, code="wrong-password") from None
+        raise          # anything else (the server unreachable...) says so as it is
     gate.call("lock", server["backup"], hold)
     return password
 

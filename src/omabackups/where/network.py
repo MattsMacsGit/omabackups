@@ -67,15 +67,30 @@ def _bare_name(address: str) -> bool:
     return _ip(address) is None and "." not in address.rstrip(".")
 
 
+def local_addresses() -> set[str]:
+    """This computer's own addresses. A server address that is also one of
+    these is never tried: it would reach this computer itself (a server's
+    Docker or VM addresses, 172.17.0.1 or 10.0.2.15, exist here too)."""
+    if os.environ.get("OMABACKUPS_SYSROOT"):      # tests: no network
+        return set(filter(None, os.environ.get("OMABACKUPS_TEST_LOCAL", "").split(",")))
+    import subprocess
+    try:
+        done = subprocess.run(["ip", "-j", "addr", "show"], capture_output=True, text=True, timeout=5)
+        return {a["local"] for i in json.loads(done.stdout or "[]") for a in i.get("addr_info", [])}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return set()
+
+
 def candidates(server: dict) -> list[tuple[str, bool]]:
-    """(address, away?) in the order to try them."""
+    """(address, away?) in the order to try them; never one of this
+    computer's own."""
     typed = server["address"]
     typed_away = tailscale(typed)
     home = list(server.get("home", [])) + ([] if typed_away else [typed])
     if _bare_name(typed):
         home.append(f"{typed}.local")
     away = list(server.get("away", [])) + ([typed] if typed_away else [])
-    out, seen = [], set()
+    out, seen = [], set(local_addresses())
     for address, is_away in [(a, False) for a in home] + [(a, True) for a in away]:
         if address and address not in seen:
             seen.add(address)

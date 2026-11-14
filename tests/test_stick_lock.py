@@ -36,3 +36,22 @@ def test_the_stick_asks_first_and_never_twice(monkeypatch):
             return {"hold": "h1"}
     monkeypatch.setattr(wizard.screens, "secret", lambda *a: pytest.fail("asked for the password again"))
     assert wizard.unlock(Gate(), "b", "pw") == ("pw", "h1")
+
+
+def test_a_failure_is_shown_before_the_window_closes(monkeypatch, capsys):
+    """It asked "Press Enter to close" first and printed the error after, so the
+    window closed on nothing (demo film, 14 Nov)."""
+    from types import SimpleNamespace
+
+    from omabackups.commands import rescue
+    from omabackups.core.events import Events
+    from omabackups.setup import menu, rescue_usb
+    monkeypatch.setattr(__import__("os"), "isatty", lambda fd: True)
+
+    def broken():
+        raise OmaError("The stick broke.", "Try another.", code="x")
+    monkeypatch.setattr(rescue_usb, "make", broken)
+    seen = {}
+    monkeypatch.setattr(menu, "ask", lambda prompt, *a, **k: seen.update(on_screen=capsys.readouterr().err) or "")
+    assert rescue.run_make(SimpleNamespace(verb="make"), Events()) == 1
+    assert "The stick broke." in seen["on_screen"]          # already there when it asks to close

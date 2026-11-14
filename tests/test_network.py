@@ -61,3 +61,13 @@ def test_learnt_addresses_are_saved(sandbox):
     network.learn_addresses(FakeGate({"addresses": ["192.0.2.50"], "tailscale": {"ips": ["100.101.102.104"]}}), server)
     saved = json.loads(paths.server_file().read_text())
     assert saved["home"] == ["192.0.2.50"] and saved["away"] == ["100.101.102.104"] and saved["address"] == "server"
+
+
+def test_an_address_this_computer_has_itself_is_never_tried(sandbox, monkeypatch):
+    """The demo film (14 Nov): the server's own 10.0.2.15 was learnt, and on the
+    computer that address is the computer itself: SSH reached itself and said
+    the host key had changed. A server's Docker 172.17.0.1 is the same trap."""
+    from omabackups.where import network
+    monkeypatch.setenv("OMABACKUPS_TEST_LOCAL", "10.0.2.15,172.17.0.1")
+    server = {"address": "192.0.2.10", "home": ["10.0.2.15", "172.17.0.1", "192.0.2.10"]}
+    assert [a for a, _ in network.candidates(server)] == ["192.0.2.10"]
