@@ -66,7 +66,9 @@ class Screen:
         name_width = max(10, w - 34)
         self.put(y, x, name[:name_width], tint | base | (curses.A_BOLD if menu else 0))
         self.put(y, x + name_width + 1, size.rjust(9), tint | base)
-        self.put(y, x + name_width + 12, note, self.col(COLOURS.get(note_colour, GREY)) | base)
+        start = x + name_width + 12
+        room = (w - 4 if opens else w - 1) - start          # never over the › of a row that opens
+        self.put(y, start, note[:max(0, room)], self.col(COLOURS.get(note_colour, GREY)) | base)
         if opens:
             self.put(y, w - 3, "›", base)
 
