@@ -17,6 +17,8 @@ checks every file: rsync only sends what's still missing.
 """
 
 import json
+import platform
+import socket
 import subprocess
 import time
 from contextlib import ExitStack
@@ -111,15 +113,17 @@ def point_name(line: str, latest: str | None) -> str:
 
 
 def backup(progress=lambda step, part="", **more: None, source=None, anyway: bool = False,
-           manual: bool = True, force_after_restore: bool = False) -> dict:
+           manual: bool = True, force_after_restore: bool = False, dry_run: bool = False) -> dict:
     """Run one backup. `anyway`: the answer "Back up now" to the away limit.
     `force_after_restore`: Back up anyway, while the folders of a partial
-    restore are still on the backup (SPEC §9).
+    restore are still on the backup (SPEC §9). `dry_run`: the check only,
+    what would be sent and deleted, nothing changed (audit 2.8).
     `source` (tests) stands in for this computer's parts and snapshots."""
-    left = partial.waiting()
+    left = None if dry_run else partial.waiting()
     if left and not force_after_restore:
         raise partial.refusal(left)
     job = open_backup(progress)
+    job.dry_run = dry_run
     if left:
         job.forced_past = left["point"]
         job.logger.warning("backing up anyway after a partial restore from %s (still on the backup: %s)",
@@ -129,6 +133,10 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
     try:
         take_over(job)
         check_parts(job, source, stack)
+        if dry_run:
+            summary = dry_summary(job)
+            drop_new(job)
+            return {"dry_run": summary}
         job.settings = schedule.user_settings(linked_user())
         if job.settings["away.on"]:
             check.away_limit(job.away, anyway, job.needed if job.known else None,
@@ -180,6 +188,9 @@ def open_backup(progress) -> Job:
 
 def take_over(job: Job) -> None:
     """A migrated computer takes the backup over (D22); then the sender."""
+    if job.server.get("migrating") and job.dry_run:
+        raise OmaError("This computer's first backup after Migrate takes the backup over.",
+                       "Back up for real first; a dry run can show the backups after it.", code="migrating")
     if job.server.get("migrating"):
         job.server = {**job.server, "line": handover(job.gate, job.server, linked_user(), job.logger)}
     # D49: stuck for 3 minutes. The first full backup stays manual (D29).
@@ -205,6 +216,7 @@ def check_parts(job: Job, source, stack: ExitStack) -> None:
             size, job.manifests[part.name] = check.folder_changes(
                 part.mount, job.record.get("manifests", {}).get(part.name, {}))
             job.needed += size
+            job.folder_sizes[part.name] = size
             continue
         snaps = stack.enter_context(source.snapshots(part) if source else Snapshots(part.device))
         job.opened[part.name] = snaps
@@ -239,7 +251,7 @@ def everyday(job: Job, name: str, snaps) -> bool:
 def everyday_plan(job: Job, part, skip, snaps, new):
     plan = changes.plan(snaps.dump(job.since.get(part.name, ""), new), new.name, str(new), skip)
     job.needed += check.size_of(plan, str(new))
-    if job.reusing:   # never send the same data twice (D25)
+    if job.reusing and not job.dry_run:   # never send the same data twice (D25)
         job.needed -= reuse.ask(job.gate, job.bid, job.line, part.name, [],
                                 reuse.fresh_files(plan, str(new), renamed_home(job.server, part.name)))["bytes"]
     return plan
@@ -249,15 +261,16 @@ def full_plan(job: Job, part, skip, snaps, new):
     """A full check: once, as a to-do list (D49 C), when the server can;
     None means rsync checks every file as it goes and the size isn't known."""
     old_patterns = job.record.get("skip_patterns", {}).get(part.name)
-    if job.reusing and old_patterns is not None and old_patterns != skip.patterns:
+    if job.reusing and not job.dry_run and old_patterns is not None and old_patterns != skip.patterns:
         folders, files = reuse.unskipped(str(new), old_patterns, skip)
         reuse.ask(job.gate, job.bid, job.line, part.name, folders, files)
     if job.resend or job.gate_version < full.NEEDS_GATE:
         job.known = False
         return None
     listed = full.prepare(part.name, skip, new, snaps, job.sender, job.record, job.bid, job.line,
-                          job.fingerprints[part.name], job.logger)
-    if listed.old_snapshot and listed.old_snapshot not in (new.name, job.since.get(part.name)):
+                          job.fingerprints[part.name], job.logger, save=not job.dry_run)
+    if (not job.dry_run and listed.old_snapshot
+            and listed.old_snapshot not in (new.name, job.since.get(part.name))):
         snaps.drop(listed.old_snapshot)
     job.needed += sum(size for _, size in listed.items)      # D50: known, so checked
     return listed
@@ -320,6 +333,7 @@ def make_point(job: Job) -> str:
     latest = after.changes_latest(job.gate, job.bid, job.line)
     name = point_name(job.line, latest)
     point = {"owner": ids.system_id(), "user": linked_user(), "omarchy": omarchy_version(),
+             "computer": socket.gethostname(), "kernel": platform.release(),      # audit 2.7
              "omabackups": __version__, "follows": latest, "how": job.how, "away": job.away,
              "not_included": job.left_out,
              "skips": {p: skips.for_part(p).patterns for p in job.how}, "created": int(time.time())}
@@ -363,3 +377,21 @@ def drop_new(job: Job) -> None:
     for part_name, snap_name in job.made.items():
         if job.since.get(part_name) != snap_name and full.keep(part_name) != snap_name:
             job.opened[part_name].drop(snap_name)
+
+
+def dry_summary(job: Job) -> list[dict]:
+    """Per part: what a backup now would send and delete (audit 2.8)."""
+    out = []
+    for part, _skip, new, plan in job.work:
+        row = {"part": part.name, "files": None, "bytes": None, "deletes": 0, "moves": 0}
+        if new is None:
+            row["bytes"] = job.folder_sizes.get(part.name)
+        elif isinstance(plan, full.FullList):
+            row.update(files=len(plan.items), bytes=sum(size for _, size in plan.items))
+            row["deletes"] = sum(op[0] == "delete" for op in plan.ops)
+        elif plan is not None:
+            row.update(files=len(plan.files), bytes=check.size_of(plan, str(new)))
+            row["deletes"] = sum(op[0] == "delete" for op in plan.ops)
+            row["moves"] = sum(op[0] == "rename" for op in plan.ops)
+        out.append(row)
+    return out

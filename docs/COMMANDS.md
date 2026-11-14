@@ -19,6 +19,17 @@ This tells you where OmaBackups is up to on this computer. On a new install
 it says OmaBackups is not set up yet: open the panel and choose
 **Set up backups**, or **Migrate from another system**.
 
+### What would a backup do?
+
+```
+omabackups backup --dry-run
+```
+
+Checks, part by part, what a backup now would send and delete, and changes
+nothing: no restore point, nothing sent, nothing on this computer kept from
+the check. Choose what gets backed up shows the same numbers live as you
+tick and untick.
+
 ### Settings
 
 ```

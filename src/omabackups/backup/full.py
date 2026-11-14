@@ -33,7 +33,8 @@ def _meta(bid: str, line: str, part: str, fingerprint: str, snapshot: str, alrea
 
 
 def prepare(part: str, skip, new, snaps, sender, record: dict, bid: str, line: str,
-            fingerprint: str, logger) -> FullList:
+            fingerprint: str, logger, save: bool = True) -> FullList:
+    """`save`: keep the list for the copy step (a dry run doesn't)."""
     loaded = todo.load(part)
     meta = loaded[0] if loaded else {}
     old = meta.get("snapshot", "")
@@ -49,14 +50,16 @@ def prepare(part: str, skip, new, snaps, sender, record: dict, bid: str, line: s
             items = todo.carry(left, plan, str(new))
             sent_before = meta.get("bytes", 0) - sum(size for _, size in left)
             already = meta.get("already", 0) + max(0, sent_before)
-            todo.save(part, _meta(bid, line, part, fingerprint, new.name, already), items)
+            if save:
+                todo.save(part, _meta(bid, line, part, fingerprint, new.name, already), items)
             logger.info("%s: carrying on a full backup: %d of %d items left, %d changed since",
                         part, len(left), meta.get("items", 0), len(plan.files) + len(plan.ranges))
             return FullList(items, plan.ops, already, True, old)
     sender.report({})
     items, deletes, total = sender.check(part, str(new), skip)
     already = max(0, total - sum(size for _, size in items))
-    todo.save(part, _meta(bid, line, part, fingerprint, new.name, already), items)
+    if save:
+        todo.save(part, _meta(bid, line, part, fingerprint, new.name, already), items)
     logger.info("%s: checked once: %d items to send, %d to delete", part, len(items), len(deletes))
     return FullList(items, [["delete", d] for d in deletes], already, False, old)
 

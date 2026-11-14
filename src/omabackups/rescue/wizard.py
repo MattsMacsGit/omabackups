@@ -122,15 +122,31 @@ def pick_point(gate, bid: str, hold: str, mine: dict) -> tuple[str, list[str]]:
     # point said "an earlier computer (line 001)". Shown as the computer's name and
     # its line, "omarchy-001"; an older line from before a Migrate as "earlier-002".
     computer, line = mine.get("computer") or "this computer", mine.get("line") or "001"
+    named = line_names(gate, bid, names)        # each line by the computer that made it (audit 2.7)
 
     def label(name: str) -> str:
-        who = f"{computer}-{name[:3]}" if name.startswith(f"{line}-") else f"earlier-{name[:3]}"
+        who = (f"{named[name[:3]]}-{name[:3]}" if named.get(name[:3])
+               else f"{computer}-{name[:3]}" if name.startswith(f"{line}-") else f"earlier-{name[:3]}")
         notes = (["newest"] if name == names[0] else []) + \
                 (["Return point"] if name == kept.get("return_point") else []) + \
                 (["kept"] if name in kept.get("kept", []) else [])
         return f"{who}  ·  {_when(name)}" + (f"  ({', '.join(notes)})" if notes else "")
     screens.step("Which restore point?", "Each shows the computer it's from and when.")
     return names[screens.choose("Restore points", [label(n) for n in names])], names
+
+
+def line_names(gate, bid: str, names: list[str]) -> dict:
+    """{line: the computer's name} from each line's newest restore point
+    (point.json records it since 14 Nov; older points: nothing)."""
+    out = {}
+    for name in sorted(names, reverse=True):
+        if name[:3] in out:
+            continue
+        try:
+            out[name[:3]] = ((gate.call("info", bid, name) or {}).get("point") or {}).get("computer", "")
+        except OmaError:
+            out[name[:3]] = ""
+    return out
 
 
 def keep_picked(gate, bid: str, point: str) -> None:

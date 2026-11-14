@@ -38,6 +38,8 @@ class Job:
     known: bool = True            # the size is known (else the room isn't checked)
     forced_past: str = ""         # a forced backup after a partial restore: its point
     rescue_settled: str = ""      # the rescue's point, let go once everything came back
+    dry_run: bool = False         # check only: nothing on the server or here is changed
+    folder_sizes: dict = field(default_factory=dict)    # a plain folder part's size to send
 
     @property
     def bid(self) -> str:

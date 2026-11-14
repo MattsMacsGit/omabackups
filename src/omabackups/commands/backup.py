@@ -22,6 +22,8 @@ def add(sub) -> None:
     now.add_argument("--force-after-restore", action="store_true",
                      help="back up anyway while folders of a rescue or Migrate are still on the backup "
                           "(keeps only what's here; that restore point stays kept)")
+    now.add_argument("--dry-run", action="store_true",
+                     help="say what a backup now would send and delete; change nothing")
     now.set_defaults(run=run_now)
     sub.add_parser("stop", help="stop the backup that's running").set_defaults(run=run_stop)
     away = sub.add_parser("away", help="answer the away-from-home question")
@@ -48,7 +50,29 @@ def run_away(args, events: Events) -> int:
     return 0
 
 
+def run_dry(events: Events) -> int:
+    if not paths.server_file().exists():
+        raise OmaError("No backup location is set up on this computer yet.",
+                       "Set up backups first: omabackups setup server", code="not-set-up")
+    events.message("Checking what a backup now would do (nothing is changed)...")
+    from omabackups.core import rootjob
+    parts = rootjob.run("backup-dry-run", {})["parts"]
+    lines = []
+    for row in parts:
+        size = check.human(row["bytes"]) if row["bytes"] is not None else "an unknown amount"
+        what = (f"{row['files']} file{'s' if row['files'] != 1 else ''} to send ({size})"
+                if row["files"] is not None else f"{size} to check and send")
+        if not row["files"] and not row["bytes"]:
+            what = "nothing to send"
+        extra = [f"{row['deletes']} to delete"] * bool(row["deletes"]) + [f"{row['moves']} to move"] * bool(row["moves"])
+        lines.append(f"{row['part']}: {what}" + (", " + ", ".join(extra) if extra else ""))
+    events.result({"parts": parts}, "\n".join(lines + ["Nothing was changed."]))
+    return 0
+
+
 def run_now(args, events: Events) -> int:
+    if getattr(args, "dry_run", False):
+        return run_dry(events)
     from omabackups.core import partial
     left = partial.waiting()
     if left and not getattr(args, "force_after_restore", False):
