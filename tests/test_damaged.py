@@ -51,3 +51,22 @@ def test_names_inside_a_part():
     names = ["points/001-2026-11-01-1000/home/u/a.txt", "current/001/home/u/a.txt",
              "points/001-2026-11-01-1000/system/etc/x", "other/thing", "points/p/home/../../x"]
     assert damaged.damaged_in(names, "home") == {"u/a.txt": names[:2]}
+
+
+def test_a_stopped_copy_says_why_plainly(sandbox):
+    from omabackups.backup.send import stopped_because
+    assert stopped_because(11) == ("Your backup stopped responding partway through.",
+                                   "Check its power and cable, then press Resume backup.")
+    assert stopped_because(255)[0] == "Lost the connection to your backup server partway through."
+    assert stopped_because(20) == ("The copy was interrupted.", "Press Resume backup to carry on.")
+    assert stopped_because(1) == ("Copying stopped with an error.", "Press Resume backup to try again.")
+
+
+def test_the_panel_says_when_the_disk_may_be_failing(sandbox):
+    from omabackups.backup import health
+    from omabackups.commands import status_data
+    health.save({"state": "damaged"})
+    titles = lambda: [ln["title"] for ln in status_data.build()["lines"]]  # noqa: E731
+    assert "Your backup's health check found damaged files" in titles()
+    damaged.save({"found": [time.time() - 30 * 86400, time.time() - 10]})
+    assert "Your backup's disk may be failing" in titles()

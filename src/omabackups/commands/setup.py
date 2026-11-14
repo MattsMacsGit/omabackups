@@ -154,6 +154,8 @@ def run_server(args, events: Events) -> int:
                        "To update OmaBackups on the server: omabackups setup server --update. "
                        "To use a different backup location, Start over from Settings first.",
                        code="already-set-up")
+    from omabackups.setup import syscheck
+    syscheck.ask()                     # warn, never block (audit 7.5)
     menu.title("Set up backups to a backup server",
                "This computer's password (a pop-up), then your password on the server\n"
                "twice: once to log you in, once for sudo to prepare the disk. Last, you\n"
@@ -197,6 +199,8 @@ def run_disk(args, events: Events) -> int:
         raise OmaError("OmaBackups is already set up on this computer.",
                        "To use a different backup location, Start over first: "
                        "omabackups start-over", code="already-set-up")
+    from omabackups.setup import syscheck
+    syscheck.ask()                     # warn, never block (audit 7.5)
     found = disks.disks()
     if not found:
         raise OmaError("There's no disk to pick (only the one this system runs from).",

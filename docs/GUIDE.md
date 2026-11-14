@@ -30,16 +30,14 @@ Plugged in, OmaBackups' backup disks and the Rescue USB are listed in your
 file manager but never opened on their own: OmaBackups opens them when it
 needs them.
 
-**Remove OmaBackups** in Settings comes with a later version. Until then,
-to remove the package by hand:
+**Remove OmaBackups** (Settings › Your backup, or `omabackups remove`)
+takes away its services, snapshots and settings, and asks whether to delete
+your backup too (twice, because that can't be undone). Then remove the
+package:
 
 ```
 sudo pacman -R omabackups
-```
-
-Your settings stay in `~/.config/omabackups/` and the log in
-`~/.local/state/omabackups/`, in case you install it again. Delete those two
-folders as well if you want nothing left behind. OmaBackups 1.x uses
+``` OmaBackups 1.x uses
 different names, so the two can sit side by side without touching each other.
 
 ## The panel

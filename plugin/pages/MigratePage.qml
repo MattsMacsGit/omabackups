@@ -28,7 +28,7 @@ Column {
   readonly property bool backingUpNow: !!(service && service.running)
   property bool anywayOpen: false
   readonly property var targets: step === "migrating" ? [carryOn]
-    : [restartButton, restoreButton, stopButton, backUp, pausedButton, anywayButton, cancelButton, again]
+    : [restartButton, restoreButton, stopButton, backUp, pausedButton, anywayButton, cancelButton, stopBackup, again]
         .filter(function(t) { return t && t.visible })
   function cursorOn(item) { return panel && panel.cursorTarget === item }
   function folderList(names) {
@@ -210,6 +210,28 @@ Column {
     width: parent.width
     running: page.service ? page.service.running : null
     barColour: page.service ? page.service.colour("blue") : Commons.Color.accent
+  }
+  // As on the everyday page: a backup can always be stopped from the panel.
+  ActionButton {
+    id: stopBackup
+    readonly property bool stopping: !!(page.service && page.service.running && page.service.running.stopping)
+    visible: backingUp.visible
+    width: parent.width
+    text: stopping ? "Stopping…" : "Stop"
+    enabled: !stopping
+    hasCursorHere: page.cursorOn(this)
+    onClicked: if (!stopping) page.service.stop()
+  }
+  Prose {
+    visible: stopBackup.visible
+    width: parent.width
+    dim: true
+    text: "Stopping is safe: Resume backup carries on from where it got to."
+  }
+  // The Back up anyway question starts closed each time the panel opens.
+  Connections {
+    target: page.panel
+    function onOpenedChanged() { page.anywayOpen = false }
   }
 
   PanelSeparator { visible: page.step === "finish" && !page.m.rescued }

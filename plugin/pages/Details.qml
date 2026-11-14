@@ -21,7 +21,7 @@ Column {
       for (var i = 0; i < keptRepeater.count; i++) out.push(keptRepeater.itemAt(i))
       return out
     }
-    if (step === "yourBackup") return confirming ? [yesStartOver, cancelStartOver] : [password, startOver]
+    if (step === "yourBackup") return confirming ? [yesStartOver, cancelStartOver] : [password, startOver, removeRow]
     return []
   }
   function cursorOn(item) { return panel && panel.cursorTarget === item }
@@ -114,6 +114,14 @@ Column {
                  + "Your backup isn't deleted: it stays where it is, with all its restore points."
       hasCursorHere: page.cursorOn(this)
       onActivated: page.confirming = true
+    }
+    NavRow {
+      id: removeRow
+      visible: !page.confirming
+      title: "Remove OmaBackups"
+      explainer: "In a terminal window: it asks first."
+      hasCursorHere: page.cursorOn(this)
+      onActivated: page.service.removeOmaBackups()
     }
     Prose {
       visible: page.confirming

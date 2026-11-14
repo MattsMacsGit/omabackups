@@ -219,6 +219,8 @@ Item {
   function restorePick(point) { terminal("omabackups restore-files " + point + " --pick") }
   function restoreStop() { run(["restore-files", "stop"]) }
   function startOver() { run(["start-over"]) }
+  // Remove OmaBackups (audit 10.2): a terminal window; it asks first, twice before deleting the backup.
+  function removeOmaBackups() { terminal("omabackups remove") }
   function pick() { terminal("omabackups pick") }
   function changePassword() { terminal("omabackups password change") }
   function setupServer(address, login) {

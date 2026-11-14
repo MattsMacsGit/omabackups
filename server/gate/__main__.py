@@ -26,10 +26,11 @@ import verbs
 import verbs_data
 import verbs_health
 import verbs_migrate
+import verbs_remove
 import wire
 from registry import Refused
 
-VERBS = {**verbs.VERBS, **verbs_data.VERBS, **verbs_health.VERBS, **verbs_migrate.VERBS}
+VERBS = {**verbs.VERBS, **verbs_data.VERBS, **verbs_health.VERBS, **verbs_migrate.VERBS, **verbs_remove.VERBS}
 
 
 def log(message: str) -> None:

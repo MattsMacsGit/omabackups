@@ -88,9 +88,13 @@ def lines(step, settings: dict, record: dict, now: dict, mine: dict) -> list[dic
         out.append(line("automatic-off", "blue", "Automatic backups wait until you press Back up now",
                         "They start again by themselves once that backup is done."))
     verdict = backup_health.load()
-    if verdict.get("state") == "damaged":
+    from omabackups.backup import damaged
+    if verdict.get("state") == "damaged" and damaged.failing():
+        out.append(line("health", "red", "Your backup's disk may be failing",
+                        "Damage was found again within three months. Replace the disk soon."))
+    elif verdict.get("state") == "damaged":
         out.append(line("health", "red", "Your backup's health check found damaged files",
-                        "They're sent again at the next backup, which checks every file's contents."))
+                        "They're sent again at the next backup."))
     elif verdict.get("state") == "warning":
         out.append(line("health", "yellow", "Your backup's disk reported read or write errors",
                         "Check its cable and power; it may be tiring."))

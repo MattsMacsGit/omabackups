@@ -102,7 +102,8 @@ def write_result(name: str, uid: int, result: dict) -> None:
 
 def _jobs() -> dict:
     from omabackups.restore import browse, files
-    from omabackups.root import job_backup, job_disk, job_migrate, job_points, job_rescue, job_server, job_skips
+    from omabackups.root import (job_backup, job_disk, job_migrate, job_points, job_remove, job_rescue,
+                                 job_server, job_skips)
     return {"migrate-join": job_migrate.join, "migrate-points": job_migrate.points,
             "migrate-info": job_migrate.info, "migrate-settings": job_migrate.settings,
             "migrate-here": job_migrate.here,
@@ -112,7 +113,7 @@ def _jobs() -> dict:
             "start-over": job_disk.start_over, "set-skips": job_skips.set_skips,
             "keep": job_points.keep, "delete-point": job_points.delete, "rebuild-from": job_points.rebuild,
             "point-sizes": job_points.point_sizes, "change-password": job_points.change_password,
-            "rescue-key": job_points.rescue_key, "backup-dry-run": job_backup.dry_run,
+            "rescue-key": job_points.rescue_key, "backup-dry-run": job_backup.dry_run, "remove": job_remove.remove,
             "rescue-usb-write": job_rescue.write, "rescue-usb-refresh": job_rescue.refresh}
 
 

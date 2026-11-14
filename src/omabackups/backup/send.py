@@ -93,10 +93,9 @@ class Sender:
                            err.decode("utf-8", "replace").strip()[-2000:], code="backup-full")
         # 24: some files vanished while being sent (normal for a live /boot).
         if code not in (0, 24):
-            raise OmaError(f"Sending the {part} part of your backup stopped.",
-                           "The next backup picks up where this one stopped.",
-                           err.decode("utf-8", "replace").strip()[-2000:] or f"rsync exit {code}",
-                           code="send-failed")
+            what, todo = stopped_because(code)
+            raise OmaError(what, todo, f"{part}: rsync exit {code}: "
+                           + (err.decode("utf-8", "replace").strip()[-2000:] or "no message"), code="send-failed")
         return out
 
     def _live(self, command: list[str], meter: Meter, base: int, ticks: Path | None):
@@ -221,4 +220,26 @@ class Sender:
                             meter.update(sent=meter.sent + len(chunk))
 
         self.gate.call_streaming("ranges", self.backup, self.line, part, feed=feed)
+
+
+def stopped_because(code: int) -> tuple[str, str]:
+    """A copy that stopped, in plain words (1.x rsync_failure_text; wording
+    agreed 14 Nov)."""
+    if code == 11:
+        return ("Your backup stopped responding partway through.",
+                "Check its power and cable, then press Resume backup.")
+    if code in (10, 12, 30, 35, 255):
+        from omabackups.where import location
+        try:
+            disk = location.load().get("kind") == "disk"
+        except OmaError:
+            disk = False
+        if disk:
+            return ("Your backup disk stopped responding partway through.",
+                    "Check it's still plugged in, then press Resume backup.")
+        return ("Lost the connection to your backup server partway through.",
+                "Check it's switched on and connected, then press Resume backup.")
+    if code == 20:
+        return "The copy was interrupted.", "Press Resume backup to carry on."
+    return "Copying stopped with an error.", "Press Resume backup to try again."
 

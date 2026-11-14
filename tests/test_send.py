@@ -79,4 +79,4 @@ def test_a_failed_send_says_so(sender, tmp_path):
     send, line = sender
     with pytest.raises(OmaError) as caught:
         send.full("home", str(tmp_path / "does-not-exist"), Skips([]))
-    assert caught.value.code == "send-failed" and "picks up" in caught.value.todo
+    assert caught.value.code == "send-failed" and "Resume backup" in caught.value.todo
