@@ -40,7 +40,8 @@ def test_the_stick_asks_first_and_never_twice(monkeypatch):
 
 def test_a_failure_is_shown_before_the_window_closes(monkeypatch, capsys):
     """It asked "Press Enter to close" first and printed the error after, so the
-    window closed on nothing (demo film, 14 Nov)."""
+    window closed on nothing (demo film, 14 Nov). Since 15 Nov it doesn't ask at
+    all: Omarchy's window says "Failed... Press any key to close" itself."""
     from types import SimpleNamespace
 
     from omabackups.commands import rescue
@@ -51,10 +52,9 @@ def test_a_failure_is_shown_before_the_window_closes(monkeypatch, capsys):
     def broken():
         raise OmaError("The stick broke.", "Try another.", code="x")
     monkeypatch.setattr(rescue_usb, "make", broken)
-    seen = {}
-    monkeypatch.setattr(menu, "ask", lambda prompt, *a, **k: seen.update(on_screen=capsys.readouterr().err) or "")
+    monkeypatch.setattr(menu, "ask", lambda *a, **k: pytest.fail("a second close prompt"))
     assert rescue.run_make(SimpleNamespace(verb="make"), Events()) == 1
-    assert "The stick broke." in seen["on_screen"]          # already there when it asks to close
+    assert "The stick broke." in capsys.readouterr().err
 
 
 def test_on_the_stick_only_a_real_refusal_is_a_wrong_password(monkeypatch):
@@ -77,3 +77,17 @@ def test_on_the_stick_only_a_real_refusal_is_a_wrong_password(monkeypatch):
             return a
     assert wizard.unlock(Gate(), "b", "pw") == ("pw", "h")
     assert said == ["Your backup server can't be reached.", "That password didn't open your backup"]
+
+
+def test_a_cancelled_choice_leaves_no_nothing_selected(monkeypatch, capsys):
+    """gum prints its own "nothing selected" when a choice is cancelled (Esc):
+    the line is wiped, our own words follow (demo film, 15 Nov)."""
+    from omabackups.setup import menu
+
+    def cancelled(args):
+        raise OmaError(menu.CANCELLED, code="cancelled")
+    monkeypatch.setattr(menu, "_gum", lambda: True)
+    monkeypatch.setattr(menu, "_run", cancelled)
+    with pytest.raises(OmaError):
+        menu.choose("Which stick?", ["a", "b"])
+    assert capsys.readouterr().err == "\033[1A\033[2K"

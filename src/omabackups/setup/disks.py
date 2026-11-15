@@ -63,6 +63,10 @@ OMABACKUPS_NAMES = {"OmaBackups", "OmaRescue", "OMABOOT", "OmaNetRescue", "OMANE
                     "omabackups-store"}
 
 
+# The Rescue USB's settings part (root/job_rescue.py formats it with this label).
+STICK_SETTINGS = "OMABACKUPS"
+
+
 def _describe(node: dict, warnings: list) -> None:
     for part in node.get("children", []):
         bits = [FORMATS.get(part.get("fstype") or "", part.get("fstype") or "unknown contents")]
@@ -71,7 +75,9 @@ def _describe(node: dict, warnings: list) -> None:
         mounts = [m for m in part.get("mountpoints") or [] if m]
         if mounts:
             bits.append(f"in use: mounted at {', '.join(mounts)} (it will be unmounted)")
-        if part.get("fstype") == "crypto_LUKS":
+        if part.get("fstype") == "crypto_LUKS" and part.get("label") == STICK_SETTINGS:
+            bits.append("a Rescue USB's own settings, locked")
+        elif part.get("fstype") == "crypto_LUKS":
             bits.append("can't see inside: it may hold a system or files")
         warnings.append(f"{part['path']} ({human(int(part['size']))}): " + ", ".join(bits))
 

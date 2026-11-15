@@ -43,8 +43,12 @@ def _run(args: list[str]) -> str:
 def choose(header: str, options: list[str], selected: int = 0) -> int:
     """One of the options, by its number in the list."""
     if _gum():
-        picked = _run(["choose", "--header", header, "--selected", options[selected],
-                       "--height", str(min(12, len(options) + 1)), *options])
+        try:
+            picked = _run(["choose", "--header", header, "--selected", options[selected],
+                           "--height", str(min(12, len(options) + 1)), *options])
+        except OmaError:
+            sys.stderr.write("\033[1A\033[2K")    # gum's own "nothing selected" line, wiped
+            raise
         return options.index(picked) if picked in options else selected
     say(header)
     for n, option in enumerate(options, 1):

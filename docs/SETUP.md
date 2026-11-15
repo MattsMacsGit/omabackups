@@ -43,8 +43,8 @@ and Enter; Esc stops setup without changing anything. The passwords:
 2. **Your password on the server**, to log in there.
 3. **The server's sudo password**, to set up OmaBackups on it.
 
-If the server is new to this computer, SSH first shows its fingerprint and
-asks if you trust it: answer `yes` if it's your server.
+The first time, this computer remembers the server's key. If that key ever
+changes, OmaBackups won't connect and says so.
 
 Then you **choose your backup's password**. Write it down and keep it
 somewhere safe. Everyday backups don't need it, because this computer has its

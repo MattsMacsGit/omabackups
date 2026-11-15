@@ -46,11 +46,13 @@ def as_gatekeeper(address: str) -> list[str]:
 
 def as_user(address: str, login: str, known_hosts: Path) -> list[str]:
     """Setup's SSH: the user's own login on the server, typed passwords. A new
-    server's host key is shown and asked about by ssh itself, then kept in
-    `known_hosts` for the root jobs."""
+    server's host key is kept the first time (as 1.x: accept-new), in
+    `known_hosts` for the root jobs; a key that changes later is refused.
+    No raw "yes/no/[fingerprint]" question, no "Permanently added" line:
+    ssh says only real errors (15 Nov 2026)."""
     control = paths.runtime_dir()
     control.mkdir(parents=True, exist_ok=True)
     os.chmod(control, 0o700)
     return ["ssh", "-o", f"UserKnownHostsFile={known_hosts}",
-            "-o", "StrictHostKeyChecking=ask", "-o", "GlobalKnownHostsFile=/dev/null",
-            *common(control), f"{login}@{address}"]
+            "-o", "StrictHostKeyChecking=accept-new", "-o", "GlobalKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR", *common(control), f"{login}@{address}"]

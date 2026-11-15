@@ -73,7 +73,7 @@ def _the_image() -> str:
     size = human(want["size"]) if want["size"] else "about 1.5 GB"
     menu.title(f"The rescue system is {size}",
                "It's downloaded once and kept. If the download stops, it carries on where it stopped.")
-    if menu.choose("Download it now?", ["Download", "Not now"]) != 0:
+    if menu.choose("Download now?", ["Download", "Not now"]) != 0:
         raise OmaError(menu.CANCELLED, code="cancelled")
     image.download(want)
     menu.say("  Downloaded and checked.")
@@ -144,7 +144,7 @@ def refresh() -> dict:
     except OmaError:
         pass        # offline: only the settings part, which needs no download
     if want and not image.have(want) and image.path().is_file():
-        menu.title(f"A newer rescue system is ready ({human(want['size'])})",
+        menu.title(f"A newer rescue image is available ({human(want['size'])})",
                    "Make the stick again with it, or only refresh its settings.")
         if menu.choose("What now?", ["Make it again with the newer one", "Only the settings"]) == 0:
             return make()

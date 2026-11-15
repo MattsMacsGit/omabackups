@@ -34,3 +34,27 @@ def test_a_server_like_layout():
     assert any("No partitions" in w for w in found["/dev/sdc"].warnings)
     for d in found.values():
         assert d.warnings[-1] == "Everything on it will be erased."
+
+
+def test_an_old_rescue_usb_says_what_its_locked_part_is():
+    """Its settings part showed as "can't see inside: it may hold a system or
+    files" (demo film, 14 Nov): it's the Rescue USB's own settings."""
+    stick = {"blockdevices": [
+        {"name": "sdb", "path": "/dev/sdb", "size": 8589934592, "model": "STICK", "tran": "usb",
+         "type": "disk", "rm": True, "children": [
+             {"name": "sdb1", "path": "/dev/sdb1", "size": 964689920, "type": "part", "fstype": "iso9660",
+              "label": "OMABACKUPS_RESCUE", "mountpoints": [None]},
+             {"name": "sdb3", "path": "/dev/sdb3", "size": 67108864, "type": "part",
+              "fstype": "crypto_LUKS", "label": "OMABACKUPS", "mountpoints": [None]}]}]}
+    found = disks.listing(stick, set())[0]
+    assert any("a Rescue USB's own settings, locked" in w for w in found.warnings)
+    assert not any("can't see inside" in w for w in found.warnings)
+
+
+def test_a_new_server_is_trusted_the_first_time_without_a_raw_question(tmp_path):
+    """Setup showed ssh's own "yes/no/[fingerprint]" question (demo film):
+    accept-new as 1.x did, and a changed key is still refused."""
+    from omabackups.where import ssh
+    cmd = ssh.as_user("192.0.2.10", "pi", tmp_path / "known_hosts")
+    assert "StrictHostKeyChecking=accept-new" in cmd and "LogLevel=ERROR" in cmd
+    assert "StrictHostKeyChecking=yes" in ssh.gatekeeper_ssh()

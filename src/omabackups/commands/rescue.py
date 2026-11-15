@@ -36,26 +36,18 @@ def run_make(args, events: Events) -> int:
                        "Start it from the panel (it opens one), or run omabackups rescue-usb make in a terminal.",
                        code="no-terminal")
     from omabackups.core import onewindow
-    from omabackups.setup import menu, rescue_usb
+    from omabackups.setup import rescue_usb
     try:
         with onewindow.only_one("Making the Rescue USB"):
             done = rescue_usb.make() if args.verb == "make" else rescue_usb.refresh()
     except OmaError as exc:
-        # Said BEFORE "Press Enter to close": printed after, it vanished with the
-        # window, and a failure looked like nothing at all (demo film, 14 Nov).
+        # Said here, before the window's own "Failed... Press any key to close"
+        # (Omarchy's): a failure must never look like nothing (demo film, 14 Nov).
         events.error(exc)
-        _close(menu)
         return 1
-    _close(menu)
     events.result({"rescue_usb": True, "disk": done.get("disk")}, "The Rescue USB is ready.")
     return 0
 
-
-def _close(menu) -> None:
-    try:
-        menu.ask("Press Enter to close this window")
-    except OmaError:
-        pass
 
 
 def run_preview(args, events: Events) -> int:

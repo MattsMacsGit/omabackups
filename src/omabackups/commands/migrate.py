@@ -204,10 +204,6 @@ def preview(events: Events) -> int:
     for v in job["skipped"]:
         menu.say(f"  Needs a look: {v}")
     events.result({"preview": True, "picked": chosen["picked"]}, "Preview only: nothing was changed.")
-    try:
-        menu.ask("Press Enter to close this window")
-    except OmaError:
-        pass
     return 0
 
 
