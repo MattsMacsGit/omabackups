@@ -197,8 +197,14 @@ Item {
   // (the Finish restore page says why and offers Back up anyway).
   readonly property bool waitingForFiles: !!(status.migrate && status.migrate.still_to_come
                                              && status.migrate.still_to_come.length)
+  // D17: the away question on screen (over the limit, away from home): pressing
+  // Back up now or Resume backup IS the answer "back up now". It warns, it
+  // doesn't stop you dead: Resume ran into the same limit again and came back
+  // to the same screen (15 Nov 2026).
+  readonly property bool awayAsked: lines.some(function(l) { return l.kind === "waiting-network" })
   function backupNow() {
     if (waitingForFiles) return
+    if (awayAsked) { awayAnswer(true); return }
     // D29: the very first backup opens the picker first; saving starts it.
     if (!firstBackupDone) terminal("omabackups pick --then-backup")
     else { startAsked = Date.now(); start(["backup"]) }
@@ -210,9 +216,16 @@ Item {
   // A line's button: carry on an unfinished backup, else start one.
   function backupOrResume() { if (status.unfinished) resume(); else backupNow() }
   // D49: an unfinished backup carries on from its list: no picker first, even the first time.
-  function resume() { if (waitingForFiles) return; startAsked = Date.now(); start(["backup"]) }
+  function resume() {
+    if (waitingForFiles) return
+    if (awayAsked) { awayAnswer(true); return }
+    startAsked = Date.now(); start(["backup"])
+  }
   function stop() { stopAsked = true; run(["stop"]) }
-  function awayAnswer(now) { if (now) start(["away", "answer", "now"]); else run(["away", "answer", "wait"]) }
+  function awayAnswer(now) {
+    if (now) { startAsked = Date.now(); start(["away", "answer", "now"]) }
+    else run(["away", "answer", "wait"])
+  }
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }
   function keep(point, on) { run([on ? "keep" : "release", point], "keep:" + point, on) }
   function rescueLater() { run(["rescue-usb", "later"]) }
