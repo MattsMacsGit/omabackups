@@ -51,7 +51,7 @@ def test_an_old_rescue_usb_says_what_its_locked_part_is():
     assert not any("can't see inside" in w for w in found.warnings)
 
 
-def test_a_new_server_is_trusted_the_first_time_without_a_raw_question(tmp_path):
+def test_a_new_server_is_trusted_the_first_time_without_a_raw_question(sandbox, tmp_path):
     """Setup showed ssh's own "yes/no/[fingerprint]" question (demo film):
     accept-new as 1.x did, and a changed key is still refused."""
     from omabackups.where import ssh
