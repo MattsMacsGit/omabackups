@@ -31,7 +31,9 @@ from omabackups.where.server import Gate
 
 BASE = ["-aHAX", "--numeric-ids", "--partial-dir=.rsync-partial"]
 _RANGE = struct.Struct(">QQ")
-_PROGRESS = re.compile(rb"([\d,]+)B?\s+\d+%")       # rsync --info=progress2: bytes so far
+# rsync --info=progress2: "  1,234,567  12%   1.23MB/s ...": bytes so far. Only
+# that shape: with -ii a line per file goes by too, and a name has digits.
+_PROGRESS = re.compile(rb"([\d,]+)B?\s+\d+%\s+[\d.,]+[kKMGT]?B/s")
 LIVE = ["--info=progress2"]
 REPORT_EVERY = 2
 OPS_AT_ONCE = 20000
@@ -43,12 +45,13 @@ STATS = {"files_checked": "Number of files", "files_sent": "Number of regular fi
 
 class Sender:
     def __init__(self, gate: Gate, backup: str, line: str, compress: bool = False,
-                 report=lambda fields: None, stuck_todo: str = ""):
+                 report=lambda fields: None, stuck_todo: str = "", itemize: bool = False):
         self.gate, self.backup, self.line = gate, backup, line
         self.stats = {}     # per part: what rsync really sent
         self.compress = compress   # D25: zstd only when away
         self.report = report       # report(fields): the bar's numbers, every few seconds
         self.stuck_todo = stuck_todo or "The next backup carries on from where this one got to."
+        self.itemize = itemize     # gatekeeper 21+: a full backup logs every file it checks
 
     def _command(self, part: str, source: str, extra: list[str]) -> list[str]:
         return ["rsync", *BASE, "--stats", *(["-z", "--zc=zstd"] if self.compress else []), *extra,
@@ -161,9 +164,10 @@ class Sender:
         with tempfile.NamedTemporaryFile("wb", prefix="omabackups-todo-") as listing:
             listing.write(b"\0".join(p.encode("utf-8", "surrogateescape") for p, _ in items) + b"\0")
             listing.flush()
+            named = ["-ii", f"--log-file-format={todo.LOG_FORMAT_ALL}"] if self.itemize else \
+                [f"--log-file-format={todo.LOG_FORMAT}"]
             self._rsync(part, source, [f"--files-from={listing.name}", "--from0",
-                                       f"--log-file={log_file}", f"--log-file-format={todo.LOG_FORMAT}"],
-                        meter, ticks=log_file)
+                                       f"--log-file={log_file}", *named], meter, ticks=log_file)
         meter.update(sent=meter.total)
         self.report({**meter.snapshot(), "percent": 100})
 

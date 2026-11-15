@@ -258,3 +258,20 @@ def test_reuse_finds_a_file_under_the_old_user_name(box):
         asked = {"files": [["new/x", 1, 1, bad]]}
         assert srv.call(kid, f"reuse {bid} 001 home", json.dumps(asked).encode())[0] in (0, 1)
         assert not (home / "new/x").exists()
+
+
+def test_a_full_backups_send_names_the_files_already_here(box, tmp_path):
+    """Gatekeeper 21 (15 Nov): with -ii the files already on the backup are
+    named in the log too. Unnamed, a list of thousands of unchanged files
+    looked "stuck" for 3 minutes, and were never ticked off."""
+    srv, kid, bid, line = box
+    src = tmp_path / "src"
+    make_source(src)
+    assert rsync(srv, kid, bid, "home", src).returncode == 0          # all of it here already
+    listing = tmp_path / "list"
+    listing.write_bytes(b"Documents/a.txt\0")
+    log = tmp_path / "done.log"
+    done = rsync(srv, kid, bid, "home", src, "-ii", f"--log-file={log}", "--log-file-format=OMI|%i|%n",
+                 files_from=listing)
+    assert done.returncode == 0, done.stderr
+    assert "OMI|.f" in log.read_text() and "|Documents/a.txt" in log.read_text()

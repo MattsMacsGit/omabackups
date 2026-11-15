@@ -21,6 +21,10 @@ _LONG = {
     # "%i" (the change codes) or "X" (rsync's own placeholder). Only words
     # sent back to the computer: no file, nothing written here.
     "--log-format=%i", "--log-format=X",
+    # A full backup's send (-ii): the files already here are named too, so
+    # the computer ticks them off its to-do list and sees rsync is working
+    # (it was "stuck" while checking thousands of unchanged files, 15 Nov).
+    "--log-format=%i%I",
 }
 # A list of files sent over rsync's own connection (Migrate brings back only
 # the ticked settings): only meaningful inside the root the gatekeeper set.

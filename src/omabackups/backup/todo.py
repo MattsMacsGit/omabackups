@@ -29,6 +29,10 @@ from omabackups.core.state import write_atomic
 MARK = "OMA|"                 # our lines in rsync's output and log
 OUT_FORMAT = MARK + "%i|%l|%n"
 LOG_FORMAT = MARK + "%n"
+# With -ii (gatekeeper 21+): every file rsync checks is logged, the ones
+# already on the backup too, after its 11-letter change code.
+ITEMIZED = "OMI|"
+LOG_FORMAT_ALL = ITEMIZED + "%i|%n"
 _ESC = re.compile(rb"\\#(\d{3})")
 
 
@@ -81,8 +85,12 @@ def ticked(part: str) -> set[str]:
         at = line.find(b"] " + MARK.encode())
         if at >= 0:
             path = _clean(unescape(line[at + 2 + len(MARK):]))
-            if path:
-                out.add(path)
+        elif (at := line.find(b"] " + ITEMIZED.encode())) >= 0:
+            path = _clean(unescape(line[at + 2 + len(ITEMIZED) + 12:]))     # "%i|" is 11 + 1
+        else:
+            continue
+        if path:
+            out.add(path)
     return out
 
 

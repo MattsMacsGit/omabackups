@@ -187,3 +187,21 @@ def test_snapshots_left_by_a_stopped_backup_are_tidied(world, monkeypatch):
     assert not any(name.endswith("20990101T000000") for name in left)
     assert set(run.load_record()["since"].values()) <= set(left)
     assert not (set(since.values()) & set(left))             # the old since went as usual
+
+
+def test_the_log_ticks_off_files_already_on_the_backup(sandbox):
+    """-ii logs them with their change code ("OMI|.f         |"): ticked too."""
+    where = todo.folder("home")
+    where.mkdir(parents=True)
+    (where / "done.log").write_bytes(
+        b"2026/11/15 19:44:51 [12] OMI|.f         |Documents/a.txt\n"
+        b"2026/11/15 19:44:51 [12] OMI|>f.st......|Music/b \xc3\xbc.txt\n"
+        b"2026/11/15 19:44:52 [12] OMI|.d         |Music/\n"
+        b"2026/11/15 19:40:00 [11] OMA|old.txt\n")
+    assert todo.ticked("home") == {"Documents/a.txt", "Music/b ü.txt", "Music", "old.txt"}
+
+
+def test_a_file_name_with_a_percent_is_never_read_as_progress():
+    from omabackups.backup import send
+    assert not send._PROGRESS.findall(b">f+++++++++ Music/100 50% remix.mp3\n")
+    assert send._PROGRESS.findall(b"   1,234,567  12%    1.23MB/s    0:00:05 (xfr#3, to-chk=9/40)")[-1] == b"1,234,567"

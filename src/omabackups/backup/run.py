@@ -202,6 +202,7 @@ def take_over(job: Job) -> None:
     # D49: stuck for 3 minutes. The first full backup stays manual (D29).
     first = not job.record.get("last_point") or job.record.get("automatic_paused")
     job.sender = Sender(job.gate, job.bid, job.line, compress=job.away,     # D25: zstd only when away
+                        itemize=job.gate_version >= 21,
                         stuck_todo="Press Resume backup when you're connected again: it carries on "
                                    "from where it got to." if first else
                                    "It tries again at the next automatic backup, from where it got to.")
