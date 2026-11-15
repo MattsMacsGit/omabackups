@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from omabackups.core import paths
 from omabackups.core.state import write_atomic
 
-STEPS = {"unlock": "Opening your backup", "check": "Checking what changed",
+STEPS = {"starting": "Starting the backup", "unlock": "Opening your backup", "check": "Checking what changed",
          "send": "Backing up", "audit": "Noting your changes to Omarchy",
          "point": "Making the restore point"}
 

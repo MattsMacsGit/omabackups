@@ -170,6 +170,9 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
 def open_backup(progress) -> Job:
     """Connect, unlock (a hold), and the health verdict."""
     logger = log.get("backup")
+    # At once, before connecting: away from home, finding the server can take a
+    # minute, and the panel went back to the last run's words meanwhile (15 Nov 2026).
+    progress("starting")
     server = location.load()
     gate, away = location.connect(server)
     progress("unlock")
