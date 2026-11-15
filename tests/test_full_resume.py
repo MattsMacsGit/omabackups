@@ -106,6 +106,20 @@ def test_unticked_items_follow_renames_and_drop_deletes(tmp_path):
     assert todo.carry(left, plan, str(snap)) == [("fresh.txt", 1), ("new/place/a.txt", 4)]
 
 
+def test_a_file_only_read_since_counts_no_bytes(tmp_path):
+    """A model that was only read (its date changed) counted whole: an away
+    backup said 27.7 GB for a few files (15 Nov 2026)."""
+    from omabackups.backup.changes import Plan
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    (snap / "model.bin").write_bytes(b"m" * 5000)
+    (snap / "unsent.bin").write_bytes(b"u" * 300)
+    (snap / "edited.txt").write_text("new text")
+    plan = Plan(files=["model.bin", "unsent.bin", "edited.txt"], light=["model.bin", "unsent.bin"])
+    left = [("unsent.bin", 300)]
+    assert todo.carry(left, plan, str(snap)) == [("edited.txt", 8), ("model.bin", 0), ("unsent.bin", 300)]
+
+
 def test_progress_reads_as_a_sentence():
     state = {"step": "send", "part": "home", "part_no": 2, "parts": 3, "percent": 42,
              "sent": 12_400_000_000, "total": 310_000_000_000, "speed": 48_000_000, "left": 6600}

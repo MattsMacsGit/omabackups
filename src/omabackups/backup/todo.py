@@ -142,12 +142,18 @@ def _renamed(path: str, ops: list) -> str | None:
 def carry(left: list[tuple[str, int]], plan, snapshot: str) -> list[tuple[str, int]]:
     """The new list after a cut-off: what's still unticked (followed through
     renames, dropped if deleted) plus what changed since (plan: the btrfs
-    changes between the list's snapshot and `snapshot`). Sizes from `snapshot`."""
+    changes between the list's snapshot and `snapshot`). Sizes from `snapshot`.
+    A file whose only change is its details (a read, a date, its owner) and
+    that was already sent stays on the list, so the details go over, but
+    counts 0 bytes: counted whole, a model that was only read made an away
+    backup say 27.7 GB (15 Nov 2026)."""
     wanted = {}
     for path, _ in left:
         moved = _renamed(path, plan.ops)
         if moved:
             wanted[moved] = None
+    unsent = set(wanted)
+    light = set(getattr(plan, "light", []))
     for path in [*plan.files, *plan.ranges]:
         wanted[path] = None
     out = []
@@ -157,7 +163,9 @@ def carry(left: list[tuple[str, int]], plan, snapshot: str) -> list[tuple[str, i
             info = os.lstat(full)
         except OSError:
             continue                                   # gone since
-        out.append((path, info.st_size if os.path.isfile(full) and not os.path.islink(full) else 0))
+        whole = os.path.isfile(full) and not os.path.islink(full)
+        details_only = path in light and path not in unsent
+        out.append((path, info.st_size if whole and not details_only else 0))
     return out
 
 
