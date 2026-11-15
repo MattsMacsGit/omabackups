@@ -268,3 +268,13 @@ def test_what_didnt_come_over_is_named():
     came = {i["id"] for i in items}
     got = brought.missed(came, {"setting:ssh"}, items)
     assert [m["id"] for m in got] == ["desktop:theme/rick", "app:x"]
+
+
+def test_an_empty_folder_never_shows_as_not_come_over():
+    """The old computer had no Wi-Fi: its folder was empty, nothing to bring,
+    yet Migrate said "Didn't come over: Wi-Fi networks" (demo film, 15 Nov)."""
+    items = [{"id": "setting:wifi", "group": "logins", "name": "Wi-Fi networks", "bytes": 0,
+              "paths": ["/etc/NetworkManager/system-connections"]},
+             {"id": "setting:gpg", "group": "logins", "name": "GPG keys", "bytes": 4096, "paths": ["~/.gnupg"]}]
+    got = brought.missed({"setting:wifi", "setting:gpg"}, set(), items)
+    assert [m["id"] for m in got] == ["setting:gpg"]

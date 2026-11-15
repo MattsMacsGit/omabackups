@@ -140,3 +140,12 @@ def test_an_older_omarchys_theme_is_found_in_its_old_place(tmp_path):
         return "some missing"
     found = apply._theme(get, "old", tmp_path / "stage")
     assert found == {"name": "tokyo-night", "background": "/home/old/.config/omarchy/current/theme/backgrounds/1.jpg"}
+
+
+def test_the_settings_helper_is_paused_before_the_theme(sandbox):
+    """D53: Desktop settings came over, then the helper wrote the new
+    install's over them when the theme was set (demo film, 15 Nov)."""
+    desktop.apply({"theme": {"name": "jade-horse"}}, "old", lambda text: None)
+    calls = sandbox.calls()
+    stop = calls.index("systemctl --user stop dconf.service")
+    assert stop < calls.index("omarchy-theme-set jade-horse")

@@ -71,7 +71,8 @@ def missed(came: set[str], here: set[str], items: list[dict]) -> list[dict]:
     """D45: the rows that were brought over but aren't here by the "is it
     here?" check (D44). Not checked: merged files (they never match the
     backup's), the theme in use (set again by name), folders (Restore my
-    files has its own progress), rows with nothing to look at."""
+    files has its own progress), rows with nothing to look at or nothing in
+    them."""
     from omabackups.migrate import plan
     out = []
     for it in items:
@@ -82,5 +83,7 @@ def missed(came: set[str], here: set[str], items: list[dict]) -> list[dict]:
             continue
         if not paths and it.get("source", {}).get("kind") not in ("package", "flatpak", "tool"):
             continue
+        if paths and it.get("bytes") == 0:       # an empty folder: nothing to bring (Wi-Fi on a
+            continue                             # computer that never had any, demo film 15 Nov)
         out.append(it)
     return out

@@ -66,8 +66,17 @@ def check_hyprland(merged: list[str], home: Path) -> list[dict]:
                      "files are kept next to them (*.from-old-system) to look at.", "details": errors}]
 
 
+def pause_settings_helper() -> None:
+    """D53: the desktop's settings helper (dconf-service) holds the new
+    install's settings and saves them all at the next change, the theme's
+    included, over Desktop settings that just came over. Stopped now, it
+    starts again when something needs it and reads the old ones."""
+    _run("systemctl", "--user", "stop", "dconf.service")
+
+
 def apply(done: dict, from_user: str, say) -> list[dict]:
     home = Path.home()
+    pause_settings_helper()               # before the theme: setting it writes a desktop setting
     problems = check_hyprland(done.get("merged", []), home)
     problems += theme(done.get("theme", {}), from_user, home, say)
     return problems
