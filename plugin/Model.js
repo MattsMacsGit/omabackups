@@ -55,7 +55,7 @@ function doing(running) {
   if (!running) return ""
   if (running.stopping) return "Stopping…"
   if (running.step === "check" && running.part) return "Checking " + running.part + "…"
-  if (running.step === "clear" && running.part) return "Clearing removed and skipped files from " + running.part + "…"
+  if (running.step === "clear" && running.part) return "Tidying the backup's copy of " + running.part + " and syncing preferences…"
   var text = STEPS[running.step] || "Backing up"
   text = running.part ? text + " " + running.part + "…" : text + "…"
   if (running.step === "send" && running.parts > 1) text += "  (part " + running.part_no + " of " + running.parts + ")"

@@ -126,7 +126,7 @@ def test_progress_reads_as_a_sentence():
     assert progress.text(state) == ("Backing up home... 42% · 12.4 GB of 310 GB · 48.0 MB/s · "
                                     "about 1 h 50 min left (part 2 of 3)")
     assert progress.text({"step": "check", "part": "home"}) == "Checking home..."
-    assert progress.text({"step": "clear", "part": "home"}) == "Clearing removed and skipped files from home..."
+    assert progress.text({"step": "clear", "part": "home"}) == "Tidying the backup's copy of home and syncing preferences..."
 
 
 def test_rsync_that_moves_nothing_for_3_minutes_is_stopped(monkeypatch, tmp_path):

@@ -61,7 +61,7 @@ def text(data: dict) -> str:
     if step == "check" and part:
         return f"Checking {part}..."
     if step == "clear" and part:
-        return f"Clearing removed and skipped files from {part}..."
+        return f"Tidying the backup's copy of {part} and syncing preferences..."   # wording agreed 15 Nov
     if step == "damaged":                         # 1.x's words
         return f"Sending fresh copies of damaged files ({part})..."
     out = f"{STEPS.get(step, step)} {part}".strip() + "..."
