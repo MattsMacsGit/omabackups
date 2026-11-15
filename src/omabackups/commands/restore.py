@@ -65,8 +65,14 @@ def run_restore(args, events: Events) -> int:
     request = {"point": args.point}
     from omabackups.core import flow, state
     migrated = state.read(flow.MIGRATE) or {}
-    if migrated.get("point") == args.point:     # after Migrate: its old user name, its picks
-        request.update(from_user=migrated.get("from_user") or "", only=migrated.get("files") or None)
+    if migrated.get("point") == args.point:     # its old user name
+        request["from_user"] = migrated.get("from_user") or ""
+        # After Migrate: only its picks. After a rescue: everything (the
+        # folders AND the Quick skips items it left; a file here is never
+        # touched). An `only` there skipped AI models and the like, and the
+        # guard waited for them for ever (demo film, 14 Nov 2026).
+        if not migrated.get("rescued"):
+            request["only"] = migrated.get("files") or None
     if getattr(args, "only", None):
         request["only"] = list(dict.fromkeys(args.only))
     if getattr(args, "pick", False):             # D52: Choose what comes back

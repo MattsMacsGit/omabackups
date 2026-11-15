@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from omabackups.commands import restore as restore_cmd
 from omabackups.commands import status_data
 from omabackups.core import flow, partial, paths, rootjob, state
+from omabackups.core.events import Events as RealEvents
+from omabackups.restore import later
 
 RESCUED = {"done": True, "files_restored": False, "rescued": True, "point": "001-2026-11-12-1955",
            "from_user": "u", "files": ["Documents", "Music", "Pictures"], "at": 1_000_000}
@@ -52,3 +54,24 @@ def test_the_ticked_folders_are_what_is_asked_for(sandbox, monkeypatch):
     restore_cmd.run_restore(SimpleNamespace(point=RESCUED["point"], only=["Music", "Music", "Pictures"]),
                             Events())
     assert asked["request"]["only"] == ["Music", "Pictures"] and asked["request"]["from_user"] == "u"
+
+
+def test_after_a_rescue_everything_left_comes_back(sandbox, monkeypatch, capsys):
+    """Not only its folders: the Quick skips items it left too (AI models...).
+    With an `only`, they never came back and backups waited for ever."""
+    state.write(flow.MIGRATE, {**RESCUED, "later": list(later.LATER)})
+    asked = {}
+    monkeypatch.setattr(rootjob, "run", lambda job, request: asked.update(request=request) or {})
+    restore_cmd.run_restore(SimpleNamespace(point=RESCUED["point"], only=None), RealEvents())
+    assert "only" not in asked["request"] and asked["request"]["from_user"] == "u"
+    assert "Bringing your files back" in capsys.readouterr().out
+    partial.note_restored(RESCUED["point"], None, [], later.brought(None, [], []))   # the run, as it ends
+    assert partial.waiting() is None
+
+
+def test_after_migrate_only_its_picks_come_back(sandbox, monkeypatch, capsys):
+    state.write(flow.MIGRATE, {**RESCUED, "rescued": False})
+    asked = {}
+    monkeypatch.setattr(rootjob, "run", lambda job, request: asked.update(request=request) or {})
+    restore_cmd.run_restore(SimpleNamespace(point=RESCUED["point"], only=None), RealEvents())
+    assert asked["request"]["only"] == RESCUED["files"]
