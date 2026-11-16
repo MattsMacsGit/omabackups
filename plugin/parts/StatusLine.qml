@@ -34,6 +34,8 @@ CursorSurface {
     Prose { width: parent.width; text: line.item.title || ""; color: line.titleColour; font.bold: true }
     Prose { width: parent.width; visible: text !== ""; text: line.item.text || ""; dim: true; color: line.textColour }
     Flow { id: buttonRow; width: parent.width; spacing: Style.space(8) }
+    // What a line's button does, under it (D22a: Set up a new backup).
+    Prose { width: parent.width; visible: text !== ""; text: line.item.offer || ""; dim: true }
   }
   MouseArea { anchors.fill: parent; z: -1; onClicked: line.activated() }
 }

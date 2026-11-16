@@ -80,6 +80,10 @@ def lines(step, settings: dict, record: dict, now: dict, mine: dict) -> list[dic
         elif error.get("code") == "unreachable":
             out.append(line("unreachable", "yellow", "Your backup can't be reached",
                             error.get("todo", ""), details=error.get("details", "")))
+        elif error.get("code") == "handed-over":          # D22a: the old computer after a Migrate
+            from omabackups.backup import handed
+            out.append(line("handed-over", "red", handed.TITLE, error.get("what", ""), "new-line",
+                            offer=handed.OFFER, details=error.get("details", "")))
         else:
             out.append(line("failed", "red", "The last backup didn't finish",
                             f"{error.get('what', '')} {error.get('todo', '')}".strip(),

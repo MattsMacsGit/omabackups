@@ -31,6 +31,8 @@ def add(sub) -> None:
     choice = answer.add_parser("answer", help="now: back up anyway; wait: until you're home")
     choice.add_argument("choice", choices=("now", "wait"))
     choice.set_defaults(run=run_away)
+    sub.add_parser("new-line", help="Set up a new backup: after a Migrate, the old computer's own "
+                   "backup line on the same server").set_defaults(run=run_new_line)
     sub.add_parser("health-run", help=argparse.SUPPRESS).set_defaults(run=run_health)
     root = sub.add_parser("backup-run", help=argparse.SUPPRESS)
     root.add_argument("kind", choices=KINDS)
@@ -41,6 +43,15 @@ def add(sub) -> None:
 
 def _systemctl(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["systemctl", "--no-ask-password", *args], capture_output=True, text=True)
+
+
+def run_new_line(args, events: Events) -> int:
+    """D22a: Set up a new backup (the old computer after a Migrate)."""
+    from omabackups.core import rootjob
+    answer = rootjob.run("new-line", {})
+    events.result(answer, f"This computer has a backup line of its own now ({answer['line']}), starting "
+                          f"from restore point {answer['from']}. Back up now carries on there.")
+    return 0
 
 
 def run_away(args, events: Events) -> int:
@@ -193,6 +204,9 @@ def run_root(args, events: Events) -> int:
             progress.write({"running": False, "ok": False, "error": exc.as_dict(), "kind": args.kind})
             if args.kind == "scheduled":
                 interval = schedule.INTERVAL[settings["automatic.every"]]
+                if exc.code == "handed-over":     # D22a: the panel says so; no daily "failed"
+                    logger.info("automatic backup skipped: %s", exc.what)
+                    return 0
                 if exc.code == "unreachable":     # quietly: it tries again next time (audit 3.6)
                     logger.info("automatic backup skipped: %s", exc.what)
                     notify.overdue(notify.UNREACHABLE, interval, last)

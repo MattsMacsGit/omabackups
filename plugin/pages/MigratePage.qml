@@ -125,6 +125,26 @@ Column {
     text: page.r && page.r.note ? page.r.note : ""
   }
 
+  // A backup that didn't finish says so here too (it went back to this page
+  // with nothing on it, 15 Nov); D22a: the old computer after a Migrate.
+  Repeater {
+    model: page.step === "finish" && page.service
+           ? page.service.lines.filter(function(l) { return l.colour === "red" }) : []
+    StatusLine {
+      required property var modelData
+      item: modelData
+      service: page.service
+      onActivated: if (modelData.action === "new-line") page.service.newBackupLine()
+      buttons: [
+        ActionButton {
+          visible: modelData.kind === "handed-over"
+          text: "Set up a new backup"
+          onClicked: page.service.newBackupLine()
+        }
+      ]
+    }
+  }
+
   // D52: a backup ends the restore; the panel then goes to its everyday page.
   PanelSeparator { visible: backUp.visible || backingUp.visible || pausedButton.visible || page.anywayOpen }
   Prose {

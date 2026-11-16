@@ -34,6 +34,7 @@ from omabackups.backup import (
     damaged,
     dryrun,
     full,
+    handed,
     health,
     reuse,
     schedule,
@@ -133,6 +134,8 @@ def backup(progress=lambda step, part="", **more: None, source=None, anyway: boo
     keeper = HoldKeeper(job.gate, job.bid, job.hold, job.logger)  # still here, however long a part takes
     stack = ExitStack()
     try:
+        if not job.server.get("migrating"):
+            handed.check(job.gate, job.bid, job.line)      # D22a: the old computer after a Migrate
         take_over(job)
         check_parts(job, source, stack)
         if dry_run:

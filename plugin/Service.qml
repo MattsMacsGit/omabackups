@@ -222,6 +222,8 @@ Item {
     startAsked = Date.now(); start(["backup"])
   }
   function stop() { stopAsked = true; run(["stop"]) }
+  // D22a: the old computer after a Migrate gets a backup line of its own.
+  function newBackupLine() { run(["new-line"]) }
   function awayAnswer(now) {
     if (now) { startAsked = Date.now(); start(["away", "answer", "now"]) }
     else run(["away", "answer", "wait"])

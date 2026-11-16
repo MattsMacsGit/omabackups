@@ -103,10 +103,17 @@ Column {
       onActivated: {
         if (modelData.action === "rescue") page.service.rescueMake()
         else if (modelData.action === "pick") page.service.pickAgain()
+        else if (modelData.action === "new-line") page.service.newBackupLine()
         else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupOrResume()
       }
       // In the line's own button row, under its text (they sat on top of it, garbled).
       buttons: [
+        ActionButton {
+          visible: modelData.kind === "handed-over"
+          text: "Set up a new backup"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.newBackupLine()
+        },
         ActionButton {
           visible: modelData.kind === "waiting-network"
           text: "Back up now"
