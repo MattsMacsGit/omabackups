@@ -214,3 +214,22 @@ def test_a_network_drop_mid_rescue_stops_it_with_what_to_do(tmp_path):
                      lambda f: None)
     assert caught.value.code == "rescue-copy"
     assert "again" in caught.value.todo and caught.value.details
+
+
+def test_the_restored_record_says_when_the_point_was_made(tmp_path):
+    """It said "Last backup: Saturday 2:17 PM (restore point ...-15-1209)":
+    the record inside the point was saved while that backup still ran."""
+    root = tmp_path / "root"
+    (root / "var/lib/omabackups").mkdir(parents=True)
+    (root / "var/lib/omabackups/backup.json").write_text(json.dumps(
+        {"last_point": "001-2026-11-15-1209", "last_finished": 1_000, "finished": False}))
+    system._record(root, "001-2026-11-15-1209", full=False, made_at=2_000)
+    record = json.loads((root / "var/lib/omabackups/backup.json").read_text())
+    assert record["last_finished"] == 2_000 and record["last_point"] == "001-2026-11-15-1209"
+    assert record["automatic_paused"] is True
+
+    class Gate:
+        def call(self, verb, *args):
+            return {"point": {"created": 2_000}} if args[1] == "new" else {}
+    assert system._made_at(Gate(), "b", "new") == 2_000
+    assert system._made_at(Gate(), "b", "old") is None             # older points: as before

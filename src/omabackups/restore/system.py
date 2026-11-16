@@ -85,7 +85,7 @@ def _chroot(root: Path, *cmd: str) -> bool:
     return subprocess.run(["arch-chroot", str(root), *cmd], capture_output=True).returncode == 0
 
 
-def make_it_start(new, root: Path, point: str, full: bool, say) -> list[str]:
+def make_it_start(new, root: Path, point: str, full: bool, say, made_at: int | None = None) -> list[str]:
     """The boot checklist, 2-9. Returns notes for the end screen."""
     notes = []
     ids = new.ids()
@@ -118,7 +118,7 @@ def make_it_start(new, root: Path, point: str, full: bool, say) -> list[str]:
     if not _firmware_entry(new):
         notes.append("If this computer doesn't offer the disk at start-up, choose EFI/BOOT/BOOTX64.EFI "
                      "on it in the firmware's boot menu.")
-    _record(root, point, full)
+    _record(root, point, full, made_at)
     return notes
 
 
@@ -134,9 +134,22 @@ def _firmware_entry(new) -> bool:
                            "--loader", "\\EFI\\BOOT\\BOOTX64.EFI"], capture_output=True).returncode == 0
 
 
-def _record(root: Path, point: str, full: bool) -> None:
+def _made_at(gate, bid: str, point: str) -> int | None:
+    """When the point was made (point.json's "created"; older points: unknown)."""
+    try:
+        created = ((gate.call("info", bid, point) or {}).get("point") or {}).get("created")
+    except OmaError:
+        return None
+    return int(created) if isinstance(created, (int, float)) and created > 0 else None
+
+
+def _record(root: Path, point: str, full: bool, made_at: int | None = None) -> None:
     """Checklist 9, and Quick's Restore my files: which point this came
-    from; each home's panel offers Restore my files until its folders are back."""
+    from; each home's panel offers Restore my files until its folders are back.
+    `made_at`: when the point was made. The record came back from inside the
+    point, saved while that backup still ran: it named the point with the
+    backup before's time ("Last backup: Saturday 2:17 PM (restore point
+    ...-15-1209)", 15 Nov)."""
     state = root / "var/lib/omabackups"
     state.mkdir(parents=True, exist_ok=True)
     (state / "rescued.json").write_text(json.dumps({"point": point, "full": full, "at": int(time.time())}) + "\n")
@@ -148,6 +161,8 @@ def _record(root: Path, point: str, full: bool) -> None:
     except (OSError, ValueError):
         record = {}
     record = {k: v for k, v in record.items() if k != "forced_past"}
+    if made_at:
+        record.update(last_point=point, last_finished=made_at)
     (state / "backup.json").write_text(json.dumps({**record, "automatic_paused": True}, indent=2) + "\n")
     (state / "restored.json").unlink(missing_ok=True)
     for home in sorted((root / "home").iterdir()) if (root / "home").is_dir() else []:
@@ -197,7 +212,7 @@ def rescue(gate, bid: str, password: str, point: str, full: bool, disk: str, dis
             except (OSError, subprocess.CalledProcessError) as exc:
                 logger.warning("no snapshots for the first backup (it checks every file): %s", exc)
         notes = make_it_start(new, newdisk.ROOT, point, full,
-                              lambda f, status: show("start", f, status))
+                              lambda f, status: show("start", f, status), _made_at(gate, bid, point))
         logger.info("rescue from %s onto %s done (%s)", point, disk, "full" if full else "quick")
         return {"done": True, "notes": notes}
     except OmaError as exc:
