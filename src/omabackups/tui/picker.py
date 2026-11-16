@@ -48,6 +48,17 @@ class BackupMode:
         return None              # (the root job paused automatic backups: D29)
 
 
+def measure_page(model: Model, nodes, stop) -> None:
+    """The page and each row on it. With the Pi's size list, a folder's own
+    size comes straight from the list, so its rows were never measured: the
+    folders inside Your files said "..." for good (demo film, 15 Nov)."""
+    for node in nodes:
+        if stop():
+            return
+        if model.size(node) is None:
+            model.measure(node, stop=stop)
+
+
 class Picker:
     def __init__(self, scr, model: Model, first: bool = False, mode=None):
         self.ui, self.model, self.first = kit.Screen(scr), model, first
@@ -61,9 +72,8 @@ class Picker:
 
     def _measure(self) -> None:
         while self.running:
-            for node in (self.stack[-1], *self.mode.measured(self.model)):
-                if self.running and self.model.size(node) is None:
-                    self.model.measure(node, stop=lambda: not self.running)
+            page = (self.stack[-1], *self.mode.measured(self.model), *list(self.rows))
+            measure_page(self.model, page, lambda: not self.running)
             time.sleep(0.3)
 
     # --- drawing ---------------------------------------------------------------

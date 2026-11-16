@@ -97,3 +97,18 @@ def test_files_lists_and_copy_gets_one_thing_out(sandbox, tmp_path, monkeypatch,
         raise AssertionError("listed outside the restore point")
     except Exception as exc:  # noqa: BLE001
         assert getattr(exc, "code", "") == "bad-path"
+
+
+def test_the_folders_inside_your_files_get_their_sizes_from_the_list(tmp_path):
+    """With the Pi's list, Your files' own size came from it at once, but the
+    folders inside never got measured: "..." for good (demo film, 15 Nov)."""
+    from omabackups.tui.bring_back import BringBack
+    from omabackups.tui.picker import measure_page
+    point_home = tmp_path / "point/home"
+    for name in ("Docs", "Videos"):
+        (point_home / "u" / name).mkdir(parents=True)          # empty here: the sizes come from the list
+    model = BringBack("u", point_home, tmp_path / "here")
+    model.known = {"home": {"u": [900, 7], "u/Docs": [200, 4], "u/Videos": [700, 3]}}
+    rows = model.listing(model.home())
+    measure_page(model, (model.home(), *rows), lambda: False)
+    assert {r.name: model.size(r) for r in rows} == {"Docs": 200, "Videos": 700}
