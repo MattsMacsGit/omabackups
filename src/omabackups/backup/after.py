@@ -27,6 +27,7 @@ def thin(gate: Gate, bid: str, logger, smart: bool = True) -> tuple[list[str], l
         left = [n for n in info["points"] if n not in gone]
         KEPT.clear()
         KEPT.update(info["kept"])
+        KEPT["lines"] = info.get("lines") or []
     except OmaError as exc:
         logger.warning("thinning: %s | %s", exc.what, exc.details)
     return gone, left
@@ -66,6 +67,7 @@ def finished_record(job, name: str, thinned: list, left: list | None, space: dic
             # Every restore point in the backup, every line: after a Migrate the
             # old computer's (and the Return point) stay listed (stage 8 lesson).
             "all_points": left if left is not None else record.get("all_points", []),
+            "lines": KEPT.get("lines", record.get("lines", [])),        # whose point is whose (D22a)
             "resent_for_pass": job.verdict.get("pass_started") if job.resend
             else record.get("resent_for_pass"),
             # SPEC §9: past this partial restore for good (Back up anyway).

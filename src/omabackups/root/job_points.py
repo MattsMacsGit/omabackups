@@ -66,6 +66,7 @@ def delete(request: dict) -> dict:
     record = run.load_record()          # written after the server said yes
     points = {n: v for n, v in (record.get("point_skips") or {}).items() if n != point}
     run.save_record({**record, "point_skips": points, "space": space, "all_points": info["points"],
+                     "lines": info.get("lines") or [],
                      "kept": info["kept"].get("kept", []), "return_point": info["kept"].get("return_point"),
                      "kept_by": info["kept"].get("by") or {}})
     return {"deleted": point, "space": space}

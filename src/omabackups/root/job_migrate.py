@@ -82,7 +82,7 @@ def join(request: dict) -> dict:
               "gate": version["gate"], "set_up": int(time.time())}
     write_atomic(paths.server_file(), (json.dumps(server, indent=2) + "\n").encode(), 0o644)
     run.pause_automatic("Migrate")
-    run.save_record({**run.load_record(), "all_points": inside["points"],
+    run.save_record({**run.load_record(), "all_points": inside["points"], "lines": inside.get("lines") or [],
                      "kept": inside["kept"].get("kept", []), "return_point": inside["kept"].get("return_point")})
     return {"backup": bid, "points": inside["points"], "lines": inside["lines"],
             "owner": inside["owner"], "kept": inside["kept"]}

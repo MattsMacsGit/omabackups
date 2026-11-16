@@ -78,3 +78,17 @@ def test_it_starts_from_this_computers_last_point_on_its_old_line():
     assert job_newline.start_from(points, "001", "001-2026-11-14-1418") == "001-2026-11-14-1418"   # rescued from
     assert job_newline.start_from(points, "001", None) == "001-2026-11-15-1209"                   # its newest
     assert job_newline.start_from(points, "003", None) is None
+
+
+def test_each_computer_lists_its_own_line_and_the_history_it_carries_on_from():
+    """The old computer listed the new laptop's points too (VM, 16 Nov)."""
+    lines = [{"line": "001", "owner": "old", "read_only": True},
+             {"line": "002", "owner": "new", "from": "001-2026-11-15-1209", "read_only": False},
+             {"line": "003", "owner": "old", "from": "001-2026-11-15-1209", "read_only": False}]
+    record = {"all_points": ["001-2026-11-14-1418", "001-2026-11-15-1209", "001-2026-11-15-1300",
+                             "002-2026-11-15-1240", "003-2026-11-16-1255"], "lines": lines}
+    names = lambda line: [p["name"] for p in status_data.points(record, line)]  # noqa: E731
+    assert names("003") == ["003-2026-11-16-1255", "001-2026-11-15-1209", "001-2026-11-14-1418"]
+    assert names("002") == ["002-2026-11-15-1240", "001-2026-11-15-1209", "001-2026-11-14-1418"]
+    assert names("001") == ["001-2026-11-15-1300", "001-2026-11-15-1209", "001-2026-11-14-1418"]
+    assert len(names(None)) == 5 and len(status_data.points({**record, "lines": []}, "003")) == 5  # as before

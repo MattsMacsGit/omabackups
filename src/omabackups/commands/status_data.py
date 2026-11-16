@@ -34,12 +34,29 @@ def point_time(name: str) -> int | None:
     return int(datetime(y, mo, d, h, mi).timestamp())
 
 
-def points(record: dict) -> list[dict]:
+def history(line: str, lines: list) -> dict:
+    """D22a: this computer's line and the lines it carries on from, each up to
+    the point it started from: {line: last point shown, or None for all}."""
+    by = {e.get("line"): e for e in lines or []}
+    out, at = {line: None}, by.get(line)
+    while at and at.get("from") and at["from"][:3] not in out:
+        out[at["from"][:3]] = at["from"]
+        at = by.get(at["from"][:3])
+    return out
+
+
+def points(record: dict, line: str | None = None) -> list[dict]:
     """The restore points, newest first, with which are kept: this computer's
-    and, after a Migrate, the old computer's line with the Return point."""
+    line and, after a Migrate, the history it carries on from (the old
+    computer's line up to the Return point). Not another computer's line: the
+    old computer listed the new laptop's points (16 Nov). Lines not known yet
+    (an older record): every point, as before."""
     kept, by = set(record.get("kept") or []), record.get("kept_by") or {}
     names = set(record.get("point_skips") or ([record["last_point"]] if record.get("last_point") else []))
-    names |= set(record.get("all_points") or [])        # every line: the old computer's too
+    names |= set(record.get("all_points") or [])        # every line, then only this one's history
+    if line and record.get("lines"):
+        mine = history(line, record["lines"])
+        names = {n for n in names if n[:3] in mine and (mine[n[:3]] is None or n <= mine[n[:3]])}
     return [{"name": n, "when": point_time(n), "kept": n in kept, "line": n[:3],
              "return_point": n == record.get("return_point"),
              # "★ kept restore" (a rescue), "★ kept migrate" (the Return point)
@@ -162,7 +179,7 @@ def build() -> dict:
     mine = state.read("panel") or {}
     migrate = _migrate()
     step = flow.where()                 # again: finishing Migrate can move it on
-    pts = points(record)
+    pts = points(record, (server or {}).get("line", "001") if server else None)
     return {
         "flow": step.value, "system": {"id": system, "short": ids.short(system)},
         "version": __version__, "header": header(server, record, pts), "points": pts,
