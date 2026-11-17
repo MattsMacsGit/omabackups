@@ -100,4 +100,14 @@ The first downloads OmaBackups. The second builds and installs it and puts the p
 
 Everything else is in [the guide](docs/GUIDE.md).
 
+## Coming from 1.x
+
+2.0 replaces the old 1.x version. Uninstall 1.x first, then install this (above):
+
+```
+~/.local/share/oma-backups/uninstall.sh --purge
+```
+
+It asks for your computer's password once. When it asks to delete the source folder, say Yes unless you want to keep that copy of 1.x. Your 1.x backups stay where they are (they still open with 1.x's backup password); 2.0 starts a backup of its own, so keep the old one until 2.0's first backup has finished.
+
 Licensed under the MIT License (see [LICENSE](LICENSE)).
