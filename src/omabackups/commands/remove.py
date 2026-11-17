@@ -13,9 +13,9 @@ def add(sub) -> None:
 
 
 def run_remove(args, events: Events) -> int:
-    from omabackups.setup import menu, udiskie
+    from omabackups.setup import menu, panel, udiskie
     menu.title("Remove OmaBackups from this computer?",
-               "Its services, snapshots and settings go. Your backup stays, so you can install "
+               "Its panel, services, snapshots and settings go. Your backup stays, so you can install "
                "OmaBackups again and carry on.")
     if not menu.confirm("Remove OmaBackups?", yes="Remove", no="Cancel"):
         raise OmaError("Nothing was removed.", code="cancelled")
@@ -32,6 +32,7 @@ def run_remove(args, events: Events) -> int:
     udiskie.remove()
     for folder in (paths.config_dir(), paths.state_dir()):
         shutil.rmtree(folder, ignore_errors=True)
+    panel.remove()                          # last (D55): the panel goes with the app
     events.result(answer, ("OmaBackups is removed, and so is your backup." if answer.get("destroyed")
                            else "OmaBackups is removed. Your backup is kept.")
                   + "\nTo finish, remove the package: sudo pacman -R omabackups")

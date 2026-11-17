@@ -64,3 +64,32 @@ def test_it_asks_twice_before_deleting_the_backup(sandbox, monkeypatch):
     with pytest.raises(OmaError):                             # Cancel: nothing at all
         remove_cmd.run_remove(SimpleNamespace(), Events())
     assert len(asked) == 3
+
+
+def test_remove_takes_the_panel_off_the_bar_last(sandbox, monkeypatch, capsys):
+    """D55: the panel goes with the app (it made no sense on its own)."""
+    from omabackups.setup import panel
+    plugin = panel.folder()
+    (plugin / "plugin").mkdir(parents=True)
+    (plugin / "manifest.json").write_text("{}")
+    seen = []
+    monkeypatch.setattr(rootjob, "run", lambda job, request: seen.append(plugin.exists()) or {"destroyed": False})
+    monkeypatch.setattr(sys, "stdin", io.StringIO("y\n"))
+    remove_cmd.run_remove(SimpleNamespace(), Events())
+    assert seen == [True]                                        # still there while the rest goes
+    assert not plugin.exists()
+    assert "omarchy-shell shell setPluginEnabled omabackups false" in sandbox.calls()
+    assert sandbox.calls()[-1] == "omarchy-shell shell rescanPlugins"
+    said = capsys.readouterr()
+    assert "Its panel, services, snapshots and settings go." in said.out + said.err
+
+
+def test_a_linked_panel_is_only_unlinked(sandbox, tmp_path):
+    from omabackups.setup import panel
+    clone = tmp_path / "someones-clone"
+    (clone / "plugin").mkdir(parents=True)
+    panel.folder().parent.mkdir(parents=True)
+    panel.folder().symlink_to(clone)
+    assert panel.remove() is True
+    assert not panel.folder().is_symlink() and (clone / "plugin").is_dir()
+    assert panel.remove() is False                               # nothing left: fine

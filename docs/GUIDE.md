@@ -31,13 +31,9 @@ file manager but never opened on their own: OmaBackups opens them when it
 needs them.
 
 **Remove OmaBackups** (Settings › Your backup, or `omabackups remove`)
-takes away its services, snapshots and settings, and asks whether to delete
-your backup too (twice, because that can't be undone). Then take the panel
-off your bar and remove the package:
-
-```
-omarchy-plugin-remove omabackups
-```
+takes away its panel, services, snapshots and settings, and asks whether to
+delete your backup too (twice, because that can't be undone). Then remove
+the package:
 
 ```
 sudo pacman -R omabackups

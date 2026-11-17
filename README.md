@@ -100,21 +100,17 @@ The first downloads OmaBackups. The second builds and installs it and puts the p
 
 ## Uninstall
 
-Also in the panel: Settings › Your backup › Remove OmaBackups. Or in a terminal, three commands:
+Also in the panel: Settings › Your backup › Remove OmaBackups. Or in a terminal, two commands:
 
 ```
 omabackups remove
 ```
 
 ```
-omarchy-plugin-remove omabackups
-```
-
-```
 sudo pacman -R omabackups
 ```
 
-The first takes away its services, snapshots and settings, and asks whether to delete your backup too (twice, because that can't be undone): your backup stays unless you say so. The second takes the panel off your bar, the third removes the package.
+The first takes away its panel, services, snapshots and settings, and asks whether to delete your backup too (twice, because that can't be undone): your backup stays unless you say so. The second removes the package.
 
 Everything else is in [the guide](docs/GUIDE.md).
 
