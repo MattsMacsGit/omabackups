@@ -98,6 +98,24 @@ omabackups/packaging/install-edge.sh
 
 The first downloads OmaBackups. The second builds and installs it and puts the panel on your bar (it asks for your computer's password once). Then click the OmaBackups icon on the bar (a clock turning back) to set up backups, or to Migrate from another computer.
 
+## Uninstall
+
+Also in the panel: Settings › Your backup › Remove OmaBackups. Or in a terminal, three commands:
+
+```
+omabackups remove
+```
+
+```
+omarchy-plugin-remove omabackups
+```
+
+```
+sudo pacman -R omabackups
+```
+
+The first takes away its services, snapshots and settings, and asks whether to delete your backup too (twice, because that can't be undone): your backup stays unless you say so. The second takes the panel off your bar, the third removes the package.
+
 Everything else is in [the guide](docs/GUIDE.md).
 
 ## Coming from 1.x

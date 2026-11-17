@@ -32,13 +32,19 @@ needs them.
 
 **Remove OmaBackups** (Settings › Your backup, or `omabackups remove`)
 takes away its services, snapshots and settings, and asks whether to delete
-your backup too (twice, because that can't be undone). Then remove the
-package:
+your backup too (twice, because that can't be undone). Then take the panel
+off your bar and remove the package:
+
+```
+omarchy-plugin-remove omabackups
+```
 
 ```
 sudo pacman -R omabackups
-``` OmaBackups 1.x uses
-different names, so the two can sit side by side without touching each other.
+```
+
+OmaBackups 1.x uses different names, so the two can sit side by side
+without touching each other.
 
 ## The panel
 
