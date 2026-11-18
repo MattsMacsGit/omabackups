@@ -262,7 +262,7 @@ Item {
   // exactly the reviewed copy.
   function installPackage() {
     var script = decodeURIComponent(String(Qt.resolvedUrl("../packaging/install-package.sh")).replace(/^file:\/\//, ""))
-    terminal(shellWord(script))
+    terminalOnce(shellWord(script))    // pressed twice: one window, one build
   }
 
   // One word for the shell, whatever was typed (never interpolated raw).
