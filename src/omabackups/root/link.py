@@ -30,19 +30,43 @@ def caller() -> pwd.struct_passwd:
     return pwd.getpwuid(int(uid))
 
 
-RULE = """// OmaBackups (BUILD 5.2, D27): written by `omabackups link`.
+RULE = """// OmaBackups (BUILD 5.2, D27, D57): written by `omabackups link`.
 // Only USER, in an active local session, may start and stop OmaBackups' own
-// services (the package's omabackups-* units) without a password. Nothing else.
+// services (the package's omabackups-* units). Nothing else. The jobs that
+// wipe or delete ask for the password (remembered a few minutes): ASK.
 polkit.addRule(function (action, subject) {
   if (action.id !== "org.freedesktop.systemd1.manage-units") return;
   if (subject.user !== "USER" || !subject.local || !subject.active) return;
   var verb = action.lookup("verb");
   if (verb !== "start" && verb !== "stop") return;
   var unit = action.lookup("unit");
+  var job = unit.match(/^omabackups-root@([a-z-]+)\\.service$/);
+  if (verb === "start" && job && ASK.indexOf(job[1]) >= 0) return polkit.Result.AUTH_ADMIN_KEEP;
   if (/^omabackups-[a-z]+(@[a-z][a-z-]{0,40})?\\.service$/.test(unit)) return polkit.Result.YES;
 });
 """
 USER_NAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+
+
+def rule_text(user: str) -> str:
+    import json as _json
+    from omabackups.core.rootjob import PASSWORD_JOBS
+    return RULE.replace("USER", user).replace("ASK", _json.dumps(list(PASSWORD_JOBS)), 2)
+
+
+def refresh_rule() -> bool:
+    """The package's post-upgrade step (D57): an existing install gets the
+    rule this version writes, for the user it's linked to. False when there's
+    nothing linked here."""
+    rule = paths.polkit_rule_file()
+    try:
+        user = json.loads(paths.linked_user_file().read_text())["user"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    if not rule.exists() or not isinstance(user, str) or not USER_NAME.match(user):
+        return False
+    write_atomic(rule, rule_text(user).encode(), 0o644)
+    return True
 
 
 def link(user: pwd.struct_passwd) -> dict:
@@ -53,7 +77,7 @@ def link(user: pwd.struct_passwd) -> dict:
     pub = keys.ensure()
     rule = paths.polkit_rule_file()
     rule.parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(rule, RULE.replace("USER", user.pw_name).encode(), 0o644)
+    write_atomic(rule, rule_text(user.pw_name).encode(), 0o644)
     if not os.environ.get("OMABACKUPS_SYSROOT"):   # tests have no systemd
         subprocess.run(["systemctl", "enable", "--now", "omabackups-backup.timer",
                         "omabackups-health.timer"], capture_output=True)

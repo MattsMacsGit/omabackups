@@ -15,6 +15,10 @@ from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
 
 
+# D57: the jobs that wipe or delete: the permission rule asks for the password.
+PASSWORD_JOBS = ("create-disk", "rescue-usb-write", "delete-point", "rebuild-from", "remove")
+
+
 def run(job: str, request: dict) -> dict:
     folder = paths.requests_dir()   # this user's own, private (D27)
     folder.mkdir(parents=True, exist_ok=True)
@@ -44,7 +48,12 @@ def run(job: str, request: dict) -> dict:
         if result.get("nonce") != nonce:
             raise ValueError("an old result")
     except (OSError, ValueError):
-        if "authoriz" in done.stderr.lower() or "access denied" in done.stderr.lower():
+        denied = any(w in done.stderr.lower() for w in ("authoriz", "access denied", "authentication"))
+        if denied and job in PASSWORD_JOBS:
+            raise OmaError("Nothing was done: that needs your password.",
+                           "Try again, and type your password when it asks.",
+                           done.stderr.strip(), code="password-needed") from None
+        if denied:
             raise OmaError("OmaBackups isn't allowed to start its jobs on this computer yet.",
                            "Run setup again: it links this computer (asks for your password once).",
                            done.stderr.strip(), code="not-linked") from None

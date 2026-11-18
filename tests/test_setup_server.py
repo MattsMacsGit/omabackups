@@ -199,3 +199,42 @@ def test_a_request_with_the_password_is_gone_once_the_job_is_done(world):
     with pytest.raises(OmaError):
         rootjob.run("change-password", {"old": "not it", "new": "anything-at-all"})
     assert not (paths.requests_dir() / "change-password.json").exists()
+
+
+def test_the_jobs_that_wipe_or_delete_ask_for_the_password(world):
+    """D57: format a disk, write a Rescue USB, delete or rebuild from a
+    restore point, Remove OmaBackups: polkit asks. Everything else: free."""
+    import json as _json
+    import re
+    from omabackups.core.rootjob import PASSWORD_JOBS
+    rule = paths.polkit_rule_file().read_text()
+    assert "ASK" not in rule.replace("ASK.", "")
+    listed = _json.loads(re.search(r"(\[[^\]]*\])\.indexOf", rule).group(1))
+    assert listed == list(PASSWORD_JOBS)
+    assert set(PASSWORD_JOBS) == {"create-disk", "rescue-usb-write", "delete-point", "rebuild-from", "remove"}
+    assert 'verb === "start" && job &&' in rule and "polkit.Result.AUTH_ADMIN_KEEP" in rule
+    assert rule.index("AUTH_ADMIN_KEEP") < rule.index("polkit.Result.YES")      # asked before the free line
+
+
+def test_an_existing_install_gets_the_new_rule_on_update(world):
+    from omabackups.root import link
+    rule = paths.polkit_rule_file()
+    rule.write_text("// an older rule\n")
+    assert link.refresh_rule() is True
+    assert "AUTH_ADMIN_KEEP" in rule.read_text()
+    paths.linked_user_file().unlink()
+    rule.write_text("// an older rule\n")
+    assert link.refresh_rule() is False and rule.read_text() == "// an older rule\n"   # nothing linked: untouched
+
+
+def test_a_cancelled_password_says_nothing_was_done(sandbox, monkeypatch):
+    import subprocess
+    from omabackups.core import rootjob
+    monkeypatch.setattr(rootjob.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 1, "", "Failed to start omabackups-root@create-disk.service: Access denied"))
+    with pytest.raises(OmaError) as caught:
+        rootjob.run("create-disk", {})
+    assert caught.value.code == "password-needed" and caught.value.what.startswith("Nothing was done")
+    with pytest.raises(OmaError) as caught:
+        rootjob.run("keep", {})
+    assert caught.value.code == "not-linked"

@@ -35,6 +35,7 @@ sum="$(sha256sum "$out/$tarball" | cut -d' ' -f1)"
         -e 's|local repo="\$startdir/.."|local repo="$srcdir/$pkgname-$pkgver"|'
 } > "$out/PKGBUILD"
 grep -q 'local repo="$srcdir/$pkgname-$pkgver"' "$out/PKGBUILD" || { echo "couldn't point the recipe at the release" >&2; exit 1; }
+cp "$here/omabackups.install" "$out/"
 (cd "$out" && makepkg --printsrcinfo > .SRCINFO)
 [[ -n ${2:-} ]] || rm -f "$out/$tarball"
 echo "Wrote $out/PKGBUILD and .SRCINFO for omabackups $version."

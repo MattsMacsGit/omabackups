@@ -1,0 +1,5 @@
+# The omabackups package's install steps (D57): an existing install gets the
+# permission rule this version writes, for the user it's linked to.
+post_upgrade() {
+  omabackups refresh-rule >/dev/null 2>&1 || true
+}

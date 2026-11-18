@@ -4,6 +4,7 @@ they're hidden from --help.
   omabackups link            (pkexec, during setup: D27)
   omabackups root-job NAME   (omabackups-root@NAME.service: 5.2)
   omabackups desktop-rules install|remove   (udiskie leaves our disks alone: audit 7.4)
+  omabackups refresh-rule    (the package's post-upgrade step: D57)
 """
 
 import argparse
@@ -21,6 +22,16 @@ def add(sub) -> None:
     rules = sub.add_parser("desktop-rules", help=argparse.SUPPRESS)
     rules.add_argument("verb", choices=("install", "remove"))
     rules.set_defaults(run=_desktop_rules)
+    sub.add_parser("refresh-rule", help=argparse.SUPPRESS).set_defaults(run=_refresh_rule)
+
+
+def _refresh_rule(args, events: Events) -> int:
+    _need_root()
+    from omabackups.root import link
+    done = link.refresh_rule()
+    events.result({"refreshed": done}, "OmaBackups' permission rule is up to date." if done
+                  else "Nothing linked here yet: setup writes the rule.")
+    return 0
 
 
 def _desktop_rules(args, events: Events) -> int:
