@@ -98,6 +98,8 @@ omabackups/packaging/install-edge.sh
 
 The first downloads OmaBackups. The second builds and installs it and puts the panel on your bar (it asks for your computer's password once). Then click the OmaBackups icon on the bar (a clock turning back) to set up backups, or to Migrate from another computer.
 
+**Where it's heading:** OmaBackups is on its way to the Omarchy plugin store: add the panel there, and its **Install it** button builds the `omabackups` package from the plugin's own copy, with one password. It will be in the AUR too, once the AUR accepts new accounts again (Arch paused them in June 2026 while it cleans up malicious packages).
+
 ## Uninstall
 
 Also in the panel: Settings › Your backup › Remove OmaBackups. Or in a terminal, two commands:

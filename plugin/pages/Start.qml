@@ -54,7 +54,7 @@ Column {
     id: install
     visible: page.step === "missing"
     title: "Install it"
-    explainer: "From the AUR, in a terminal window. It asks for your password once."
+    explainer: "Built from this plugin's own copy, in a terminal window. It asks for your password once."
     hasCursorHere: page.cursorOn(this)
     onActivated: page.service.installPackage()
   }

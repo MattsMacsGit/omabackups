@@ -1,7 +1,7 @@
 #!/bin/bash
 # Install OmaBackups from this clone: the package and the panel plugin.
-# For testing before the release (then it comes from the AUR and the
-# Omarchy plugin store). Asks for this computer's password once (pacman).
+# Until the Omarchy plugin store lists it (D56), and for testing. Asks for
+# this computer's password once (pacman).
 #
 #   git clone -b edge https://github.com/MattsMacsGit/omabackups
 #   omabackups/packaging/install-edge.sh
@@ -9,40 +9,21 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(dirname "$here")"
 
-# A fresh Omarchy install (from the offline ISO) has never downloaded the
-# package lists for core/extra, so pacman can't find dependencies like sshfs
-# ("database file for 'extra' does not exist" / "target not found: sshfs").
-# Update the system first, through `omarchy update`: Omarchy's pacman hook
-# refuses a direct `pacman -Syu` ("Woah partner..."), and plain -Sy then
-# installing would be a partial upgrade.
-for db in core extra; do
-  if [ ! -s "/var/lib/pacman/sync/$db.db" ]; then
-    echo "Pacman's package lists are missing (fresh install): running omarchy update first..."
-    omarchy-update -y
-    break
-  fi
-done
-
-# Build without sudo (-d: building needs only python, always there), then one
-# pacman -U installs the package and fetches its dependencies with it: one
-# password. makepkg -si asked once for the dependencies and again for the
-# package, each through its own sudo.
-echo "Building the omabackups package..."
-(cd "$here" && makepkg -fd --noconfirm)
-pkg="$(cd "$here" && makepkg --packagelist)"
-echo "Installing it (asks for this computer's password)..."
-sudo pacman -U --noconfirm "$pkg"
+"$here/install-package.sh"
 
 echo "Installing the panel plugin..."
 plugin="$HOME/.config/omarchy/plugins/omabackups"
 mkdir -p "$plugin"
-rsync -a --delete --exclude '*.pyc' "$repo/manifest.json" "$repo/LICENSE" "$repo/README.md" "$repo/plugin" "$plugin/"
+# The whole repo, as the plugin store installs it (D56): the panel's Install it
+# builds the package from this copy. Only what git tracks: no build leftovers.
+stage="$(mktemp -d)"
+git -C "$repo" ls-files -z | rsync -a --from0 --files-from=- "$repo/" "$stage/"
+rsync -a --delete "$stage/" "$plugin/"
+rm -rf "$stage"
 # The running shell only knows plugins it has scanned: without the rescan,
 # enable fails with "plugin 'omabackups' is not known" and the widget never
 # appears on the bar. Don't hide enable's errors.
 omarchy-shell shell rescanPlugins >/dev/null
-# udiskie leaves OmaBackups' disks and the Rescue USB alone when they're plugged in (audit 7.4).
-omabackups desktop-rules install || true
 
 if ! omarchy-plugin-enable omabackups --section right; then
   echo "Couldn't put OmaBackups on the bar. Try: omarchy-plugin-enable omabackups --section right" >&2

@@ -257,7 +257,13 @@ Item {
   }
   function migrateContinue() { terminalOnce("omabackups migrate") }
   function restartNow() { Quickshell.execDetached(["systemctl", "reboot"]) }
-  function installPackage() { terminal("omarchy-pkg-aur-add omabackups") }
+  // D56: built from the plugin's own copy of the repo (the store installs it
+  // whole); the AUR isn't taking new packages. The code that runs as root is
+  // exactly the reviewed copy.
+  function installPackage() {
+    var script = decodeURIComponent(String(Qt.resolvedUrl("../packaging/install-package.sh")).replace(/^file:\/\//, ""))
+    terminal(shellWord(script))
+  }
 
   // One word for the shell, whatever was typed (never interpolated raw).
   function shellWord(text) { return "'" + String(text).replace(/'/g, "'\\''") + "'" }
