@@ -146,3 +146,37 @@ def test_a_retired_stick_key_isnt_called_a_wrong_password(monkeypatch):
     monkeypatch.setattr(wizard, "_problem", lambda what, todo="", details="": said.append(what))
     assert wizard.unlock(Gate(), "b") == ("pw", "h")
     assert said == ["This Rescue USB's key no longer works"]
+
+
+def test_a_release_writes_only_its_own_image(sandbox, monkeypatch):
+    """D58: the release's code names its image and checksum; the checksum
+    published next to the image is never asked for. Edge (another version, or
+    no pin) follows the testing image as before."""
+    import omabackups
+    from omabackups.setup import rescue_pin
+    asked = []
+
+    def fake_curl(*args, capture=True):
+        asked.append(args[-1])
+        return type("Done", (), {"returncode": 0, "stdout": ("f" * 64) if args[-1].endswith(".sha256") else "x",
+                                 "stderr": ""})()
+    monkeypatch.setattr(image, "_curl", fake_curl)
+    monkeypatch.setattr(omabackups, "__version__", "2.0.1")
+    monkeypatch.setattr(rescue_pin, "RELEASE", "v2.0.1")
+    monkeypatch.setattr(rescue_pin, "SHA256", "A" * 64)
+    assert image.pinned() and image.base().endswith("/releases/download/v2.0.1/")
+    assert image.published()["sha256"] == "a" * 64
+    assert not any(a.endswith(".sha256") for a in asked) and all("/v2.0.1/" in a for a in asked)
+
+    monkeypatch.setattr(omabackups, "__version__", "2.0.2.dev1")              # edge, moved on
+    asked.clear()
+    assert not image.pinned() and image.base() == image.BASE
+    assert image.published()["sha256"] == "f" * 64 and all("/rescue-edge/" in a for a in asked)
+    monkeypatch.setattr(rescue_pin, "RELEASE", "")
+    assert not image.pinned()
+
+
+def test_the_release_workflow_checks_the_image_against_the_pin():
+    from pathlib import Path
+    flow = (Path(__file__).parent.parent / ".github/workflows/rescue-release.yml").read_text()
+    assert "workflow_dispatch" in flow and "rescue_pin.py" in flow and "sha256sum -c" in flow
