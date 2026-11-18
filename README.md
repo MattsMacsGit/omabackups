@@ -89,7 +89,7 @@ Plain-language messages everywhere, each with what to do and details you can cop
 On Omarchy, in a terminal, two commands:
 
 ```
-git clone -b edge https://github.com/MattsMacsGit/omabackups
+git clone https://github.com/MattsMacsGit/omabackups
 ```
 
 ```

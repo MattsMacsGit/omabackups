@@ -3,7 +3,8 @@
 # Until the Omarchy plugin store lists it (D56), and for testing. Asks for
 # this computer's password once (pacman).
 #
-#   git clone -b edge https://github.com/MattsMacsGit/omabackups
+#   git clone https://github.com/MattsMacsGit/omabackups          (main: the latest release)
+#   git clone -b edge https://github.com/MattsMacsGit/omabackups  (edge: what's being built)
 #   omabackups/packaging/install-edge.sh
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
