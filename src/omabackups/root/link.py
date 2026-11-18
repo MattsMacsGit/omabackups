@@ -33,7 +33,7 @@ def caller() -> pwd.struct_passwd:
 RULE = """// OmaBackups (BUILD 5.2, D27, D57): written by `omabackups link`.
 // Only USER, in an active local session, may start and stop OmaBackups' own
 // services (the package's omabackups-* units). Nothing else. The jobs that
-// wipe or delete ask for the password (remembered a few minutes): ASK.
+// wipe or delete ask for the password, each time: ASK.
 polkit.addRule(function (action, subject) {
   if (action.id !== "org.freedesktop.systemd1.manage-units") return;
   if (subject.user !== "USER" || !subject.local || !subject.active) return;
@@ -41,7 +41,7 @@ polkit.addRule(function (action, subject) {
   if (verb !== "start" && verb !== "stop") return;
   var unit = action.lookup("unit");
   var job = unit.match(/^omabackups-root@([a-z-]+)\\.service$/);
-  if (verb === "start" && job && ASK.indexOf(job[1]) >= 0) return polkit.Result.AUTH_ADMIN_KEEP;
+  if (verb === "start" && job && ASK.indexOf(job[1]) >= 0) return polkit.Result.AUTH_ADMIN;
   if (/^omabackups-[a-z]+(@[a-z][a-z-]{0,40})?\\.service$/.test(unit)) return polkit.Result.YES;
 });
 """

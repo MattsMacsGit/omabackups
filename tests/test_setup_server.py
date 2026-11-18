@@ -212,8 +212,8 @@ def test_the_jobs_that_wipe_or_delete_ask_for_the_password(world):
     listed = _json.loads(re.search(r"(\[[^\]]*\])\.indexOf", rule).group(1))
     assert listed == list(PASSWORD_JOBS)
     assert set(PASSWORD_JOBS) == {"create-disk", "rescue-usb-write", "delete-point", "rebuild-from", "remove"}
-    assert 'verb === "start" && job &&' in rule and "polkit.Result.AUTH_ADMIN_KEEP" in rule
-    assert rule.index("AUTH_ADMIN_KEEP") < rule.index("polkit.Result.YES")      # asked before the free line
+    assert 'verb === "start" && job &&' in rule and "polkit.Result.AUTH_ADMIN;" in rule
+    assert rule.index("AUTH_ADMIN;") < rule.index("polkit.Result.YES")      # asked before the free line
 
 
 def test_an_existing_install_gets_the_new_rule_on_update(world):
@@ -221,7 +221,7 @@ def test_an_existing_install_gets_the_new_rule_on_update(world):
     rule = paths.polkit_rule_file()
     rule.write_text("// an older rule\n")
     assert link.refresh_rule() is True
-    assert "AUTH_ADMIN_KEEP" in rule.read_text()
+    assert "AUTH_ADMIN;" in rule.read_text()
     paths.linked_user_file().unlink()
     rule.write_text("// an older rule\n")
     assert link.refresh_rule() is False and rule.read_text() == "// an older rule\n"   # nothing linked: untouched

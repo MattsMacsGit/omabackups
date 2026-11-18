@@ -39,8 +39,10 @@ the package:
 sudo pacman -R omabackups
 ```
 
-OmaBackups 1.x uses different names, so the two can sit side by side
-without touching each other.
+OmaBackups 1.x uses other names, so the two sit side by side. Everyday
+things never ask for a password; what wipes or deletes does, each time:
+setting up a backup disk, making a Rescue USB, deleting a restore point,
+rebuilding from one, and Remove OmaBackups.
 
 ## The panel
 
