@@ -24,14 +24,20 @@ def run(job: str, request: dict) -> dict:
     # The result must carry this back: an old result from an earlier run
     # (which this user can't delete) is never mistaken for this one.
     nonce = secrets.token_hex(8)
-    write_atomic(folder / f"{job}.json", json.dumps({**request, "nonce": nonce}).encode(), 0o600)
+    request_file = folder / f"{job}.json"
+    write_atomic(request_file, json.dumps({**request, "nonce": nonce}).encode(), 0o600)
 
     if os.environ.get("OMABACKUPS_SYSROOT"):
         # Tests: the same root job, run directly (there is no systemd unit here).
         command = [sys.executable, "-m", "omabackups", "root-job", job]
     else:
         command = ["systemctl", "start", f"omabackups-root@{job}.service"]
-    done = subprocess.run(command, capture_output=True, text=True)
+    try:
+        done = subprocess.run(command, capture_output=True, text=True)
+    finally:
+        # Read by now (the unit runs to the end before start returns). A
+        # request can hold the backup's password: it's never left lying.
+        request_file.unlink(missing_ok=True)
 
     try:
         result = json.loads(result_file.read_text())

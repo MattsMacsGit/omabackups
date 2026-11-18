@@ -75,9 +75,33 @@ def _image(request: dict) -> Path:
     return image
 
 
-def _copy(image: Path, disk: str) -> None:
-    total, done = image.stat().st_size, 0
-    with open(image, "rb") as src, open(disk, "wb", buffering=0) as dst:
+def _owner() -> int:
+    import pwd
+    from omabackups.backup.run import linked_user
+    return pwd.getpwnam(linked_user()).pw_uid
+
+
+def _open_image(image: Path, owner: int):
+    """Open once, then check what was opened: a file of the linked user's own.
+    The path was checked before, but the user could swap it for a link to a
+    root-only file in between, and root would copy that onto the stick."""
+    import stat
+    try:
+        fd = os.open(image, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as e:
+        raise OmaError("The rescue system to write wasn't found.", "Make the Rescue USB again.",
+                       f"{image}: {e}", code="bad-request") from None
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != owner:
+        os.close(fd)
+        raise OmaError("The rescue system to write wasn't found.", "Make the Rescue USB again.",
+                       f"{image}: not a file of yours", code="bad-request")
+    return os.fdopen(fd, "rb")
+
+
+def _copy(image: Path, disk: str, owner: int) -> None:
+    with _open_image(image, owner) as src, open(disk, "wb", buffering=0) as dst:
+        total, done = os.fstat(src.fileno()).st_size, 0
         while block := src.read(4 << 20):
             dst.write(block)
             done += len(block)
@@ -184,7 +208,7 @@ def write(request: dict) -> dict:
                        code="rescue-usb-small")
     _say("write")
     newdisk.free(disk)
-    _copy(image, disk)
+    _copy(image, disk, _owner())
     _say("settings", 100)
     _reread(disk)
     # The image's own table is the old (MBR) kind with two parts: a third,

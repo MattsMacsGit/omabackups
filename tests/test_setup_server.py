@@ -190,3 +190,12 @@ def test_a_new_server_is_asked_about_as_before(sandbox):
     login = server.Login("192.0.2.10", "someone")
     files = next(x for x in login.base if x.startswith("UserKnownHostsFile="))
     assert files == f"UserKnownHostsFile={login.known_hosts}"
+
+
+def test_a_request_with_the_password_is_gone_once_the_job_is_done(world):
+    """A request can carry the backup's password: never left lying in the
+    user's runtime folder, whether the job worked or not."""
+    from omabackups.core import rootjob
+    with pytest.raises(OmaError):
+        rootjob.run("change-password", {"old": "not it", "new": "anything-at-all"})
+    assert not (paths.requests_dir() / "change-password.json").exists()

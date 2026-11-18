@@ -3,6 +3,7 @@ download that doesn't match is never used; the root job writes only the
 image in the user's own download folder."""
 
 import hashlib
+import os
 
 import pytest
 
@@ -54,10 +55,24 @@ def test_an_old_settings_part_past_the_image_is_blanked(sandbox, monkeypatch, tm
     monkeypatch.setattr(job_rescue, "CLEAR", 3 << 20)
     img, disk = tmp_path / "rescue.iso", tmp_path / "stick"
     img.write_bytes(b"R" * (5 << 20))
-    job_rescue._copy(img, str(disk))
+    job_rescue._copy(img, str(disk), os.getuid())
     written = disk.read_bytes()
     assert written[:5 << 20] == img.read_bytes()
     assert written[5 << 20:] == bytes(3 << 20)
+
+
+def test_the_image_is_checked_after_it_is_opened(sandbox, tmp_path):
+    """Swapped for a link (to a root-only file, say) after the path was
+    checked: refused. Someone else's file: refused."""
+    from omabackups.root import job_rescue
+    real, link, disk = tmp_path / "rescue.iso", tmp_path / "swapped.iso", tmp_path / "stick"
+    real.write_bytes(b"R" * 1024)
+    link.symlink_to(real)
+    with pytest.raises(OmaError):
+        job_rescue._copy(link, str(disk), os.getuid())
+    with pytest.raises(OmaError):
+        job_rescue._copy(real, str(disk), os.getuid() + 1)
+    assert not disk.exists()
 
 
 def test_a_settings_part_the_desktop_opened_is_let_go_and_formatted(monkeypatch):
