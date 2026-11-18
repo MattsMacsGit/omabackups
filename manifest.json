@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "omabackups",
   "name": "OmaBackups",
-  "version": "2.0.0-dev1",
+  "version": "2.0.0",
   "author": "OmaBackups",
   "license": "MIT",
   "description": "Backups, rescue and migration for Omarchy: automatic backups to a backup server or a disk, restore a file or the whole system, and move your setup onto a fresh install.",
