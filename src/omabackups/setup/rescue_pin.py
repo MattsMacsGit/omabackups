@@ -7,5 +7,5 @@ The image is built from the commit before this pin (a file can't hold its
 own image's checksum); .github/workflows/rescue-release.yml copies it into
 the release and checks it against this file."""
 
-RELEASE = "v2.0.1"
-SHA256 = "f002016071fe02b6687abe29118db5193503fa8386a891e9dca9589259f4e425"
+RELEASE = "v2.0.2"
+SHA256 = "c609cbae4050462109be22f2b30da23448360e9a6d0a8e3d2ec482c5d1708f0d"
