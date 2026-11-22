@@ -62,6 +62,19 @@ def test_a_disk_that_isnt_plugged_in_says_so(disk):
     assert caught.value.code == "unreachable" and "plugged in" in caught.value.what
 
 
+def test_start_over_waits_for_a_running_backup(disk):
+    """Store review: Start over drops the snapshots a running backup still needs."""
+    from omabackups.backup import progress
+    from omabackups.root import job_disk
+    with progress.only_one() as mine:           # a backup is running
+        assert mine
+        with pytest.raises(OmaError) as caught:
+            job_disk.start_over({})
+    assert caught.value.code == "busy"
+    assert paths.server_file().exists()         # nothing was forgotten
+    assert job_disk.start_over({})["forgot"] == "disk"   # free again once it finished
+
+
 def test_start_over_forgets_but_keeps_the_backup(disk, sandbox):
     made, box, src = disk
     run.backup(source=src)

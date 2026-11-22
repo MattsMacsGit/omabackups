@@ -123,20 +123,27 @@ def create_disk(request: dict) -> dict:
 
 
 def start_over(request: dict) -> dict:
-    """D28: forget the backup location and this computer's local snapshots."""
+    """D28: forget the backup location and this computer's local snapshots.
+    Not while a backup runs: it still needs those snapshots (like Remove and
+    Rebuild, it waits its turn behind the backup's lock)."""
+    from omabackups.backup import progress
     try:
         kind = json.loads(paths.server_file().read_text()).get("kind", "server")
     except (OSError, ValueError):
         kind = None
-    if not os.environ.get("OMABACKUPS_SYSROOT"):
-        for part in parts():
-            if part.btrfs:
-                with Snapshots(part.device) as snaps:
-                    for name in snaps.names():
-                        snaps.drop(name)
-    for path in (paths.server_file(), paths.system_state_dir() / "backup.json",
-                 paths.system_state_dir() / "health.json", paths.system_run_dir() / "progress.json",
-                 paths.known_hosts_file()):
-        path.unlink(missing_ok=True)
-    shutil.rmtree(paths.system_state_dir() / "disk-gate", ignore_errors=True)
+    with progress.only_one() as mine:
+        if not mine:
+            raise OmaError("A backup is running.", "Wait for it to finish, or press Stop, then try again.",
+                           code="busy")
+        if not os.environ.get("OMABACKUPS_SYSROOT"):
+            for part in parts():
+                if part.btrfs:
+                    with Snapshots(part.device) as snaps:
+                        for name in snaps.names():
+                            snaps.drop(name)
+        for path in (paths.server_file(), paths.system_state_dir() / "backup.json",
+                     paths.system_state_dir() / "health.json", paths.system_run_dir() / "progress.json",
+                     paths.known_hosts_file()):
+            path.unlink(missing_ok=True)
+        shutil.rmtree(paths.system_state_dir() / "disk-gate", ignore_errors=True)
     return {"forgot": kind}
