@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from omabackups.backup import run
-from omabackups.core import log, paths
+from omabackups.core import asuser, log, paths
 from omabackups.core.errors import OmaError
 from omabackups.core.state import write_atomic
 from omabackups.migrate import apply, brought
@@ -134,14 +134,20 @@ def _clean(paths_: list, absolute: bool) -> list[str]:
 
 
 def _fetch(gate, bid: str, point: str, part: str, items: list[str], dest: Path, chown: str,
-           keep: Path | None = None) -> str:
+           keep: Path | None = None, user: str | None = None) -> str:
     """rsync just these paths (relative to the part) into dest; the error text if any.
-    keep: what's replaced is moved there first, same paths (D45)."""
+    keep: what's replaced is moved there first, same paths (D45); in the
+    home folder (user given) that copying is the user's own step (D59)."""
     if not items:
         return ""
-    dest.mkdir(parents=True, exist_ok=True)
+    if not user:
+        dest.mkdir(parents=True, exist_ok=True)
     if keep:          # the gatekeeper allows no backup options: what's replaced is copied aside first
-        apply.keep_first(_listing(gate, bid, point, part, items, dest), dest, keep)
+        listing = _listing(gate, bid, point, part, items, dest)
+        if user:
+            asuser.run(user, "keep-first", {"listing": listing, "dest": str(dest), "keep": str(keep)})
+        else:
+            apply.keep_first(listing, dest, keep)
     command = ["rsync", "-aHAX", "-r", "--files-from=-", "--from0", *chown.split(),
                "-e", gate.rsh(), f"--rsync-path=fetch {bid} {point} {part}",
                f"{gate.rsync_target()}:{part}/", f"{dest}/"]
@@ -182,25 +188,27 @@ def here(request: dict) -> dict:
     gate, bid = _open()
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     import tempfile
-    from omabackups.migrate.here import has_past, histories
+    from omabackups.migrate.here import histories
+    user = run.linked_user()
     kept = set()
     try:
         mine = _listing(gate, bid, point, f"home/{from_user}", home_items, home)
         system = _listing(gate, bid, point, "system", system_items, root)
         with tempfile.TemporaryDirectory(prefix="omabackups-here.") as tmp:
             names = histories(mine)
-            _fetch(gate, bid, point, f"home/{from_user}", names, Path(tmp), "")
-            for name in names:
-                try:
-                    old = (Path(tmp) / name).read_text(errors="replace")
-                    now = (home / name).read_text(errors="replace")
-                except OSError:
-                    continue
-                if has_past(old, now):
-                    kept.add(name)
+            if names:     # D59: compared by the user's own step, the backup's copies theirs
+                asuser.give(tmp, user)
+                _fetch(gate, bid, point, f"home/{from_user}", names, Path(tmp), _owner(user))
+                kept = set(asuser.run(user, "histories", {"home": str(home), "fetched": tmp, "names": names}))
     finally:
         gate.call("lock", bid, hold)
     return {"home": sorted(tally(mine, home_items, kept)), "system": sorted(tally(system, system_items))}
+
+
+def _owner(user: str) -> str:
+    """rsync's options that make what it writes the user's (root only)."""
+    who = asuser.ids(user)
+    return f"--chown={who[0]}:{who[1]} --numeric-ids" if who else ""
 
 
 def _merges(asked) -> list[dict]:
@@ -237,11 +245,10 @@ def settings(request: dict) -> dict:
                                                        "from_user": from_user}, indent=2)
                                            + "\n").encode(), 0o644)
     if os.environ.get("OMABACKUPS_SYSROOT"):      # tests: the sandbox's home and system
-        home, root, owner = Path.home(), Path(os.environ["OMABACKUPS_SYSROOT"]), ""
+        home, root = Path.home(), Path(os.environ["OMABACKUPS_SYSROOT"])
     else:
-        entry = pwd.getpwnam(user)
-        home, root = Path(entry.pw_dir), Path("/")
-        owner = f"--chown={entry.pw_uid}:{entry.pw_gid} --numeric-ids"
+        home, root = Path(pwd.getpwnam(user).pw_dir), Path("/")
+    owner = _owner(user)
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     keeper = run.HoldKeeper(gate, bid, hold, logger)
     released = []
@@ -263,7 +270,8 @@ def settings(request: dict) -> dict:
 
     def get(part: str, items: list[str], dest: Path, owned: bool) -> str:
         keep = keep_home if dest == home else keep_root if dest == root else None
-        return _fetch(gate, bid, point, part, items, dest, owner if owned else "", keep)
+        return _fetch(gate, bid, point, part, items, dest, owner if owned else "", keep,
+                      user if dest == home else None)
 
     try:
         done = apply.run(get, home, root, from_user, user, home_items, system_items,
@@ -271,7 +279,7 @@ def settings(request: dict) -> dict:
                          _merges(request.get("merge", [])), keep_root)
     finally:
         let_go()
-    done["replaced"] = apply.kept(home, keep_home, keep_root)
+    done["replaced"] = apply.kept(home, keep_home, keep_root, user)
     logger.info("migrate settings from %s: %d home, %d system, services %s, %d renamed, %d problems",
                 point, len(home_items), len(system_items), done["services"], len(done["renamed"]),
                 len(done["problems"]))

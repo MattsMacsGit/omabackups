@@ -40,9 +40,9 @@ sudo pacman -R omabackups
 ```
 
 OmaBackups 1.x uses other names, so the two sit side by side. Everyday
-things never ask for a password; what wipes or deletes does, each time:
-setting up a backup disk, making a Rescue USB, deleting a restore point,
-rebuilding from one, and Remove OmaBackups.
+things never ask for a password. What wipes, deletes or changes system
+settings does, each time: setting up a backup disk, making a Rescue USB,
+deleting a restore point, rebuilding from one, Remove OmaBackups and Migrate.
 
 ## The panel
 

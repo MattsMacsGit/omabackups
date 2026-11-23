@@ -11,6 +11,11 @@ The order is 1.x's (backup.sh cmd_migrate_apply), proven on a fresh install:
      stopped: they reload.
   4. Your own units in /etc/systemd switched on; the old user name fixed in
      the settings that came over; then a check that each thing is really back.
+
+Everything done inside the home folder (merging, keeping copies aside,
+fixing the user name, checking) runs as the user (D59: core/asuser.py,
+migrate/home.py). What only root may read is fetched into `stage`; what the
+user's steps read is fetched, theirs, into `ustage`.
 """
 
 import os
@@ -19,11 +24,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from omabackups.migrate import merge, rename, services
-
-# Where Omarchy keeps the theme in use: since June 2026 in ~/.local/state,
-# before that in ~/.config (D42: any release). Read from whichever is there.
-THEME_PLACES = (".local/state/omarchy/current", ".config/omarchy/current")
+from omabackups.core import asuser
+from omabackups.migrate import rename, services
+from omabackups.migrate.home import THEME_PLACES
 
 
 def systemctl(*args: str) -> subprocess.CompletedProcess:
@@ -42,7 +45,8 @@ class Fetched:
 
 
 def fetch(get, home: Path, root: Path, stage: Path, from_user: str, home_items: list[str],
-          system_items: list[str], theme: bool) -> Fetched:
+          system_items: list[str], theme: bool, ustage: Path | None = None,
+          user: str | None = None) -> Fetched:
     """Step 1. get(part, items, dest, owned) -> error text ("" when fine):
     rsync those paths of the restore point's part into dest (owned: the
     files belong to this user)."""
@@ -59,85 +63,29 @@ def fetch(get, home: Path, root: Path, stage: Path, from_user: str, home_items: 
     if out.held and not get("system", ["etc/systemd/system"], stage / "@old", False):
         out.on = services.enabled(stage / "@old/etc/systemd/system")
     if theme:
-        out.theme = _theme(get, from_user, stage / "@theme")
+        out.theme = _theme(get, from_user, (ustage or stage) / "@theme", user)
     return out
 
 
-def _theme(get, from_user: str, where: Path) -> dict:
-    """The old theme's name and background, from either layout."""
+def _theme(get, from_user: str, where: Path, user: str | None = None) -> dict:
+    """The old theme's name and background, from either layout (read as the user)."""
     get(f"home/{from_user}", [f"{p}/{n}" for p in THEME_PLACES for n in ("theme.name", "theme", "background")],
-        where, False)            # some aren't there: that's expected
-    for place in THEME_PLACES:
-        name_file, theme, link = where / place / "theme.name", where / place / "theme", where / place / "background"
-        name = name_file.read_text().strip() if name_file.is_file() else \
-            os.path.basename(os.readlink(theme).rstrip("/")) if theme.is_symlink() else ""
-        if name:
-            return {"name": name, "background": os.readlink(link) if link.is_symlink() else ""}
-    return {}
+        where, True)             # some aren't there: that's expected
+    return asuser.run(user, "theme", {"where": str(where)})
 
 
-def merged(get, home: Path, root: Path, stage: Path, from_user: str, items: list[dict]) -> tuple[list, list]:
-    """Keybindings, bar & theme (D43): each file merged onto this release's.
+def merged(get, home: Path, root: Path, stage: Path, from_user: str, items: list[dict],
+           user: str | None = None) -> tuple[list, list]:
+    """Keybindings, bar & theme (D43): each file merged onto this release's,
+    by the user's own step (stage: the user's holding folder).
     Returns (files merged, problems)."""
-    done, problems = [], []
     if not items:
-        return done, problems
-    get(f"home/{from_user}", [i["path"] for i in items], stage / "@merge/home", False)
-    get("system", [i["stock"] for i in items], stage / "@merge/system", False)
-    plugins = _plugins(home)
-    keep = lambda wid: str(wid).startswith("omarchy.") or wid in plugins  # noqa: E731
-    owner = home.stat()
-    for i in items:
-        old = stage / "@merge/home" / i["path"]
-        if not old.is_file():
-            continue
-        stock_file = stage / "@merge/system" / i["stock"]
-        stock = stock_file.read_text(errors="replace") if stock_file.is_file() else None
-        here = home / i["path"]
-        new_file = here if here.is_file() else root / i["stock"]
-        new = new_file.read_text(errors="replace") if new_file.is_file() else ""
-        mine = old.read_text(errors="replace")
-        try:
-            if i["kind"] == "json":
-                text, unplaced = merge.shell(stock, mine, new or mine, keep), []
-            else:
-                text, unplaced = merge.lua(stock, mine, new)
-        except ValueError as exc:
-            problems.append({"what": f"~/{i['path']} couldn't be merged; yours is kept as "
-                                     f"~/{i['path']}.from-old-system to look at.", "details": str(exc)})
-            text, unplaced = None, []
-        if text is None or not text.strip():
-            _write(home / (i["path"] + ".from-old-system"), mine, owner)
-            continue
-        before = home / (i["path"] + ".omabackups-before")
-        if here.is_file() and not before.exists():      # D44: the first merge's, kept
-            _write(before, here.read_text(errors="replace"), owner)
-        _write(here, text, owner)
-        done.append(i["path"])
-        if unplaced:
-            problems.append({"what": f"Some of your changes to ~/{i['path']} don't fit this Omarchy; "
-                                     "they're listed here to add by hand if you still want them.",
-                             "details": "\n".join(unplaced)})
-    return done, problems
-
-
-def _plugins(home: Path) -> set:
-    import json
-    ids = set()
-    for manifest in (home / ".config/omarchy/plugins").glob("*/manifest.json"):
-        try:
-            ids.add(json.loads(manifest.read_text()).get("id"))
-        except (OSError, ValueError):
-            pass
-    return ids
-
-
-def _write(path: Path, text: str, owner) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".omabackups-tmp")
-    tmp.write_text(text)
-    os.chown(tmp, owner.st_uid, owner.st_gid)
-    os.replace(tmp, path)
+        return [], []
+    get(f"home/{from_user}", [i["path"] for i in items], stage / "@merge/home", True)
+    get("system", [i["stock"] for i in items], stage / "@merge/system", True)
+    done = asuser.run(user, "merge", {"home": str(home), "root": str(root),
+                                      "stage": str(stage / "@merge"), "items": items})
+    return done["done"], done["problems"]
 
 
 def keep_first(listing: str, dest: Path, keep: Path) -> None:
@@ -155,21 +103,12 @@ def keep_first(listing: str, dest: Path, keep: Path) -> None:
         shutil.copy2(here, target, follow_symlinks=False)
 
 
-def kept(home: Path, keep_home: Path, keep_root: Path) -> list[str]:
-    """D45: where what Migrate replaced was kept (only if something was);
-    the home copy is this user's, as the files were."""
+def kept(home: Path, keep_home: Path, keep_root: Path, user: str | None = None) -> list[str]:
+    """D45: where what Migrate replaced was kept (only if something was).
+    The home copy was made by the user's own step, so it's theirs."""
     out = []
-    if keep_home.is_dir() and any(keep_home.iterdir()):
-        owner = home.stat()
-        state = keep_home.parent.parent          # ~/.local/state/omabackups: rsync may have made it
-        if state.stat().st_uid != owner.st_uid:
-            os.lchown(state, owner.st_uid, owner.st_gid)
-        for folder, dirs, files in os.walk(keep_home.parent):
-            for name in [folder, *(os.path.join(folder, x) for x in dirs + files)]:
-                os.lchown(name, owner.st_uid, owner.st_gid)
+    if asuser.run(user, "kept", {"keep": str(keep_home)}):
         out.append(str(keep_home))
-    elif keep_home.is_dir():
-        shutil.rmtree(keep_home, ignore_errors=True)
     if keep_root.is_dir() and any(keep_root.iterdir()):
         os.chmod(keep_root.parent, 0o700)
         out.append(str(keep_root))
@@ -244,9 +183,10 @@ def crontab(root: Path, home: Path, from_user: str, user: str) -> list[dict]:
     return []
 
 
-def missing(home: Path, root: Path, home_items: list[str], system_items: list[str]) -> list[dict]:
+def missing(home: Path, root: Path, home_items: list[str], system_items: list[str],
+            user: str | None = None) -> list[dict]:
     """Step 4's check: every setting asked for is really here now (1.x)."""
-    gone = [f"~/{i}" for i in home_items if not os.path.lexists(home / i)]
+    gone = asuser.run(user, "missing", {"home": str(home), "items": home_items}) if home_items else []
     gone += [f"/{i}" for i in system_items if not os.path.lexists(root / i)]
     return [{"what": f"{g} isn't back (it may not be in that restore point).", "details": ""} for g in gone]
 
@@ -258,25 +198,29 @@ def run(get, home: Path, root: Path, from_user: str, user: str, home_items: list
     base = root / "var/tmp"
     base.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix="omabackups-migrate.", dir=base))
+    ustage = Path(tempfile.mkdtemp(prefix="omabackups-migrate-home.", dir=base))
+    asuser.give(ustage, user)
     try:
         try:
-            fetched = fetch(get, home, root, stage, from_user, home_items, system_items, theme)
-            desk, desk_problems = merged(get, home, root, stage, from_user, merges or [])
+            fetched = fetch(get, home, root, stage, from_user, home_items, system_items, theme, ustage, user)
+            desk, desk_problems = merged(get, home, root, ustage, from_user, merges or [], user)
         finally:
             let_go()
         report, problems = swap(fetched, root, keep)
         problems += crontab(root, home, from_user, user)
         problems = fetched.problems + desk_problems + problems + units(unit_list)
-        later: list[str] = []
-        renamed = rename.fix(home, home_items + desk, f"/home/{from_user}", later) if from_user != user else []
+        renamed, later = [], []
         if from_user != user:       # D44: names too (an app's folders named after the old home)
-            renamed += rename.names(home, home_items, f"/home/{from_user}")
+            fixed = asuser.run(user, "rename", {"home": str(home), "items": home_items + desk,
+                                                "old_home": f"/home/{from_user}"})
+            renamed, later = fixed["renamed"], fixed["later"]
         rename.save_later(home, f"/home/{from_user}", later)
         renamed_cron = [f"var/spool/cron/{user}" if i == f"var/spool/cron/{from_user}" else i
                         for i in system_items]
-        problems += missing(home, root, home_items, renamed_cron)
+        problems += missing(home, root, home_items, renamed_cron, user)
         return {"services": report, "theme": fetched.theme, "renamed": renamed, "later": later, "merged": desk,
                 "problems": problems,
                 "home": len(home_items), "system": len(system_items)}
     finally:
         shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(ustage, ignore_errors=True)     # fd-based: never follows the user's links

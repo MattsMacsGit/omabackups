@@ -211,7 +211,8 @@ def test_the_jobs_that_wipe_or_delete_ask_for_the_password(world):
     assert "ASK" not in rule.replace("ASK.", "")
     listed = _json.loads(re.search(r"(\[[^\]]*\])\.indexOf", rule).group(1))
     assert listed == list(PASSWORD_JOBS)
-    assert set(PASSWORD_JOBS) == {"create-disk", "rescue-usb-write", "delete-point", "rebuild-from", "remove"}
+    assert set(PASSWORD_JOBS) == {"create-disk", "rescue-usb-write", "delete-point", "rebuild-from", "remove",
+                                  "migrate-settings"}
     assert 'verb === "start" && job &&' in rule and "polkit.Result.AUTH_ADMIN;" in rule
     assert rule.index("AUTH_ADMIN;") < rule.index("polkit.Result.YES")      # asked before the free line
 

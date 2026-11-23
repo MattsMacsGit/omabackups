@@ -16,7 +16,8 @@ from omabackups.core.state import write_atomic
 
 
 # D57: the jobs that wipe or delete: the permission rule asks for the password.
-PASSWORD_JOBS = ("create-disk", "rescue-usb-write", "delete-point", "rebuild-from", "remove")
+PASSWORD_JOBS = ("create-disk", "rescue-usb-write", "delete-point", "rebuild-from", "remove",
+                 "migrate-settings")     # D57, D59
 
 
 def run(job: str, request: dict) -> dict:

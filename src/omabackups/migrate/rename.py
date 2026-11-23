@@ -196,6 +196,7 @@ def later(user: str) -> list[str]:
                     break
                 time.sleep(0.5)
             restart.append(name)
-    fix(home, saved["files"], saved["old_home"])
+    from omabackups.core import asuser         # D59: inside the home, as the user
+    asuser.run(user, "rename-later", {"home": str(home), "files": saved["files"], "old_home": saved["old_home"]})
     later_file().unlink(missing_ok=True)
     return restart
