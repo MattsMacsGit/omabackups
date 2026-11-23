@@ -33,35 +33,43 @@ def merge(home: str, root: str, stage: str, items: list[dict]) -> dict:
     plugins = _plugins(home_)
     keep = lambda wid: str(wid).startswith("omarchy.") or wid in plugins  # noqa: E731
     for i in items:
-        mine = _text(stage_ / "home" / i["path"])
-        if mine is None:
-            continue
-        stock = _text(stage_ / "system" / i["stock"])
-        here = home_ / i["path"]
-        new = _text(here) if here.is_file() else _text(root_ / i["stock"])
-        new = new or ""
         try:
-            if i["kind"] == "json":
-                text, unplaced = merging.shell(stock, mine, new or mine, keep), []
-            else:
-                text, unplaced = merging.lua(stock, mine, new)
-        except ValueError as exc:
-            problems.append({"what": f"~/{i['path']} couldn't be merged; yours is kept as "
-                                     f"~/{i['path']}.from-old-system to look at.", "details": str(exc)})
-            text, unplaced = None, []
-        if text is None or not text.strip():
-            _write(home_ / (i["path"] + ".from-old-system"), mine)
-            continue
-        before = home_ / (i["path"] + ".omabackups-before")
-        if here.is_file() and not before.exists():      # D44: the first merge's, kept
-            _write(before, here.read_text(errors="replace"))
-        _write(here, text)
-        done.append(i["path"])
-        if unplaced:
-            problems.append({"what": f"Some of your changes to ~/{i['path']} don't fit this Omarchy; "
-                                     "they're listed here to add by hand if you still want them.",
-                             "details": "\n".join(unplaced)})
+            _merge_one(home_, root_, stage_, i, keep, done, problems)
+        except OSError as exc:      # as the user: a file they can't write is said, not forced
+            problems.append({"what": f"~/{i['path']} couldn't be merged: it can't be written here.",
+                             "details": str(exc)})
     return {"done": done, "problems": problems}
+
+
+def _merge_one(home_: Path, root_: Path, stage_: Path, i: dict, keep, done: list, problems: list) -> None:
+    mine = _text(stage_ / "home" / i["path"])
+    if mine is None:
+        return
+    stock = _text(stage_ / "system" / i["stock"])
+    here = home_ / i["path"]
+    new = _text(here) if here.is_file() else _text(root_ / i["stock"])
+    new = new or ""
+    try:
+        if i["kind"] == "json":
+            text, unplaced = merging.shell(stock, mine, new or mine, keep), []
+        else:
+            text, unplaced = merging.lua(stock, mine, new)
+    except ValueError as exc:
+        problems.append({"what": f"~/{i['path']} couldn't be merged; yours is kept as "
+                                 f"~/{i['path']}.from-old-system to look at.", "details": str(exc)})
+        text, unplaced = None, []
+    if text is None or not text.strip():
+        _write(home_ / (i["path"] + ".from-old-system"), mine)
+        return
+    before = home_ / (i["path"] + ".omabackups-before")
+    if here.is_file() and not before.exists():      # D44: the first merge's, kept
+        _write(before, here.read_text(errors="replace"))
+    _write(here, text)
+    done.append(i["path"])
+    if unplaced:
+        problems.append({"what": f"Some of your changes to ~/{i['path']} don't fit this Omarchy; "
+                                 "they're listed here to add by hand if you still want them.",
+                         "details": "\n".join(unplaced)})
 
 
 def _plugins(home: Path) -> set:

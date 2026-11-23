@@ -89,3 +89,21 @@ def test_migrate_settings_asks_for_the_password():
     from omabackups.root.link import rule_text
     assert "migrate-settings" in PASSWORD_JOBS
     assert '"migrate-settings"' in rule_text("someone")
+
+
+def test_a_file_the_user_cant_write_is_said_and_the_rest_carries_on(tmp_path):
+    stage = tmp_path / "stage"
+    for rel in ("home/a/x.lua", "home/b/y.lua"):
+        (stage / rel).parent.mkdir(parents=True, exist_ok=True)
+        (stage / rel).write_text("-- mine\nbind = SUPER, X, exec, thing\n")
+    home = tmp_path / "home"
+    (home / "a").mkdir(parents=True)
+    (home / "a").chmod(0o500)                     # not writable: like a folder root owns
+    try:
+        done = asuser.run("anyone", "merge", {"home": str(home), "root": str(tmp_path), "stage": str(stage),
+                                              "items": [{"path": "a/x.lua", "stock": "none", "kind": "lua"},
+                                                        {"path": "b/y.lua", "stock": "none", "kind": "lua"}]})
+    finally:
+        (home / "a").chmod(0o700)
+    assert done["done"] == ["b/y.lua"]
+    assert any("~/a/x.lua couldn't be merged" in p["what"] for p in done["problems"])
