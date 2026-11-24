@@ -86,7 +86,9 @@ Plain-language messages everywhere, each with what to do and details you can cop
 
 ## Install
 
-On Omarchy, in a terminal, two commands:
+**From the Omarchy plugin store:** add OmaBackups, then click its icon on the bar (a clock turning back) and press **Install it**. It builds the `omabackups` package from the plugin's own copy, in a terminal window, and asks for your computer's password once. Then set up backups, or Migrate from another computer.
+
+**Or in a terminal**, two commands:
 
 ```
 git clone https://github.com/MattsMacsGit/omabackups
@@ -100,7 +102,7 @@ The first downloads OmaBackups. The second builds and installs it and puts the p
 
 It needs python, rsync, openssh, cryptsetup, btrfs-progs, polkit, gum and sshfs, all from Arch's own packages (installed with it). Tailscale is optional, for backing up away from home.
 
-**Where it's heading:** OmaBackups is on its way to the Omarchy plugin store: add the panel there, and its **Install it** button builds the `omabackups` package from the plugin's own copy, with one password. It will be in the AUR too, once the AUR accepts new accounts again (Arch paused them in June 2026 while it cleans up malicious packages).
+**The AUR:** it will be in the AUR too, once the AUR accepts new accounts again (Arch paused them in June 2026 while it cleans up malicious packages).
 
 ## Uninstall
 
