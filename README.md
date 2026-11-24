@@ -86,9 +86,17 @@ Plain-language messages everywhere, each with what to do and details you can cop
 
 ## Install
 
-**From the Omarchy plugin store:** add OmaBackups, then click its icon on the bar (a clock turning back) and press **Install it**. It builds the `omabackups` package from the plugin's own copy, in a terminal window, and asks for your computer's password once. Then set up backups, or Migrate from another computer.
+On Omarchy, in a terminal:
 
-**Or in a terminal**, two commands:
+```
+omarchy plugin add https://github.com/MattsMacsGit/omabackups.git --enable
+```
+
+That puts OmaBackups on your bar. Click its icon (a clock turning back) and press **Install it**: it builds the `omabackups` package from the plugin's own copy, in a terminal window, and asks for your computer's password once. Then set up backups, or Migrate from another computer.
+
+OmaBackups is in the Omarchy plugin store too. It's marked "Manual setup" there because it needs its own system package as well as the panel, so the store sends you here for the steps above.
+
+**Or build it straight from a clone**, two commands:
 
 ```
 git clone https://github.com/MattsMacsGit/omabackups
