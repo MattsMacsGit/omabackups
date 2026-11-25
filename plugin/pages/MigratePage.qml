@@ -18,8 +18,9 @@ Column {
   readonly property var m: service && service.status.migrate ? service.status.migrate : ({})
   readonly property var r: service ? service.restoring : null
   readonly property bool restoringNow: !!(r && r.running)
-  // D52: after a Quick Rescue, Restore my files opens Choose what comes back
-  // (the picker, the other way round), as often as you like, until Back up now.
+  // D52, D64: after a Quick Rescue, Restore my files brings everything back and
+  // Choose what comes back (the picker, the other way round) lets you pick, as
+  // often as you like, until Back up now.
   readonly property bool rescuedFlow: !!(m.rescued && m.files && m.files.length)
   readonly property bool showRestore: step === "finish" && (rescuedFlow || !m.files_restored)
   // SPEC §9: backups wait until every folder is back, or a deliberate Back up anyway.
@@ -28,7 +29,7 @@ Column {
   readonly property bool backingUpNow: !!(service && service.running)
   property bool anywayOpen: false
   readonly property var targets: step === "migrating" ? [carryOn]
-    : [restartButton, restoreButton, stopButton, backUp, pausedButton, anywayButton, cancelButton, stopBackup, again]
+    : [restartButton, restoreButton, chooseButton, stopButton, backUp, pausedButton, anywayButton, cancelButton, stopBackup, again]
         .filter(function(t) { return t && t.visible })
   function cursorOn(item) { return panel && panel.cursorTarget === item }
   function folderList(names) {
@@ -74,11 +75,17 @@ Column {
   }
 
   Prose {
-    visible: page.showRestore
+    visible: page.showRestore && !page.restoringNow
     width: parent.width
     color: page.service ? page.service.colour("blue") : Commons.Color.foreground
-    text: page.restoringNow ? "Bringing back your files · " + (page.r.percent || 0) + "%"
-          : page.rescuedFlow ? "Bring back your files" : "Restore my files to finish"
+    text: page.rescuedFlow ? "Bring back your files" : "Restore my files to finish"
+  }
+  // D63: the backup's own bar, the other way round.
+  BackupProgress {
+    visible: page.showRestore && page.restoringNow
+    width: parent.width
+    running: visible ? page.r : null
+    barColour: page.service ? page.service.colour("blue") : Commons.Color.accent
   }
   Prose {
     visible: page.showRestore && !page.restoringNow
@@ -87,8 +94,8 @@ Column {
     text: (page.r && page.r.error ? page.r.error.what + " " : "")
           + (page.rescuedFlow
              ? "Your folders are in the restore point from " + page.whenOf(page.m.point)
-               + ". Restore my files lets you choose what comes back first; open it again as "
-               + "often as you like. A file that's newer here is never overwritten."
+               + ". Restore my files brings all of it back; Choose what comes back lets you pick, "
+               + "as often as you like. A file that's newer here is never overwritten."
              : "Your files are still in the restore point from " + page.whenOf(page.m.point)
                + ". They come back while you work; a file that's newer here is never overwritten.")
   }
@@ -106,8 +113,15 @@ Column {
     width: parent.width
     text: "Restore my files"
     hasCursorHere: page.cursorOn(this)
-    onClicked: page.rescuedFlow ? page.service.restorePick(page.m.point)
-                                : page.service.restoreFiles(page.m.point)
+    onClicked: page.service.restoreFiles(page.m.point)       // D64: the whole restore point
+  }
+  ActionButton {
+    id: chooseButton                                          // D64, under it: the chooser (D52)
+    visible: page.showRestore && !page.restoringNow && page.rescuedFlow
+    width: parent.width
+    text: "Choose what comes back"
+    hasCursorHere: page.cursorOn(this)
+    onClicked: page.service.restorePick(page.m.point)
   }
   ActionButton {
     id: stopButton

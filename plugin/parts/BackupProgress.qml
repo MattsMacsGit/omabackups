@@ -11,7 +11,7 @@ Column {
   id: box
   property var running: null
   property color barColour: Commons.Color.accent
-  readonly property bool known: !!(running && running.step === "send" && running.total > 0)
+  readonly property bool known: Model.moving(running) && running.total > 0     // D63: restores too
   spacing: Style.space(6)
 
   Prose { width: parent.width; text: Model.doing(box.running) }

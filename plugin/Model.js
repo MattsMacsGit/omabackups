@@ -62,7 +62,12 @@ function free(header) {
 
 // What a running backup is doing, in words.
 var STEPS = { starting: "Starting the backup", unlock: "Opening your backup", check: "Checking what changed", send: "Backing up",
-              audit: "Noting your changes to Omarchy", point: "Making the restore point" }
+              audit: "Noting your changes to Omarchy", point: "Making the restore point",
+              // D63: Restore my files, the backup's way round
+              list: "Checking what's in the restore point", bring: "Bringing back your files" }
+
+// D63: the bar's numbers for a backup's sending and a restore's bringing back alike.
+function moving(running) { return !!running && (running.step === "send" || running.step === "bring") }
 
 function doing(running) {
   if (!running) return ""
@@ -90,7 +95,11 @@ function rounded(seconds) {
 }
 
 function detail(running) {
-  if (!running || running.step !== "send" || !running.total) return ""
+  if (!moving(running)) return ""
+  if (!running.total) {           // a restore point an older server never measured
+    if (!running.sent) return ""
+    return [human(running.sent) + " so far"].concat(running.speed ? [human(running.speed) + "/s"] : []).join(" · ")
+  }
   var bits = [(running.percent || 0) + "%", human(running.sent || 0) + " of " + human(running.total)]
   if (running.speed) bits.push(human(running.speed) + "/s")
   var left = rounded(running.left)

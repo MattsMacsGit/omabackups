@@ -61,7 +61,10 @@ Then Omarchy's logo fills as it works. At the end it says what to know,
 
 After a Quick Rescue, the panel says **Finish restore**:
 
-1. **Restore my files** opens **Choose what comes back**: the same picker as
+1. **Restore my files** brings back everything in the restore point that
+   isn't here yet, with the same progress bar as a backup (percent, how
+   much, speed, time left).
+   Or **Choose what comes back**, under it: the same picker as
    Choose what gets backed up, the other way round. It opens on **Quick
    skips** (bring back your AI models and games now, or later), and **Your
    files** at the bottom shows your home folder as it is in the restore
@@ -75,7 +78,8 @@ After a Quick Rescue, the panel says **Finish restore**:
 3. Once every folder is back, press **Back up now**. That finishes the
    restore, and the panel goes back to its everyday page.
 
-From a terminal: `omabackups restore-files <restore point> --pick`.
+From a terminal: `omabackups restore-files <restore point>` (everything), or
+add `--pick` to choose first.
 
 A Quick Rescue gets you working fast: your system, apps, settings and
 logins come back first. Your folders, and the big things you can get again

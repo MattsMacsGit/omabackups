@@ -4,7 +4,9 @@ point, never overwriting a file that's newer here (changed since).
 Root jobs `restore-files-start` / `restore-files-stop` start and stop a
 service (omabackups-restore, made with systemd-run). Stopped part-way, it
 carries on later: whatever is already back is skipped.
-State: /run/omabackups/restore.json (point, percent, running, done, error).
+State: /run/omabackups/restore.json (point, running, done, error, and how
+it's going as a backup says it, D63: step list|bring, percent, sent, total,
+speed, left).
 """
 
 import json
@@ -26,7 +28,6 @@ from omabackups.root import keys
 from omabackups.where import location
 
 UNIT = "omabackups-restore"
-PERCENT = re.compile(rb"\s(\d{1,3})%\s")
 
 
 USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -81,10 +82,12 @@ def start_job(request: dict) -> dict:
     from omabackups.restore import later
     known = set(later.system_paths())
     leave_out_system = [p for p in request.get("leave_out_system") or [] if p in known]
+    total = request.get("total")             # Choose what comes back's own (D63)
+    total = total if isinstance(total, int) and not isinstance(total, bool) and total > 0 else None
     stop_job({})
     write_atomic(plan_file(), json.dumps({"point": point, "from_user": from_user, "only": only,
-                                          "leave_out": leave_out,
-                                          "leave_out_system": leave_out_system}).encode(), 0o600)
+                                          "leave_out": leave_out, "leave_out_system": leave_out_system,
+                                          "total": total}).encode(), 0o600)
     subprocess.run(["systemd-run", f"--unit={UNIT}", "--collect", "--quiet",
                     "--property=KillMode=mixed", sys.executable, "-m", "omabackups",
                     "restore-run", point, run.linked_user()], check=False, capture_output=True)
@@ -164,7 +167,7 @@ def bring_later_system(gate, bid: str, point: str, leave_out_system: list[str]) 
 
 def restore(point: str, user: str, home: Path | None = None, stopping=lambda: False,
             from_user: str = "", only: list[str] | None = None, leave_out: list[str] | None = None,
-            leave_out_system: list[str] | None = None) -> dict:
+            leave_out_system: list[str] | None = None, total: int | None = None) -> dict:
     """Bring `user`'s home back from `point` (from `from_user`'s folder there,
     or just the paths in `only`). Returns the final state."""
     logger = log.get("restore")
@@ -178,19 +181,18 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     keeper = run.HoldKeeper(gate, bid, hold, logger)
     try:
+        from omabackups.restore import progress
+        watch = progress.Watch(state, progress.planned(_sizes(gate, bid, point), from_user or user,
+                                                       only, leave_out, total), _say)
+        _say(state)
         proc = subprocess.Popen(command(gate, bid, point, user, home, from_user, only, leave_out),
                                 stdin=subprocess.PIPE if only is not None else subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=gate.rsync_env())
         if only is not None:
             proc.stdin.write(b"\0".join(p.encode() for p in only) + b"\0")
             proc.stdin.close()
-        buffer = b""
         while chunk := proc.stdout.read1(4096):
-            buffer = (buffer + chunk)[-400:]
-            found = PERCENT.findall(buffer)
-            if found and int(found[-1]) != state["percent"]:
-                state["percent"] = min(100, int(found[-1]))
-                _say(state)
+            watch.feed(chunk)
             if stopping():
                 proc.terminate()
         error = proc.stderr.read().decode("utf-8", "replace")
@@ -234,6 +236,17 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
             logger.warning("locking after restore: %s", exc.details)
 
 
+def _sizes(gate, bid: str, point: str) -> dict | None:
+    """The restore point's measured sizes (gate 18+); None when not there."""
+    try:
+        if gate.call("version").get("gate", 0) < 18:
+            return None
+        listed = gate.call("sizes", bid, point)
+    except OmaError:
+        return None
+    return listed.get("parts") if listed.get("ready") else None
+
+
 def serve(point: str, user: str) -> int:
     """Runs in omabackups-restore."""
     stop = {"now": False}
@@ -249,7 +262,8 @@ def serve(point: str, user: str) -> int:
                         from_user=asked.get("from_user") or "", only=asked.get("only"),
                         leave_out=clean_leave_out(asked.get("leave_out")),
                         leave_out_system=[p for p in asked.get("leave_out_system") or []
-                                          if isinstance(p, str)])
+                                          if isinstance(p, str)],
+                        total=asked.get("total") if isinstance(asked.get("total"), int) else None)
     except OmaError as exc:
         _say({"point": point, "user": user, "running": False, "error": exc.as_dict(),
               "since": int(time.time())})

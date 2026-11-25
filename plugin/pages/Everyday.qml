@@ -75,11 +75,17 @@ Column {
     width: parent.width
     spacing: Style.space(6)
     Prose {
+      visible: !!(restoreBox.r && restoreBox.r.error && !restoreBox.r.running)
       width: parent.width
-      color: restoreBox.r && restoreBox.r.error ? page.service.colour("red") : Commons.Color.foreground
-      text: !restoreBox.r ? "" : restoreBox.r.error
-            ? restoreBox.r.error.what + " " + (restoreBox.r.error.todo || "")
-            : "Bringing back your files · " + (restoreBox.r.percent || 0) + "%"
+      color: page.service ? page.service.colour("red") : Commons.Color.foreground
+      text: visible ? restoreBox.r.error.what + " " + (restoreBox.r.error.todo || "") : ""
+    }
+    // D63: the backup's own bar, the other way round.
+    BackupProgress {
+      visible: !!(restoreBox.r && restoreBox.r.running)
+      width: parent.width
+      running: visible ? restoreBox.r : null
+      barColour: page.service ? page.service.colour("blue") : Commons.Color.accent
     }
     ActionButton {
       id: restoreStop

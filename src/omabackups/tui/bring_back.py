@@ -133,7 +133,8 @@ class BringBackMode:
         try:
             # Quick skips in the system area (AI models and the like, audit 8.4) left in the backup too.
             rootjob.run("restore-files-start", {**self.request, "leave_out": model.leave_out(),
-                                                "leave_out_system": model.rules["system"]})
+                                                "leave_out_system": model.rules["system"],
+                                                "total": model.total()})     # the bar's total (D63)
         except OmaError as exc:
             return exc.what
         return None

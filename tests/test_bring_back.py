@@ -43,7 +43,7 @@ def test_what_stays_is_left_out_of_restore_my_files(tmp_path, monkeypatch):
     monkeypatch.setattr("omabackups.tui.bring_back.state.write", lambda *a: None)
     assert BringBackMode("001-2026-11-12-1955", {"point": "001-2026-11-12-1955"}).save(m) is None
     assert calls[-1] == ("restore-files-start", {"point": "001-2026-11-12-1955", "leave_out": ["/Videos"],
-                                                 "leave_out_system": []})
+                                                 "leave_out_system": [], "total": m.total()})
 
 
 def test_restore_my_files_leaves_out_what_stays(tmp_path):
