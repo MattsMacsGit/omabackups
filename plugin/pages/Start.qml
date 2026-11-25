@@ -183,6 +183,12 @@ Column {
       }
       buttons: [
         ActionButton {
+          visible: modelData.kind === "update"
+          text: "Update it"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.installPackage()
+        },
+        ActionButton {
           visible: modelData.kind === "waiting-network"
           text: "Back up now"
           hasCursorHere: page.cursorOn(this)

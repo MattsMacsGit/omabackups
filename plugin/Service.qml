@@ -58,7 +58,7 @@ Item {
     kind: "update", colour: "yellow", action: "update",
     title: "An update for OmaBackups is ready",
     text: "The panel is " + panelVersion + "; the omabackups package is still " + packageVersion
-          + ". Update it builds the new package from this plugin's own copy, in a terminal window. "
+          + ". Update it builds the new one from this plugin's own copy, in a terminal window. "
           + "It asks for your password once."
   }] : []).concat(status.lines || [])
   readonly property var settings: {

@@ -110,6 +110,12 @@ Column {
       // In the line's own button row, under its text (they sat on top of it, garbled).
       buttons: [
         ActionButton {
+          visible: modelData.kind === "update"
+          text: "Update it"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.installPackage()
+        },
+        ActionButton {
           visible: modelData.kind === "handed-over"
           text: "Set up a new backup"
           hasCursorHere: page.cursorOn(this)
