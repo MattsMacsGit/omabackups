@@ -70,7 +70,7 @@ def _connect(args) -> dict:
 
 def _pick_point(points: list[str]) -> str:
     from omabackups.setup import menu
-    newest = sorted(points, reverse=True)
+    newest = sorted(points, key=lambda p: p[4:], reverse=True)    # by date, not line (D61)
     if not newest:
         raise OmaError("That backup has no restore points yet.",
                        "Back up the old computer first, then Migrate.", code="no-points")

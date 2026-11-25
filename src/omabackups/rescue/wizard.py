@@ -131,16 +131,27 @@ def unlock(gate, bid: str, known: str | None = None) -> tuple[str, str]:
             time.sleep(2)
 
 
-def pick_point(gate, bid: str, hold: str, mine: dict) -> tuple[str, list[str]]:
+def in_order(names: list[str], line: str) -> list[str]:
+    """D61: this computer's line first, newest date first; the other lines
+    after, newest first. Names are <line>-<date>: sorting them by name put the
+    highest LINE first and called it newest (another computer's, after a Migrate)."""
+    when = lambda name: name[4:]  # noqa: E731
+    own = [n for n in names if n.startswith(f"{line}-")]
+    rest = [n for n in names if not n.startswith(f"{line}-")]
+    return sorted(own, key=when, reverse=True) + sorted(rest, key=when, reverse=True)
+
+
+def pick_point(gate, bid: str, hold: str, mine: dict) -> tuple[str, list[str], str]:
+    """The restore point, every point, and whose it is (for "replaced by...")."""
     listed = gate.call("points", bid)
-    names = sorted(listed["points"], reverse=True)
-    if not names:
-        raise OmaError("Your backup has no restore points yet.", "Back up from the computer first.", code="no-points")
-    kept = listed.get("kept") or {}
     # A computer's first line is 001 and isn't written down until it changes: every
     # point said "an earlier computer (line 001)". Shown as the computer's name and
     # its line, "omarchy-001"; an older line from before a Migrate as "earlier-002".
     computer, line = mine.get("computer") or "this computer", mine.get("line") or "001"
+    names = in_order(listed["points"], line)
+    if not names:
+        raise OmaError("Your backup has no restore points yet.", "Back up from the computer first.", code="no-points")
+    kept = listed.get("kept") or {}
     named = line_names(gate, bid, names)        # each line by the computer that made it (audit 2.7)
 
     def label(name: str) -> str:
@@ -151,7 +162,10 @@ def pick_point(gate, bid: str, hold: str, mine: dict) -> tuple[str, list[str]]:
                 (["kept"] if name in kept.get("kept", []) else [])
         return f"{who}  ·  {_when(name)}" + (f"  ({', '.join(notes)})" if notes else "")
     screens.step("Which restore point?", "Each shows the computer it's from and when.")
-    return names[screens.choose("Restore points", [label(n) for n in names])], names
+    point = names[screens.choose("Restore points", [label(n) for n in names])]
+    whose = computer if point.startswith(f"{line}-") else \
+        f"{named[point[:3]]} (line {point[:3]})" if named.get(point[:3]) else f"the computer on line {point[:3]}"
+    return point, names, whose
 
 
 def line_names(gate, bid: str, names: list[str]) -> dict:
@@ -231,7 +245,7 @@ def run(events) -> int:
     bid = server["backup"]
     password, hold = unlock(gate, bid, password)
     try:
-        point, names = pick_point(gate, bid, hold, {**mine, "line": server.get("line")})
+        point, names, whose = pick_point(gate, bid, hold, {**mine, "line": server.get("line")})
         keep_picked(gate, bid, point)
     finally:
         gate.call("lock", bid, hold)
@@ -244,7 +258,7 @@ def run(events) -> int:
         screens.clear_logo()
         screens.gap()
         screens.say(f"Everything on {disk.line()} will be replaced", screens.RED)
-        screens.say(f"by {mine.get('computer', 'your computer')} as it was on {_when(point)}.", screens.GREY)
+        screens.say(f"by {whose} as it was on {_when(point)}.", screens.GREY)
         screens.gap()
         if screens.confirm("Start the rescue?", "Rescue", "Change"):
             break
