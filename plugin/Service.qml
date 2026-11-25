@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "Model.js" as Model
 
 // Talks to the omabackups command (D19: the panel only shows things and presses
 // its buttons). Status comes from `omabackups --json status`: often while a
@@ -39,7 +40,27 @@ Item {
     var want = root.expected["keep:" + p.name]
     return want === undefined ? p : Object.assign({}, p, { kept: want })
   })
-  readonly property var lines: status.lines || []
+  // D62: the package older than this panel (a plugin update brings the panel,
+  // not the package): said first, with Update it (the Install it build).
+  FileView {
+    id: manifestFile
+    path: decodeURIComponent(String(Qt.resolvedUrl("../manifest.json")).replace(/^file:\/\//, ""))
+    blockLoading: true
+    printErrors: false
+    onFileChanged: reload()
+  }
+  readonly property string panelVersion: {
+    try { return JSON.parse(manifestFile.text()).version || "" } catch (e) { return "" }
+  }
+  readonly property string packageVersion: status.version || ""
+  readonly property bool packageOld: Model.older(packageVersion, panelVersion)
+  readonly property var lines: (packageOld ? [{
+    kind: "update", colour: "yellow", action: "update",
+    title: "An update for OmaBackups is ready",
+    text: "The panel is " + panelVersion + "; the omabackups package is still " + packageVersion
+          + ". Update it builds the new package from this plugin's own copy, in a terminal window. "
+          + "It asks for your password once."
+  }] : []).concat(status.lines || [])
   readonly property var settings: {
     var out = Object.assign({}, status.settings || {})
     for (var key in root.expected)

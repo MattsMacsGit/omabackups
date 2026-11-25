@@ -101,7 +101,8 @@ Column {
       service: page.service
       hasCursorHere: page.cursorOn(this)
       onActivated: {
-        if (modelData.action === "rescue") page.service.rescueMake()
+        if (modelData.action === "update") page.service.installPackage()
+        else if (modelData.action === "rescue") page.service.rescueMake()
         else if (modelData.action === "pick") page.service.pickAgain()
         else if (modelData.action === "new-line") page.service.newBackupLine()
         else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupOrResume()

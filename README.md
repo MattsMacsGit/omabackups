@@ -112,6 +112,18 @@ It needs python, rsync, openssh, cryptsetup, btrfs-progs, polkit, gum and sshfs,
 
 **The AUR:** it will be in the AUR too, once the AUR accepts new accounts again (Arch paused them in June 2026 while it cleans up malicious packages).
 
+## Update
+
+Installed with `omarchy plugin add`:
+
+```
+omarchy plugin update omabackups
+```
+
+Then open the panel: when its package is older than the panel, it says "An update for OmaBackups is ready". Press **Update it** (it asks for your password once).
+
+Installed from a clone: `git pull` in it, then run `packaging/install-edge.sh` again.
+
 ## Uninstall
 
 Also in the panel: Settings › Your backup › Remove OmaBackups. Or in a terminal, two commands:

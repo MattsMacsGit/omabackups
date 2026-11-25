@@ -177,7 +177,8 @@ Column {
       service: page.service
       hasCursorHere: page.cursorOn(this)
       onActivated: {
-        if (modelData.action === "pick") page.service.pickAgain()
+        if (modelData.action === "update") page.service.installPackage()
+        else if (modelData.action === "pick") page.service.pickAgain()
         else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupOrResume()
       }
       buttons: [

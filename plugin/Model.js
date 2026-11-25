@@ -27,6 +27,19 @@ function when(epoch, now) {
   return d.getFullYear() === now.getFullYear() ? text : text + " " + d.getFullYear()
 }
 
+// D62: the package (a) older than the panel (b)? The first three numbers; an
+// unknown or odd version is never called older.
+function older(a, b) {
+  if (!a || !b) return false
+  var x = String(a).split("."), y = String(b).split(".")
+  for (var i = 0; i < 3; i++) {
+    var p = parseInt(x[i], 10), q = parseInt(y[i], 10)
+    if (isNaN(p) || isNaN(q)) return false
+    if (p !== q) return p < q
+  }
+  return false
+}
+
 function capital(text) { return text ? text.charAt(0).toUpperCase() + text.slice(1) : "" }
 
 function human(bytes) {
