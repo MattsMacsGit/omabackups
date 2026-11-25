@@ -19,7 +19,8 @@ def add(sub) -> None:
     p_set.set_defaults(run=run_settings)
     verbs.add_parser("wizard", help="the rescue itself (runs on the Rescue USB)").set_defaults(run=run_wizard)
     verbs.add_parser("make", help="make a Rescue USB (in a terminal)").set_defaults(run=run_make)
-    verbs.add_parser("refresh", help="refresh your Rescue USB's settings (in a terminal)").set_defaults(run=run_make)
+    verbs.add_parser("refresh", help="make your Rescue USB again, the whole stick (in a terminal)") \
+        .set_defaults(run=run_make)
 
 
 def run_later(args, events: Events) -> int:
@@ -39,7 +40,7 @@ def run_make(args, events: Events) -> int:
     from omabackups.setup import rescue_usb
     try:
         with onewindow.only_one("Making the Rescue USB"):
-            done = rescue_usb.make() if args.verb == "make" else rescue_usb.refresh()
+            done = rescue_usb.make()          # refresh is the same (D60): the whole stick
     except OmaError as exc:
         # Said here, before the window's own "Failed... Press any key to close"
         # (Omarchy's): a failure must never look like nothing (demo film, 14 Nov).

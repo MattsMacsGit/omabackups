@@ -4,7 +4,7 @@ rescue-usb-write    the downloaded image onto the stick, then its small
                     settings part (OMABACKUPS): the server's addresses, its
                     fingerprint and the stick's own read-only key (the last
                     stick's key is taken off the server)
-rescue-usb-refresh  only the settings part rewritten (a new key, the old cut off)
+(Refresh Rescue USB runs this same job: the whole stick again, D60.)
 
 The settings part is encrypted (LUKS2, labelled OMABACKUPS) with the backup's
 own password: one password opens the stick and the backup (audit 8.3, agreed
@@ -166,12 +166,6 @@ def check_password(request: dict) -> str:
     return password
 
 
-def _settings_part(disk: str) -> str | None:
-    listing = subprocess.run(["lsblk", "-nrpo", "NAME,LABEL", disk], capture_output=True, text=True).stdout
-    return next((line.split()[0] for line in listing.splitlines()
-                 if len(line.split()) > 1 and line.split()[1] == LABEL), None)
-
-
 def _write_settings(part: str, password: str) -> dict:
     """A new read-only key on the server (the last stick's taken off), its
     settings onto the stick's settings part."""
@@ -223,15 +217,3 @@ def write(request: dict) -> dict:
     made = _write_settings(part, password)
     _say("done", 100)
     return {"made": made, "disk": disk}
-
-
-def refresh(request: dict) -> dict:
-    from omabackups.restore import newdisk
-    disk = _disk(request)
-    password = check_password(request)
-    part = _settings_part(disk)
-    if not part:
-        raise OmaError("That stick isn't a Rescue USB (it has no settings part).",
-                       "Make Rescue USB writes a new one.", disk, code="rescue-usb-not-one")
-    newdisk.free(disk)
-    return {"made": _write_settings(part, password), "disk": disk}

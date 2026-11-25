@@ -5,8 +5,9 @@ Make: which stick (every disk, with what's on it; the one this system runs
 on left out) -> the rescue system downloaded (size first, resumes, checked,
 kept) -> written to the stick with its small settings part and its own
 read-only key (the last stick's cut off) -> done.
-Refresh: only the stick's settings part (seconds); a newer rescue system is
-offered, with its size.
+Refresh is the same thing (D60): the whole stick again, never only its
+settings (a settings-only refresh once left an older stick unable to read
+the newer settings it wrote).
 """
 
 import json
@@ -60,6 +61,8 @@ def _pick_stick(purpose: str):
         raise OmaError(menu.CANCELLED, code="cancelled")
     return disk
 
+
+TRIES = 3          # D60: a wrong backup password is asked again, three tries in all
 
 KEEP_OPEN = "On a slow connection this can take a little while: please keep this window open."
 
@@ -124,9 +127,7 @@ def make() -> dict:
                "It becomes your Rescue USB.")
     if menu.choose("Make the Rescue USB?", ["Make it", "No, stop here"], 1) != 0:
         raise OmaError(menu.CANCELLED, code="cancelled")
-    password = menu.secret(LOCK)
-    done = _with_progress("rescue-usb-write", {"disk": disk.path, "image": path, "password": password},
-                          "Starting...")
+    done = _write(disk, path)
     _remember(done.get("made", {}), disk)
     menu.title("Your Rescue USB is ready",
                "Keep it somewhere safe. To bring this computer back, start it from the stick.\n"
@@ -134,24 +135,18 @@ def make() -> dict:
     return done
 
 
-def refresh() -> dict:
-    # Words first: the check below asks online and said nothing meanwhile,
-    # so the window looked stuck and got closed.
-    menu.title("Refresh Rescue USB", "Checking online for a newer rescue system... " + KEEP_OPEN)
-    want = None
-    try:
-        want = image.published()
-    except OmaError:
-        pass        # offline: only the settings part, which needs no download
-    if want and not image.have(want) and image.path().is_file():
-        menu.title(f"A newer rescue image is available ({human(want['size'])})",
-                   "Make the stick again with it, or only refresh its settings.")
-        if menu.choose("What now?", ["Make it again with the newer one", "Only the settings"]) == 0:
-            return make()
-    disk = _pick_stick("is your Rescue USB")
-    password = menu.secret(LOCK)
-    done = _with_progress("rescue-usb-refresh", {"disk": disk.path, "password": password},
-                          "Refreshing its settings...")
-    _remember(done.get("made", {}), disk)
-    menu.title("Your Rescue USB is up to date", "The last stick's key no longer opens anything.")
-    return done
+def _write(disk, path: str) -> dict:
+    """The root job, with the backup's password: a wrong one is asked again
+    (each try is its own job, so the computer's password comes again too)."""
+    for attempt in range(1, TRIES + 1):
+        password = menu.secret(LOCK)
+        try:
+            return _with_progress("rescue-usb-write", {"disk": disk.path, "image": path, "password": password},
+                                  "Starting...")
+        except OmaError as exc:
+            if exc.code != "wrong-password" or attempt == TRIES:
+                raise
+            left = TRIES - attempt
+            menu.say(f"  That password didn't open your backup. Try again ({left} "
+                     f"{'try' if left == 1 else 'tries'} left).")
+    raise AssertionError("unreachable")

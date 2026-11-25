@@ -142,8 +142,8 @@ Column {
     readonly property var made: page.service ? page.service.status.rescue_usb : null
     title: made ? "Refresh Rescue USB" : "Make Rescue USB"
     explainer: made
-      ? "Your stick, up to date: only its small settings part is rewritten (seconds), and a newer "
-        + "rescue system is offered if there is one."
+      ? "Makes your stick again: the newest rescue system, its settings and a fresh key "
+        + "(a minute or two)."
       : "A USB stick that brings this computer back if it won't start. The rescue system downloads "
         + "once (about 1 GB); any stick of 4 GB or more."
     hasCursorHere: page.cursorOn(this)

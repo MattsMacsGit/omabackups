@@ -114,7 +114,7 @@ def _jobs() -> dict:
             "keep": job_points.keep, "delete-point": job_points.delete, "rebuild-from": job_points.rebuild,
             "point-sizes": job_points.point_sizes, "change-password": job_points.change_password,
             "rescue-key": job_points.rescue_key, "backup-dry-run": job_backup.dry_run, "remove": job_remove.remove,
-            "rescue-usb-write": job_rescue.write, "rescue-usb-refresh": job_rescue.refresh,
+            "rescue-usb-write": job_rescue.write,
             "new-line": job_newline.new_line}
 
 

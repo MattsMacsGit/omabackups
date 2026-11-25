@@ -30,9 +30,9 @@ Settings). A window opens:
 One stick at a time: making a new one switches the last one's key off, so a
 lost stick can always be cut off.
 
-**Refresh Rescue USB** (Settings) rewrites only the stick's small settings
-part, in seconds. When a newer rescue system is out, it offers that too, with
-its size.
+**Refresh Rescue USB** (Settings) makes the stick again: the newest rescue
+system (downloaded first when there's a newer one), its settings and a fresh
+key. It takes a minute or two.
 
 ## Using it
 

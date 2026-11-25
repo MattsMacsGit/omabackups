@@ -180,3 +180,58 @@ def test_the_release_workflow_checks_the_image_against_the_pin():
     from pathlib import Path
     flow = (Path(__file__).parent.parent / ".github/workflows/rescue-release.yml").read_text()
     assert "workflow_dispatch" in flow and "rescue_pin.py" in flow and "sha256sum -c" in flow
+
+
+def _stick_job(monkeypatch, right="the backup's"):
+    """The write job as it answers: a wrong backup password ends it at once."""
+    from omabackups.core import rootjob
+    asked = []
+
+    def run(job, request):
+        asked.append((job, request["password"]))
+        if request["password"] != right:
+            raise OmaError("That password didn't open your backup, so the stick wasn't touched.",
+                           code="wrong-password")
+        return {"made": {"key": "k"}, "disk": request["disk"]}
+    monkeypatch.setattr(rootjob, "run", run)
+    return asked
+
+
+class _Stick:
+    path = "/dev/sdz"
+
+
+def test_a_wrong_password_is_asked_again_and_the_stick_is_made(monkeypatch):
+    """D60: a typo no longer ends the run (it used to, and Refresh followed)."""
+    from omabackups.setup import menu, rescue_usb
+    typed = iter(["oops", "the backup's"])
+    monkeypatch.setattr(menu, "secret", lambda prompt: next(typed))
+    asked = _stick_job(monkeypatch)
+    assert rescue_usb._write(_Stick(), "/x.iso")["disk"] == "/dev/sdz"
+    assert asked == [("rescue-usb-write", "oops"), ("rescue-usb-write", "the backup's")]
+
+
+def test_three_wrong_passwords_stop_with_nothing_written(monkeypatch):
+    from omabackups.setup import menu, rescue_usb
+    monkeypatch.setattr(menu, "secret", lambda prompt: "wrong")
+    asked = _stick_job(monkeypatch)
+    with pytest.raises(OmaError) as caught:
+        rescue_usb._write(_Stick(), "/x.iso")
+    assert caught.value.code == "wrong-password" and len(asked) == rescue_usb.TRIES == 3
+
+
+def test_refresh_makes_the_whole_stick_again(monkeypatch):
+    """D60: one tool. Refresh runs Make (the image, the settings, a fresh key);
+    there is no settings-only refresh to leave an older stick unreadable."""
+    import argparse
+    from omabackups.commands import rescue
+    from omabackups.core.events import Events
+    from omabackups.root import jobs
+    from omabackups.setup import rescue_usb
+    made = []
+    monkeypatch.setattr(rescue_usb, "make", lambda: made.append(True) or {"disk": "/dev/sdz"})
+    monkeypatch.setattr(os, "isatty", lambda fd: True)
+    assert rescue.run_make(argparse.Namespace(verb="refresh"), Events(as_json=True)) == 0
+    assert made == [True]
+    assert not hasattr(rescue_usb, "refresh")
+    assert "rescue-usb-refresh" not in jobs._jobs()
