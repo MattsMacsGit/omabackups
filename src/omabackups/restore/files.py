@@ -131,6 +131,31 @@ def command(gate, bid: str, point: str, user: str, home: Path, from_user: str = 
             f"{gate.rsync_target()}:home/", f"{home}/"]
 
 
+TOTAL = re.compile(rb"Total transferred file size: ([\d,]+)")
+
+
+def to_bring(gate, bid: str, point: str, user: str, home: Path, from_user: str,
+             only: list[str] | None, leave_out: list[str] | None, stopping=lambda: False) -> int | None:
+    """D63: the bytes still to come back (a dry run: what isn't here yet), as
+    the backup's check finds what it will send; None if it can't say."""
+    check = [a for a in command(gate, bid, point, user, home, from_user, only, leave_out)
+             if not a.startswith("--info=")]
+    check[1:1] = ["-n", "--stats"]
+    proc = subprocess.Popen(check, stdin=subprocess.PIPE if only is not None else subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=gate.rsync_env())
+    if only is not None:
+        proc.stdin.write(b"\0".join(p.encode() for p in only) + b"\0")
+        proc.stdin.close()
+    while proc.poll() is None:         # quiet until it ends (-n, no -v): Stop is still heard
+        if stopping():
+            proc.terminate()
+            proc.wait()
+            return None
+        time.sleep(0.5)
+    found = TOTAL.search(proc.stdout.read())
+    return int(found.group(1).replace(b",", b"")) if found and proc.returncode in (0, 24) else None
+
+
 def still_missing(gate, bid: str, point: str, user: str, home: Path, from_user: str,
                   only: list[str] | None, leave_out: list[str] | None = None) -> int:
     """Check the result, not the exit code: rsync once more, as a dry run, and
@@ -172,7 +197,8 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
     or just the paths in `only`). Returns the final state."""
     logger = log.get("restore")
     home = home or Path(pwd.getpwnam(user).pw_dir)
-    state = {"point": point, "user": user, "percent": 0, "running": True, "since": int(time.time())}
+    state = {"point": point, "user": user, "percent": 0, "running": True, "since": int(time.time()),
+             "step": "list"}           # D63: "Checking what's in the restore point..." from the start
     _say(state)
     server = location.load()
     gate, _away = location.connect(server)
@@ -182,8 +208,15 @@ def restore(point: str, user: str, home: Path | None = None, stopping=lambda: Fa
     keeper = run.HoldKeeper(gate, bid, hold, logger)
     try:
         from omabackups.restore import progress
-        watch = progress.Watch(state, progress.planned(_sizes(gate, bid, point), from_user or user,
-                                                       only, leave_out, total), _say)
+        # D63, as a backup checks first: exactly what's still to come back.
+        exact = to_bring(gate, bid, point, user, home, from_user, only, leave_out, stopping)
+        if stopping():
+            state.update(running=False, stopped=True)
+            _say(state)
+            return state
+        watch = progress.Watch(state, exact if exact is not None else
+                               progress.planned(_sizes(gate, bid, point), from_user or user, only, leave_out, total),
+                               _say)
         _say(state)
         proc = subprocess.Popen(command(gate, bid, point, user, home, from_user, only, leave_out),
                                 stdin=subprocess.PIPE if only is not None else subprocess.DEVNULL,

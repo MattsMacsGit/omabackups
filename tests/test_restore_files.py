@@ -98,3 +98,23 @@ def test_a_network_drop_mid_restore_says_so_and_carries_on_next_time(world, tmp_
     again = files.restore(point, "u", home=home)
     assert again.get("done") and sorted(p.name for p in (home / "Documents").iterdir()) == \
         [f"{n}.txt" for n in range(5)]
+
+
+def test_the_bar_counts_only_what_is_still_to_come_back(world, monkeypatch):
+    """D63, seen in the VM: the bar's total was the whole restore point (7.3 GB)
+    when 3.8 GB was missing; it stalled halfway, then jumped. It checks first,
+    as a backup does, and "Backing up..." never shows while it lists."""
+    srv, kid, bid, src, box = world
+    home = src.root / "home" / "u"
+    (home / "Big").mkdir(parents=True)
+    (home / "Big/gone.bin").write_bytes(os.urandom(300_000))
+    (home / "Big/here.bin").write_bytes(os.urandom(200_000))
+    point = run.backup(source=src)["point"]
+    (home / "Big/gone.bin").unlink()
+    said = []
+    monkeypatch.setattr(files, "_say", lambda state: said.append(dict(state)))
+    state = files.restore(point, "u", home=home)
+    assert state.get("done"), (state.get("error") or {}).get("details")
+    assert said[0]["step"] == "list"                       # checking first, from the very start
+    counted = [s for s in said if s.get("step") == "bring"]
+    assert counted and counted[-1]["total"] == 300_000    # only what was missing
