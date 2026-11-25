@@ -93,13 +93,11 @@ def _with_progress(job: str, request: dict, what: str) -> dict:
         except OmaError as exc:
             failure.append(exc)
     worker = threading.Thread(target=work)
+    started = time.time()
     worker.start()
     shown = ""
     while worker.is_alive():
-        try:
-            now = json.loads((paths.system_run_dir() / "rescue-usb.json").read_text())
-        except (OSError, ValueError):
-            now = {}
+        now = _progress(started)
         line = {"write": f"Writing the rescue system: {now.get('percent', 0)}%",
                 "settings": "Adding the stick's settings and its own key...",
                 "done": "Finishing..."}.get(now.get("step"), what)
@@ -111,6 +109,18 @@ def _with_progress(job: str, request: dict, what: str) -> dict:
     if failure:
         raise failure[0]
     return result
+
+
+def _progress(since: float) -> dict:
+    """The job's progress, only once this run wrote it: the last stick's
+    "done" is still there until then (it showed "Finishing..." first)."""
+    file = paths.system_run_dir() / "rescue-usb.json"
+    try:
+        if file.stat().st_mtime < since:
+            return {}
+        return json.loads(file.read_text())
+    except (OSError, ValueError):
+        return {}
 
 
 def _remember(made: dict, disk) -> None:

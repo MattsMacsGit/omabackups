@@ -235,3 +235,17 @@ def test_refresh_makes_the_whole_stick_again(monkeypatch):
     assert made == [True]
     assert not hasattr(rescue_usb, "refresh")
     assert "rescue-usb-refresh" not in jobs._jobs()
+
+
+def test_the_last_sticks_progress_isnt_shown_as_this_ones(sandbox):
+    """It said "Finishing..." before anything had started (D60, in the VM)."""
+    import time
+    from omabackups.core import paths
+    from omabackups.setup import rescue_usb
+    paths.system_run_dir().mkdir(parents=True, exist_ok=True)
+    file = paths.system_run_dir() / "rescue-usb.json"
+    file.write_text('{"step": "done", "percent": 100}')
+    os.utime(file, (time.time() - 60, time.time() - 60))
+    assert rescue_usb._progress(time.time() - 1) == {}
+    file.write_text('{"step": "write", "percent": 12}')
+    assert rescue_usb._progress(time.time() - 1)["step"] == "write"
