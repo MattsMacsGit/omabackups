@@ -1,7 +1,8 @@
 name: rescue-release
 
 # D58: a release carries its own Rescue USB image. Run by hand with the
-# release's tag, after the tested image is on "rescue-edge": it copies the
+# release's tag, after the tested image is on "rescue-edge" (or, D65, with
+# "from" set to the last release when the stick hasn't changed): it copies the
 # image, its checksum and version into that release, checking the image
 # against its checksum AND against the checksum the tag's code pins
 # (src/omabackups/setup/rescue_pin.py). Nothing goes through anyone's own
@@ -13,6 +14,10 @@ on:
       tag:
         description: "The release's tag, e.g. v2.0.1"
         required: true
+      from:
+        description: "Where the image comes from: rescue-edge, or an earlier release's tag when the stick hasn't changed (D65)"
+        required: false
+        default: "rescue-edge"
 
 permissions:
   contents: write
@@ -25,6 +30,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TAG: ${{ inputs.tag }}
+      FROM: ${{ inputs.from }}
     steps:
       # Actions are pinned to exact commits (plugin store rule).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,11 +41,12 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $TAG"; exit 1; }
+          [[ "$FROM" == "rescue-edge" || "$FROM" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a source: $FROM"; exit 1; }
           pin="$(sed -n 's/^SHA256 = "\([0-9a-f]\{64\}\)"$/\1/p' src/omabackups/setup/rescue_pin.py)"
           release="$(sed -n 's/^RELEASE = "\(.*\)"$/\1/p' src/omabackups/setup/rescue_pin.py)"
           [[ -n "$pin" && "$release" == "$TAG" ]] || { echo "rescue_pin.py at $TAG doesn't pin $TAG"; exit 1; }
           mkdir out && cd out
-          gh release download rescue-edge -p 'omabackups-rescue-x86_64.*'
+          gh release download "$FROM" -p 'omabackups-rescue-x86_64.*'
           sha256sum -c omabackups-rescue-x86_64.iso.sha256
           echo "$pin  omabackups-rescue-x86_64.iso" | sha256sum -c
           gh release upload "$TAG" omabackups-rescue-x86_64.iso omabackups-rescue-x86_64.iso.sha256 \

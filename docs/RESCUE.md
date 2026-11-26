@@ -34,6 +34,10 @@ lost stick can always be cut off.
 system (downloaded first when there's a newer one), its settings and a fresh
 key. It takes a minute or two.
 
+Updating OmaBackups doesn't mean making a new stick. A release only brings a
+new rescue system when the stick itself changed; otherwise it keeps the last
+one, so the stick you have stays current.
+
 ## Using it
 
 Start the computer from the stick (the boot menu key, often F12, Esc or F2;

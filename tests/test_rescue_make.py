@@ -180,6 +180,7 @@ def test_the_release_workflow_checks_the_image_against_the_pin():
     from pathlib import Path
     flow = (Path(__file__).parent.parent / ".github/workflows/rescue-release.yml").read_text()
     assert "workflow_dispatch" in flow and "rescue_pin.py" in flow and "sha256sum -c" in flow
+    assert 'gh release download "$FROM"' in flow      # D65: an earlier release's image, unchanged
 
 
 def _stick_job(monkeypatch, right="the backup's"):
