@@ -1,6 +1,6 @@
 """OmaBackups: backups, rescue and migration for Omarchy."""
 
-__version__ = "2.0.6"
+__version__ = "2.0.7"
 
 # The version of the JSON that `omabackups ... --json` prints (BUILD 5.10).
 # Raise it whenever a field changes meaning or goes away.
