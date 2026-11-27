@@ -3,14 +3,22 @@ picked on the stick; nothing but a command-line delete removes it while the
 restore is unfinished; once everything came back and a normal backup ran,
 the keep lets go; after a forced backup it stays."""
 
+import io
 import json
+import sys
+from types import SimpleNamespace
 
+import pytest
 from gate_harness import make_pubkey
 from test_gate import KEY, owned, server  # noqa: F401  (fixtures)
 from test_run import world  # noqa: F401  (the fixture)
 
 from omabackups.backup import run
-from omabackups.core import flow, state
+from omabackups.commands import points as points_cmd
+from omabackups.core import flow, rootjob, state
+from omabackups.core.errors import OmaError
+from omabackups.core.events import Events
+from omabackups.root import job_points, jobs
 
 OLD, NEW = "001-2026-11-01-1000", "001-2026-11-02-1000"
 
@@ -30,7 +38,7 @@ def test_the_stick_keeps_and_only_delete_any_takes_it(owned):  # noqa: F811
     server.ok(rescue, f"keep {bid} {OLD}")
     assert server.ok(kid, f"points {bid}")["kept"]["by"] == {OLD: "rescue"}
     assert server.call(rescue, f"release {bid} {OLD}")[0] == 1                  # the stick never lets go
-    assert "only omabackups delete" in server.call(kid, f"release {bid} {OLD}")[2]   # nor the panel
+    assert "a rescue keeps" in server.call(kid, f"release {bid} {OLD}")[2]     # nor the panel, unasked
     assert server.call(kid, f"delete {bid} {OLD}")[0] == 1                      # nor thinning
     server.ok(kid, f"delete {bid} {OLD} any")                                   # the command line can
     kept = server.ok(kid, f"points {bid}")["kept"]
@@ -97,3 +105,66 @@ def test_the_tags_say_who_kept_it():
               "kept_by": {OLD: "rescue"}, "return_point": "001-2026-11-03-1000"}
     tags = {p["name"]: (p["kept"], p["kept_by"]) for p in status_data.points(record)}
     assert tags == {OLD: (True, "restore"), NEW: (True, ""), "001-2026-11-03-1000": (False, "migrate")}
+
+
+# --- D66: you can stop keeping it, after the warning -------------------------------
+
+def test_anyway_lets_go_from_your_own_key_only(owned):  # noqa: F811
+    server, kid, bid = owned
+    rescue = stick(server, kid, bid)
+    inside = server.root / "data/store" / f"{bid}.box" / "inside"
+    for name in (OLD, NEW):
+        (inside / "points" / name).mkdir()
+    server.ok(kid, f"unlock {bid}", KEY)
+    server.ok(rescue, f"keep {bid} {OLD}")
+    server.ok(kid, f"keep {bid} {NEW}")
+    assert server.call(rescue, f"release {bid} {OLD} anyway")[0] == 1         # the stick still can't
+    server.ok(kid, f"release {bid} {OLD} anyway")
+    server.ok(kid, f"release {bid} {NEW} anyway")                             # yours lets go as always
+    kept = server.ok(kid, f"points {bid}")["kept"]
+    assert kept["kept"] == [] and kept["by"] == {}
+    assert server.call(kid, f"release {bid} {OLD} whatever")[0] == 1
+
+
+def _rescue_kept_point(world, monkeypatch):  # noqa: F811
+    srv, kid, bid, src, box = world
+    names = iter(["001-2099-01-01-0000", "001-2099-01-02-0000"])
+    monkeypatch.setattr(run, "point_name", lambda line, latest: next(names))
+    first = run.backup(source=src)["point"]
+    kept_by_rescue(srv, kid, bid, first)
+    run.backup(source=src)                                   # the computer carries on (a test restore)
+    assert run.load_record()["kept_by"] == {first: "rescue"}
+    asked = []
+    monkeypatch.setattr(rootjob, "run", lambda job, request: asked.append(request) or jobs._jobs()[job](request))
+    return first, box, asked
+
+
+def test_switching_off_a_rescues_keep_asks_first(world, monkeypatch):  # noqa: F811
+    first, box, asked = _rescue_kept_point(world, monkeypatch)
+    release = SimpleNamespace(point=first, keep=False, anyway=False, json=False)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("n\n"))
+    points_cmd.run_keep(release, Events())
+    assert asked == [] and first in json.loads((box / "kept.json").read_text())["kept"]   # "Keep it"
+    points_cmd.run_keep(SimpleNamespace(point=first, keep=False, anyway=False, json=True), Events())
+    assert asked == []                                       # the panel never lets go without asking
+    monkeypatch.setattr(sys, "stdin", io.StringIO("y\n"))
+    points_cmd.run_keep(release, Events())
+    assert asked == [{"point": first, "keep": False, "anyway": True}]
+    kept = json.loads((box / "kept.json").read_text())
+    assert first not in kept["kept"] and kept["by"] == {}
+    assert run.load_record()["kept_by"] == {}
+
+
+def test_the_panels_release_anyway_lets_go(world, monkeypatch):  # noqa: F811
+    first, box, asked = _rescue_kept_point(world, monkeypatch)
+    points_cmd.run_keep(SimpleNamespace(point=first, keep=False, anyway=True, json=True), Events())
+    assert first not in json.loads((box / "kept.json").read_text())["kept"]
+
+
+def test_an_older_backup_server_says_to_update_it(world, monkeypatch):  # noqa: F811
+    first, box, asked = _rescue_kept_point(world, monkeypatch)
+    monkeypatch.setattr(job_points, "LET_GO_GATE", 99)
+    with pytest.raises(OmaError) as caught:
+        job_points.keep({"point": first, "keep": False, "anyway": True})
+    assert caught.value.code == "gate-version"
+    assert first in json.loads((box / "kept.json").read_text())["kept"]

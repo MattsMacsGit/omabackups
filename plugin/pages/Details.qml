@@ -12,11 +12,13 @@ Column {
   property var panel: null
   property string step: "kept"          // kept (Restore points) | yourBackup
   property bool confirming: false
+  property var letGo: null              // D66: a ★ kept restore point, asked about first
   spacing: Style.space(8)
 
   readonly property var h: service && service.header ? service.header : ({})
   readonly property var targets: {
     if (step === "kept") {
+      if (letGo) return [yesLetGo, keepIt]
       var out = [thinningSwitch, runAgain]
       for (var i = 0; i < keptRepeater.count; i++) out.push(keptRepeater.itemAt(i))
       return out
@@ -29,7 +31,7 @@ Column {
   // --- Restore points: smart thinning, and the kept ones (D35) -----------------------------
   SwitchRow {
     id: thinningSwitch
-    visible: page.step === "kept"
+    visible: page.step === "kept" && !page.letGo
     title: "Smart thinning"
     checked: !!page.service && page.service.settings["thinning.on"] !== false
     hasCursorHere: page.cursorOn(this)
@@ -47,16 +49,16 @@ Column {
   }
   NavRow {
     id: runAgain
-    visible: page.step === "kept"
+    visible: page.step === "kept" && !page.letGo
     title: "Run Migrate again"
     explainer: "Brings back the migration chooser, so you can pick any preferences you left behind: "
                + "you can still recover them here."
     hasCursorHere: page.cursorOn(this)
     onActivated: page.service.migrateContinue()
   }
-  PanelSectionHeader { visible: page.step === "kept"; text: "Select restore points to keep" }
+  PanelSectionHeader { visible: page.step === "kept" && !page.letGo; text: "Select restore points to keep" }
   Prose {
-    visible: page.step === "kept"
+    visible: page.step === "kept" && !page.letGo
     width: parent.width
     dim: true
     text: "A kept restore point is never thinned or deleted, so you can always go back to it."
@@ -66,11 +68,49 @@ Column {
     model: page.step === "kept" && page.service ? page.service.points : []
     SwitchRow {
       required property var modelData
+      visible: !page.letGo
       title: Model.capital(Model.when(modelData.when))
       explainer: modelData.return_point ? "The Return point (from before a handover)." : ""
       checked: modelData.kept || modelData.return_point
       hasCursorHere: page.cursorOn(this)
-      onToggled: page.service.keep(modelData.name, !checked)
+      // A rescue's keep: asked first (D66), then let go like any other.
+      onToggled: {
+        if (checked && modelData.kept_by === "restore") page.letGo = modelData
+        else page.service.keep(modelData.name, !checked)
+      }
+    }
+  }
+  Column {
+    visible: page.step === "kept" && !!page.letGo
+    width: parent.width
+    spacing: Style.space(6)
+    Prose {
+      width: parent.width
+      text: page.letGo ? Model.capital(Model.when(page.letGo.when)) + " · ★ kept restore" : ""
+    }
+    Prose {
+      width: parent.width
+      text: "Another computer was restored from this point. Are you sure you're done keeping it?"
+    }
+    Prose {
+      width: parent.width
+      dim: true
+      text: "Once it isn't kept, smart thinning treats it like any other restore point."
+    }
+    Row {
+      spacing: Style.space(8)
+      ActionButton {
+        id: yesLetGo
+        text: "Yes, stop keeping it"
+        hasCursorHere: page.cursorOn(this)
+        onClicked: { page.service.releaseAnyway(page.letGo.name); page.letGo = null }
+      }
+      ActionButton {
+        id: keepIt
+        text: "Keep it"
+        hasCursorHere: page.cursorOn(this)
+        onClicked: page.letGo = null
+      }
     }
   }
 

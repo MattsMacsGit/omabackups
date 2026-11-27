@@ -14,10 +14,11 @@ from omabackups.where import location
 
 POINT = run.thinning.NAME
 NEEDS_GATE = 16      # rebuild, and delete any restore point
+LET_GO_GATE = 22     # release a rescue's keep anyway (D66)
 
 
-def _new_enough(gate) -> None:
-    if gate.call("version").get("gate", 0) < NEEDS_GATE:
+def _new_enough(gate, needs: int = NEEDS_GATE) -> None:
+    if gate.call("version").get("gate", 0) < needs:
         raise OmaError("OmaBackups on your backup server needs updating first.",
                        "Run: omabackups setup server --update (your backup is kept).", code="gate-version")
 
@@ -31,12 +32,15 @@ def _open():
 
 def keep(request: dict) -> dict:
     point, on = str(request.get("point", "")), request.get("keep")
+    anyway = not on and request.get("anyway") is True       # a rescue's keep, after the warning (D66)
     if not POINT.match(point) or not isinstance(on, bool):
         raise OmaError("That isn't a restore point.", code="bad-request")
     gate, bid = _open()
+    if anyway:
+        _new_enough(gate, LET_GO_GATE)
     hold = gate.call("unlock", bid, data=keys.read_unlock_key())["hold"]
     try:
-        gate.call("keep" if on else "release", bid, point)
+        gate.call("keep" if on else "release", bid, point, *(["anyway"] if anyway else []))
         kept = gate.call("points", bid)["kept"]
     finally:
         gate.call("lock", bid, hold)

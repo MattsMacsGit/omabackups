@@ -325,8 +325,8 @@ Each kept restore point says why:
 - **★ kept restore**: a Rescue USB restored from it. It's kept from the
   moment you pick it on the stick. Once everything came back and a backup
   ran, it lets go by itself; after a **Back up anyway** it stays kept,
-  because it holds what didn't come back. Only `omabackups delete` removes
-  it before then.
+  because it holds what didn't come back. You can still stop keeping it
+  yourself (it asks first), say after a test restore onto a spare disk.
 - **★ kept migrate**: the Return point, where a Migrate's handover started.
 
 ### Deleting a restore point

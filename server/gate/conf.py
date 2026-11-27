@@ -13,7 +13,7 @@ import os
 import re
 from pathlib import Path
 
-VERSION = 21          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses;
+VERSION = 22          # the gatekeeper's own version (2.0 started at 1; 2: data; 3: addresses;
                      # 4: health; 5: scrub as its own service; 6: a disk of its own;
                      # 7: the check stands aside for backups; 8: reuse;
                      # 9: changes.json in restore points, info; 10: password;
@@ -25,7 +25,8 @@ VERSION = 21          # the gatekeeper's own version (2.0 started at 1; 2: data;
                      # 18: every folder's size beside each restore point;
                      # 19: damaged files named in full, and never reused;
                      # 20: destroy, for Remove OmaBackups;
-                     # 21: a full backup's send names every file it checks)
+                     # 21: a full backup's send names every file it checks;
+                     # 22: release a rescue's keep anyway, D66)
 CONTRACT = 1         # the version of its verbs and answers (BUILD 5.10)
 ACCOUNT = "omabackups-gate"
 

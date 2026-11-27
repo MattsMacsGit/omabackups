@@ -251,6 +251,8 @@ Item {
   }
   function setSetting(name, value) { run(["settings", "set", name, String(value)], "setting:" + name, value) }
   function keep(point, on) { run([on ? "keep" : "release", point], "keep:" + point, on) }
+  // D66: a rescue's keep, let go after the panel asked.
+  function releaseAnyway(point) { run(["release", point, "--anyway"], "keep:" + point, false) }
   function rescueLater() { run(["rescue-usb", "later"]) }
   // Make / Refresh Rescue USB (9c): a terminal window, like setup (it asks which
   // stick, downloads the rescue system and writes it).

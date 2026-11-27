@@ -17,6 +17,9 @@ def add(sub) -> None:
                         ("release", "stop keeping a restore point")):
         p = sub.add_parser(verb, help=about)
         p.add_argument("point")
+        if verb == "release":
+            p.add_argument("--anyway", action="store_true",
+                           help="a point a rescue kept: you're sure you're done keeping it (it asks otherwise)")
         p.set_defaults(run=run_keep, keep=verb == "keep")
     d = sub.add_parser("delete", help="delete a restore point, any one (it asks first)")
     d.add_argument("point")
@@ -38,8 +41,21 @@ def run_points(args, events: Events) -> int:
     return 0
 
 
+# D66: the agreed wording (27 Nov 2026).
+LET_GO = "Another computer was restored from this point. Are you sure you're done keeping it?"
+
+
 def run_keep(args, events: Events) -> int:
-    answer = rootjob.run("keep", {"point": args.point, "keep": args.keep})
+    anyway = getattr(args, "anyway", False)
+    if not args.keep and not anyway:
+        record = status_data._read(status_data.paths.system_state_dir() / "backup.json")
+        if (record.get("kept_by") or {}).get(args.point) == "rescue":
+            from omabackups.setup import menu
+            if getattr(args, "json", False) or not menu.confirm(LET_GO, "Yes, stop keeping it", "Keep it"):
+                events.result({"kept": None}, f"{args.point} is still kept.")
+                return 0
+            anyway = True
+    answer = rootjob.run("keep", {"point": args.point, "keep": args.keep, **({"anyway": True} if anyway else {})})
     events.result(answer, f"{args.point} is {'kept' if args.keep else 'no longer kept'}.")
     return 0
 

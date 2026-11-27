@@ -340,15 +340,19 @@ def v_info(call):
     return out
 
 
+LET_GO = ("rescue-done", "anyway")     # release's third word (audit 9.3, D66)
+
+
 def _kept(call, keep: bool):
-    """keep BACKUP POINT / release BACKUP POINT [rescue-done].
+    """keep BACKUP POINT / release BACKUP POINT [rescue-done | anyway].
 
     A Rescue USB keeps the point it restores from the moment it's picked
     (audit 1.4): its key may keep, never release; the point is marked as
     kept by a rescue (R). Releasing one is refused, except by the computer's
-    own backup once everything came back ("rescue-done", audit 9.3); only
-    `delete ... any` removes it otherwise."""
-    if len(call.args) not in (2, 3) or (len(call.args) == 3 and (keep or call.args[2] != "rescue-done")):
+    own backup once everything came back ("rescue-done", audit 9.3), or when
+    you said you're done keeping it after the warning ("anyway", D66);
+    `delete ... any` removes it too."""
+    if len(call.args) not in (2, 3) or (len(call.args) == 3 and (keep or call.args[2] not in LET_GO)):
         raise Refused("wrong number of arguments")
     bid, name = call.args[:2]
     data = registry.load()
@@ -362,8 +366,8 @@ def _kept(call, keep: bool):
     kept = layout.kept(inside)
     by = dict(kept.get("by") or {})
     if not keep and by.get(name) == "rescue" and len(call.args) != 3:
-        raise Refused("a rescue keeps that restore point; only omabackups delete removes it")
-    if len(call.args) == 3 and by.get(name) != "rescue":
+        raise Refused("a rescue keeps that restore point; release it anyway, or omabackups delete removes it")
+    if len(call.args) == 3 and call.args[2] == "rescue-done" and by.get(name) != "rescue":
         return {"kept": kept["kept"]}              # only ever lets go of a rescue's keep
     names = [n for n in kept["kept"] if n != name] + ([name] if keep else [])
     if keep and by_rescue:
