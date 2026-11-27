@@ -57,12 +57,7 @@ class Model:
         self.dirty = False
         self.show_hidden = False    # hidden files: Migrate's business; H shows them
         self._sizes, self._inside, self._lock, self._held = {}, {}, threading.Lock(), {}
-        # A Quick skip's real folders on this computer: one search of the home
-        # folder each, in the background (measure), never while drawing. The
-        # colours asked for it once per restore point on the screen's own
-        # thread: with 19 points the picker stayed an empty window for
-        # minutes (27 Nov 2026).
-        self._places = {}
+        self._places = {}   # a Quick skip's folders: searched once, in the background (27 Nov)
         self.known = None          # {part: {folder: [bytes, files]}}: the Pi's size list (sizes.py)
         # The size on the computer, skipped or not: the rows' order. Ticking
         # never changes it, so rows don't jump about (they sorted by the
@@ -154,8 +149,7 @@ class Model:
             return self._inside.get(node, 0)
 
     def places(self, node: Node, search: bool = False) -> list[str] | None:
-        """A Quick skip's real folders: found once (search=True, the
-        background), else None until then."""
+        """A Quick skip's real folders: found once (search=True, the background); None till then."""
         with self._lock:
             if node in self._places or not search:
                 return self._places.get(node)
@@ -166,8 +160,7 @@ class Model:
 
     def held(self, node: Node, latest_only: bool) -> bool:
         """Is it in your latest restore point (or in any)? Not skipped by that
-        point's list, and there already when it was made. A Quick skip not
-        searched yet says no for now (its plain colour), and asks again."""
+        point's list, and there already when it was made. A Quick skip not searched yet: no, for now."""
         key = (node, latest_only)
         if node.part == "quick" and node.rel and self.places(node) is None:
             return False
