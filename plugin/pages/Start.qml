@@ -178,6 +178,7 @@ Column {
       hasCursorHere: page.cursorOn(this)
       onActivated: {
         if (modelData.action === "update") page.service.installPackage()
+        else if (modelData.action === "server-update") page.service.updateServer()
         else if (modelData.action === "pick") page.service.pickAgain()
         else if (modelData.kind === "failed" || modelData.kind === "unreachable") page.service.backupOrResume()
       }
@@ -187,6 +188,12 @@ Column {
           text: "Update it"
           hasCursorHere: page.cursorOn(this)
           onClicked: page.service.installPackage()
+        },
+        ActionButton {
+          visible: modelData.kind === "server-update"
+          text: "Update it"
+          hasCursorHere: page.cursorOn(this)
+          onClicked: page.service.updateServer()
         },
         ActionButton {
           visible: modelData.kind === "waiting-network"

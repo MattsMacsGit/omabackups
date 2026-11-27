@@ -123,11 +123,27 @@ def lines(step, settings: dict, record: dict, now: dict, mine: dict) -> list[dic
         out.append(line("not-included", "yellow", "Some folders aren't backed up",
                         "Each is a separate btrfs subvolume, which a snapshot can't include: "
                         + ", ".join(record["not_included"])))
+    if everyday and _server_behind(record):
+        out.append(line("server-update", "yellow", "Your backup server needs an update",
+                        "OmaBackups on your backup server is older than this computer's. Update it "
+                        "opens a terminal window: it asks for your login on the server and its sudo "
+                        "password, once each. Your backup is kept.", "server-update"))
     if everyday and not mine.get("rescue_usb"):
         out.append(line("no-rescue-usb", "yellow", "No Rescue USB yet",
                         "A USB stick that brings this computer back if it won't start. "
                         "Click to make one.", "rescue"))
     return out
+
+
+def _server_behind(record: dict) -> bool:
+    """D67: the server's gatekeeper (as the last backup found it, or as an
+    update just left it) is older than the one this omabackups carries."""
+    from omabackups.where.server import GATE_LATEST, SERVER_GATE
+    found = record.get("gate")
+    if not isinstance(found, int):          # a backup disk, or no backup since this version
+        return False
+    updated = (state.read(SERVER_GATE) or {}).get("gate")
+    return max(found, updated if isinstance(updated, int) else 0) < GATE_LATEST
 
 
 def _browsing() -> dict | None:

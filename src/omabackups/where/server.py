@@ -16,6 +16,9 @@ from omabackups.where import ssh
 
 GATE_CONTRACT = 1
 GATE_NEEDED = 2     # the oldest gatekeeper this omabackups works with
+GATE_LATEST = 22    # the one it carries (server/gate/conf.py VERSION; a test keeps them in step):
+                    # an older one on the server -> "Your backup server needs an update" (D67)
+SERVER_GATE = "server-gate"   # the user's state: the version `setup server --update` just put there
 
 
 class Gate:

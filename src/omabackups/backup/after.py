@@ -73,7 +73,9 @@ def finished_record(job, name: str, thinned: list, left: list | None, space: dic
             # SPEC §9: past this partial restore for good (Back up anyway).
             "forced_past": job.forced_past or record.get("forced_past"),
             "kept_by": KEPT.get("by", record.get("kept_by") or {}),
-            "rescue_settled": job.rescue_settled or record.get("rescue_settled")}
+            "rescue_settled": job.rescue_settled or record.get("rescue_settled"),
+            # D67: the server's gatekeeper version (a backup disk runs this package's own).
+            "gate": None if job.server.get("kind") == "disk" else job.gate_version}
 
 
 def keep_forced_point(job) -> None:

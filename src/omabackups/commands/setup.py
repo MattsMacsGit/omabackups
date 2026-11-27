@@ -79,6 +79,9 @@ def run_update(args, events: Events) -> int:
         installed = server.install(session, "-", server.public_key())
     finally:
         session.close()
+    from omabackups.core import state
+    from omabackups.where.server import SERVER_GATE
+    state.write(SERVER_GATE, {"gate": installed.get("gate")})     # D67: the panel's line goes at once
     events.result({"gate": installed.get("gate")},
                   f"OmaBackups on your backup server is up to date (gatekeeper version {installed.get('gate')}).")
     return 0

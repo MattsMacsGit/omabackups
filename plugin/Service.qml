@@ -288,6 +288,9 @@ Item {
     terminalOnce(shellWord(script))    // pressed twice: one window, one build
   }
 
+  // D67: the backup server's gatekeeper, updated in a terminal window (its login and sudo).
+  function updateServer() { terminalOnce("omabackups setup server --update") }
+
   // One word for the shell, whatever was typed (never interpolated raw).
   function shellWord(text) { return "'" + String(text).replace(/'/g, "'\\''") + "'" }
 }

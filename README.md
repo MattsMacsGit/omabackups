@@ -124,6 +124,8 @@ Then open the panel: when its package is older than the panel, it says "An updat
 
 Installed from a clone: `git pull` in it, then run `packaging/install-edge.sh` again.
 
+When a new version also needs your backup server updated, the panel says "Your backup server needs an update". Press **Update it**: it asks for your login on the server and its sudo password, once each. Your backup is kept. (Or run `omabackups setup server --update`.)
+
 ## Uninstall
 
 Also in the panel: Settings › Your backup › Remove OmaBackups. Or in a terminal, two commands:
