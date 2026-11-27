@@ -7,6 +7,7 @@ Rules use the same spelling as the skip list's defaults, so a default
 (Caches, Trash, Package cache) shows as already skipped. "{u}" is the user.
 """
 
+import fnmatch
 import glob
 import os
 import re
@@ -89,22 +90,41 @@ def rules(q: Quick, user: str) -> dict:
 
 def places(q: Quick, user: str, roots: dict) -> list[str]:
     """The real folders a switch covers on this computer (for its size)."""
-    found = []
+    found, anywhere = [], []
     for part, items in rules(q, user).items():
         root = str(roots[part])
         for rule in items:
             if rule.startswith("/"):
                 found += glob.glob(os.path.join(root, rule.lstrip("/")), include_hidden=True)
             else:   # any depth: look in the user's home
-                # include_hidden: Steam's games live under .local (hidden), and ** skipped them (0 bytes).
-                found += glob.glob(os.path.join(root, user, "**", rule.removeprefix("**/")), recursive=True,
-                                   include_hidden=True)
+                anywhere.append(rule.removeprefix("**/").split("/"))
+    if anywhere and "home" in roots:
+        found += _anywhere(os.path.join(str(roots["home"]), user), anywhere)
     # A match inside another match (a .cache inside a .cache) is counted once.
     tops = []
     for path in sorted(set(found)):
         if not any(path.startswith(top + "/") for top in tops):
             tops.append(path)
     return tops
+
+
+def _anywhere(home: str, patterns: list[list[str]]) -> list[str]:
+    """Everything in the home folder whose last parts match a pattern, in one
+    walk that never follows a link into another folder. glob's "**" did: a
+    link to / (Wine's drive Z:, Steam's) sent it across the whole computer
+    and every disk in it, and the picker stayed empty for minutes (27 Nov).
+    Hidden things count too (Steam's games live under .local). A match isn't
+    looked inside."""
+    out = []
+    for top, dirs, files in os.walk(home):
+        base = os.path.relpath(top, home).split(os.sep) if top != home else []
+        for name in (*dirs, *files):
+            parts = [*base, name]
+            if any(len(parts) >= len(p) and all(fnmatch.fnmatchcase(a, b) for a, b in zip(parts[-len(p):], p))
+                   for p in patterns):
+                out.append(os.path.join(top, name))
+        dirs[:] = [d for d in dirs if os.path.join(top, d) not in out]
+    return out
 
 
 def size(paths: list[str]) -> int:

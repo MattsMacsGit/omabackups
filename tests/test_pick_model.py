@@ -216,3 +216,41 @@ def test_things_you_can_see_still_count_however_they_were_skipped(world, tmp_pat
     world.measure(world.home())
     projects = Node("home", "u/Projects", "Projects", True)
     assert world.inside_skipped(projects) == 1 and world.mark(projects) == "•"
+
+
+# --- 27 Nov: the picker stayed an empty window for minutes -------------------------
+
+def test_the_screen_never_searches_the_home_folder(world, monkeypatch):
+    """Drawing (marks, colours) never searches for a Quick skip's folders:
+    the colours did, once per restore point, before the first screen."""
+    from omabackups.tui import quick
+    searched = []
+    real = quick.places
+    monkeypatch.setattr(quick, "places", lambda *a: searched.append(a[0].id) or real(*a))
+    for row in world.listing(world.quick()):
+        world.mark(row), world.colour(row)
+    assert searched == []
+    world.measure(world.quick())                               # the background
+    once = len(searched)
+    for row in world.listing(world.quick()):
+        world.colour(row)
+    assert len(searched) == once and once > 0                  # once each, whatever the number of points
+    assert world.colour(quick_row(world, "downloads")) == "yellow"   # skipped, but an older point holds it
+
+
+def test_a_link_out_of_the_home_folder_is_never_followed(tmp_path):
+    """A link to / (Wine's drive Z:, Steam's) sent glob's ** across every disk."""
+    from omabackups.tui import quick
+    home = tmp_path / "home"
+    (home / "u/.cache").mkdir(parents=True)
+    outside = tmp_path / "elsewhere/.cache"
+    outside.mkdir(parents=True)
+    (home / "u/.wine/dosdevices").mkdir(parents=True)
+    (home / "u/.wine/dosdevices/z:").symlink_to(tmp_path)          # the whole "computer"
+    (home / "u/loop").symlink_to(home / "u")                       # and a loop
+    (home / "u/games/Steam/steamapps/common").mkdir(parents=True)
+    caches = next(q for q in quick.QUICK if q.id == "caches")
+    games = next(q for q in quick.QUICK if q.id == "games")
+    roots = {"home": home, "system": tmp_path / "root"}
+    assert quick.places(caches, "u", roots) == [str(home / "u/.cache")]
+    assert quick.places(games, "u", roots) == [str(home / "u/games/Steam/steamapps/common")]
